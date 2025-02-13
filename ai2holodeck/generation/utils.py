@@ -5,15 +5,10 @@ from typing import Dict, Any
 
 import compress_json
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFont
 from ai2thor.controller import Controller
 from ai2thor.hooks.procedural_asset_hook import ProceduralAssetHookRunner
-from moviepy.editor import (
-    TextClip,
-    CompositeVideoClip,
-    concatenate_videoclips,
-    ImageSequenceClip,
-)
+from moviepy import *
 from tqdm import tqdm
 
 from ai2holodeck.constants import HOLODECK_BASE_DATA_DIR, THOR_COMMIT_ID
@@ -303,7 +298,7 @@ def ithor_video(scene, objaverse_asset_dir, width, height, scene_type):
     return video
 
 
-def room_video(scene, objaverse_asset_dir, width, height):
+def room_video(scene, objaverse_asset_dir, width, height, camera_height=None):
     def add_line_breaks(text, max_line_length):
         words = text.split(" ")
         lines = []
@@ -342,13 +337,15 @@ def room_video(scene, objaverse_asset_dir, width, height):
     except:
         query = scene["rooms"][0]["roomType"]
 
-    wall_height = max([point["y"] for point in scene["walls"][0]["polygon"]])
+    if camera_height is None:
+        wall_height = max([point["y"] for point in scene["walls"][0]["polygon"]])
 
     text_query = add_line_breaks(query, 60)
     videos = []
     for room in scene["rooms"]:
         room_name = room["roomType"]
-        camera_height = wall_height - 0.2
+        if camera_height is None:
+            camera_height = wall_height - 0.2
         print("camera height: ", camera_height)
 
         room_vertices = [[point["x"], point["z"]] for point in room["floorPolygon"]]
@@ -400,14 +397,14 @@ def room_video(scene, objaverse_asset_dir, width, height):
         # Create text clips
         txt_clip_query = (
             TextClip(
-                f"Query: {text_query}", fontsize=30, color="white", font="Arial-Bold"
+                text=f"Query: {text_query}", font_size=30, color="white", font=ImageFont.load_default()
             )
             .set_pos(("center", "top"))
             .set_duration(imsn.duration)
         )
         txt_clip_room = (
             TextClip(
-                f"Room Type: {room_name}", fontsize=30, color="white", font="Arial-Bold"
+                text=f"Room Type: {room_name}", font_size=30, color="white", font=ImageFont.load_default()
             )
             .set_pos(("center", "bottom"))
             .set_duration(imsn.duration)
