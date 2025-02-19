@@ -394,24 +394,25 @@ def room_video(scene, objaverse_asset_dir, width, height, camera_height=None):
 
         imsn = ImageSequenceClip(images, fps=30)
 
+        """
         # Create text clips
         txt_clip_query = (
             TextClip(
-                text=f"Query: {text_query}", font_size=30, color="white", font=ImageFont.load_default()
+                text=f"Query: {text_query}", font_size=30, color="white", font="DejaVu-Sans"
             )
             .set_pos(("center", "top"))
             .set_duration(imsn.duration)
         )
         txt_clip_room = (
             TextClip(
-                text=f"Room Type: {room_name}", font_size=30, color="white", font=ImageFont.load_default()
+                text=f"Room Type: {room_name}", font_size=30, color="white", font="DejaVu-Sans"
             )
             .set_pos(("center", "bottom"))
             .set_duration(imsn.duration)
-        )
+        )"""
 
         # Overlay the text clip on the first video clip
-        video = CompositeVideoClip([imsn, txt_clip_query, txt_clip_room])
+        video = CompositeVideoClip([imsn])#, txt_clip_query, txt_clip_room])
 
         # Add this room's video to the list
         videos.append(video)

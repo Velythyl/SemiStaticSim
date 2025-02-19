@@ -5,6 +5,7 @@ from typing import Tuple, Any, List, Union
 import numpy as np
 
 from hippo.flaxdataclass import selfdataclass, SelfDataclass
+from hippo.spatial_utils import get_bounding_box
 from hippo.string_utils import get_uuid
 
 
@@ -48,8 +49,11 @@ class HippoObjectPlan(_Hippo):
     _found_sizes: Tuple[Tuple[float,float,float]] = tuple()
     _found_scores: Tuple[float] = tuple()
 
+
     _clip_features: np.ndarray = None
     _desired_size: Tuple[float, float, float] = None
+
+
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores):
         return self.replace(

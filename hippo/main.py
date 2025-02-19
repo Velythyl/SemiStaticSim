@@ -63,6 +63,8 @@ class Hippo:
             self.clip_model, self.clip_preprocess, self.clip_tokenizer, None
         )
 
+        os.makedirs("/tmp")
+
     def generate_rooms(self, scene, plan: str=None, hipporoom: HippoRoomPlan=None):
         if not plan:
             assert hipporoom is not None
@@ -73,19 +75,6 @@ class Hippo:
         rooms = self.floor_generator.get_plan("programmatic floor query", plan)
         scene["rooms"] = rooms
         return scene
-
-    def random_select(self, candidates):
-        if not self.do_weighted_random_selection:
-            selected_candidate = random.choice(candidates)
-        else:
-            scores = [candidate[1] for candidate in candidates]
-            scores_tensor = torch.Tensor(scores)
-            probas = F.softmax(
-                scores_tensor, dim=0
-            )  # TODO: consider using normalized scores
-            selected_index = torch.multinomial(probas, 1).item()
-            selected_candidate = candidates[selected_index]
-        return selected_candidate
 
     def compute_size_difference(self, target_size, candidates):
 
@@ -100,9 +89,6 @@ class Hippo:
 
         target_size_list = list(target_size)
         target_size = torch.tensor(target_size_list)
-
-        scaling_factors = candidate_sizes / target_size
-
 
         size_difference = abs(candidate_sizes - target_size).mean(axis=1) / 100
         size_difference = size_difference.tolist()
@@ -122,7 +108,7 @@ class Hippo:
 
 
 
-    def get_assets(self, obj: HippoObjectPlan, size_comparison_tresh=0.1):
+    def lookup_assets(self, obj: HippoObjectPlan, size_comparison_tresh=0.1):
 
         candidates = self.object_retriever.retrieve(
             [f"a 3D model of {obj.object_name}, {obj.object_description}"],
@@ -248,7 +234,7 @@ if __name__ == '__main__':
     print(hipporoom.coords)
 
     new_scene = hippo.generate_rooms(scene, hipporoom.asholodeckstr())
-    objects = [hippo.get_assets(obj) for obj in objects]
+    objects = [hippo.lookup_assets(obj) for obj in objects]
 
     for obj in objects:
         print(obj.object_name)
@@ -275,7 +261,7 @@ if __name__ == '__main__':
     #object = HippoObject(id="id0", roomId=hipporoom.id, object_name="kettle", description="black electric kettle", assetId=None)
 
 
-    temp = hippo.get_assets({"object_name": "kettle", "description": "black electric kettle", "size": (15, 20, 24)})
+    temp = hippo.lookup_assets({"object_name": "kettle", "description": "black electric kettle", "size": (15, 20, 24)})
     object_dict = {
         "assetId": "7075f67e22524936ad00939c0ef939ed",
         "position": {"x": 5, "y": 0.1, "z": 5},
