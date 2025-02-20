@@ -3,8 +3,9 @@ import itertools
 import json
 import os
 import random
+import struct
 import uuid
-from typing import Tuple, Dict, Any, List
+from typing import Tuple, Dict, Any, List, Union
 
 import numpy as np
 import open_clip
@@ -18,7 +19,7 @@ from ai2holodeck.generation.objaverse_retriever import ObjathorRetriever
 from ai2holodeck.generation.rooms import FloorPlanGenerator
 from ai2holodeck.generation.utils import get_annotations, get_bbox_dims, get_top_down_frame, room_video
 from hippo.conceptgraph_to_hippo import get_hippos
-from hippo.flaxdataclass import selfdataclass
+from hippo.flaxdataclass import selfdataclass, SelfDataclass
 from hippo.scenedata import HippoRoomPlan, HippoObjectPlan
 
 
@@ -63,7 +64,7 @@ class Hippo:
             self.clip_model, self.clip_preprocess, self.clip_tokenizer, None
         )
 
-        os.makedirs("/tmp")
+
 
     def generate_rooms(self, scene, plan: str=None, hipporoom: HippoRoomPlan=None):
         if not plan:
@@ -189,34 +190,82 @@ class Hippo:
             - rotation (dict): A dictionary with 'x', 'y', and 'z' rotation values. Default is no rotation.
             - object_name (str): A name for the object. Default is based on assetId.
         """
+
         # Ensure the 'objects' list exists in the scene
         if 'objects' not in scene:
             scene['objects'] = []
 
         new_object = object_dict.asholodeckdict()
 
-        """
-        # Generate a unique ID for the object
-        object_id = f"{object_dict.get('object_name', object_dict['assetId'])}-{uuid.uuid4().hex[:8]}"
-
-        # Create the new object entry
-        new_object = {
-            "assetId": object_dict['assetId'],
-            "id": object_id,
-            "kinematic": True,  # Most AI2-THOR objects are kinematic by default
-            "position": object_dict['position'],
-            "rotation": object_dict.get('rotation', {"x": 0, "y": 0, "z": 0}),
-            "material": None,
-            "roomId": object_dict['roomId'],
-            "object_name": object_dict.get('object_name', object_id),
-            "layer": "Procedural0",
-            #"vertices": object_dict["vertices"]
-        }
-        """
-
         # Add the new object to the scene
         scene['objects'].append(new_object)
         return scene
+
+@dataclasses.dataclass
+class ObjectComposer(SelfDataclass):
+    objectplans: Tuple[HippoObjectPlan] = tuple()
+    scene: Dict = dataclasses.field(default_factory=dict)
+
+    @property
+    def _object_indices(self):
+        ret = []
+        for obj in self.objectplans:
+            ret.append(list(np.arange(len(obj))))
+        return ret
+
+    @property
+    def _object_indices_prod(self):
+        product = list(itertools.product(*self._object_indices))
+        return product
+
+
+    def _add_object_(self, object_dict: Union[List[HippoObjectPlan], HippoObjectPlan]):
+        """
+                Add an object to the scene.
+
+                Parameters:
+                - scene (dict): The scene dictionary.
+                - object_dict (dict): Dictionary containing object properties.
+                  Required keys:
+                    - assetId (str): The asset ID of the object.
+                    - position (dict): A dictionary with 'x', 'y', and 'z' coordinates.
+                    - roomId (str): The room where the object will be placed.
+                  Optional keys:
+                    - rotation (dict): A dictionary with 'x', 'y', and 'z' rotation values. Default is no rotation.
+                    - object_name (str): A name for the object. Default is based on assetId.
+                """
+
+        # Ensure the 'objects' list exists in the scene
+        if 'objects' not in scene:
+            scene['objects'] = []
+
+        new_object = object_dict.asholodeckdict()
+
+        # Add the new object to the scene
+        scene['objects'].append(new_object)
+        return self.replace(scene=scene)
+
+    def generate_compositions_in_order(self, prod=None):
+        if prod is None:
+            prod = self._object_indices_prod
+
+        for possible_scene in prod:
+            for i, obj_i in enumerate(possible_scene):
+                self = self._add_object_(self.objectplans[i][obj_i])
+            yield self.scene
+
+    def sample_composition(self):
+        prod = self._object_indices_prod
+
+        randprod = []
+        for obj in prod:
+            random.shuffle(obj)
+            randprod.append(obj)
+
+        yield from self.generate_compositions_in_order(prod)
+
+
+
 
 
 
@@ -235,6 +284,8 @@ if __name__ == '__main__':
 
     new_scene = hippo.generate_rooms(scene, hipporoom.asholodeckstr())
     objects = [hippo.lookup_assets(obj) for obj in objects]
+
+    composer = ObjectComposer(new_scene, objects)
 
     for obj in objects:
         print(obj.object_name)

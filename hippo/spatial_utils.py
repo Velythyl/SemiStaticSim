@@ -2,7 +2,8 @@ import open3d
 import open3d as o3d
 import numpy as np
 
-def get_bounding_box(points, as_dict=True, array_backend=np):
+def get_bounding_box(points):
+
     if isinstance(points, o3d.geometry.MeshBase):
         bbox = points.get_axis_aligned_bounding_box()
 
@@ -10,9 +11,16 @@ def get_bounding_box(points, as_dict=True, array_backend=np):
         min_bounds = bbox.get_min_bound()
     else:
         if isinstance(points, o3d.geometry.PointCloud):
-            points = array_backend.array(np.asarray(points.points))
+            points = np.asarray(points.points)
 
         min_bounds, max_bounds = points.min(axis=0), points.max(axis=0)
+
+    return *min_bounds, *max_bounds
+
+
+def get_size(points, as_dict=True):
+    bbox = get_bounding_box(points)
+    min_bounds, max_bounds = bbox[:3], bbox[3:]
 
     dico = {k: max_bounds[i] - min_bounds[i] for i,k in enumerate(["x", "y", "z"])}
 
@@ -84,15 +92,12 @@ def disambiguate(bbox1, bbox2, tresh_overlap=0.8, tresh_noice=0.5):
 
     # fixme requires tuning
     # Step 5: Decision logic for partial overlaps
-    if overlap_ratio > 0.8:
+    if overlap_ratio > 0.1:
         return (True, False) if volume1 > volume2 else (False, True)
-    elif noise_ratio > 0.5:
+    elif noise_ratio > 0.1:
         return (True, False) if volume1 > volume2 else (False, True)
-    elif overlap_ratio > 0.5:
-        return (True, True)  # Significant overlap but not enough to discard
-    else:
-        return (True, True)  # Minimal overlap, likely two objects
 
+    return True, True
 
 # Example usage
 #pos1 = (1, 1, 1)

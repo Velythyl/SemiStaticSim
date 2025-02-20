@@ -3,7 +3,7 @@ import uuid
 
 from hippo.conceptgraph_intake import load_conceptgraph
 from hippo.scenedata import HippoObjectPlan, HippoRoomPlan
-from hippo.spatial_utils import get_bounding_box, disambiguate
+from hippo.spatial_utils import get_size, disambiguate, get_bounding_box
 from hippo.string_utils import get_uuid
 
 import numpy as np
@@ -50,26 +50,47 @@ def get_hippos(path, pad=1):
     minbound, maxbound = minbound-pad, maxbound+pad
     assert (minbound == 0).all()
 
+    id2objs = {}
     name2objs = {}
-    for hippo_object, pcd in enumerate(zip(hippo_objects,pcds)):
+    for hippo_object, pcd in (zip(hippo_objects,pcds)):
         position = np.median(pcd, axis=0)
         position[1] = np.min(pcd[:,1])
         print(position)
         assert (position >= (minbound+pad)).all()
         assert (position <= (maxbound-pad)).all()
-        size = get_bounding_box(pcd, as_dict=False)
+        size = get_size(pcd, as_dict=False)
         hippo_object = hippo_object.replace(position=position, _desired_size=size)
 
         if hippo_object.object_name not in name2objs:
             name2objs[hippo_object.object_name] = []
-        name2objs[hippo_object.object_name].append(hippo_object)
+        name2objs[hippo_object.object_name].append((hippo_object, get_bounding_box(pcd), len(pcd)))
+        id2objs[hippo_object.id] = hippo_object
+
+    def keep_delete(keep, id):
+        if not keep:
+            if id in id2objs:
+                del id2objs[id]
 
     # disambiguation step
     for name, hippo_objects in name2objs.items():
-        for obj1, obj2 in itertools.combinations(hippo_objects, 2):
-            keep1, keep2 = disambiguate(obj1., obj2)
+        if len(hippo_objects) == 1:
+            continue
+
+        for (obj1, bbox1, num_pcd1), (obj2, bbox2, num_pcd2) in itertools.combinations(hippo_objects, 2):
+            keep1, keep2 = disambiguate(bbox1, bbox2)
+
+            if keep1 == keep2:  # either true, true or false, false
+                keep_delete(keep1, obj1.id)
+                keep_delete(keep2, obj2.id)
+
+            if keep1 != keep2:
+                if num_pcd2 > num_pcd1:
+                    keep_delete(False, obj1.id)
+                else:
+                    keep_delete(False, obj2.id)
 
 
+    hippo_objects = list(id2objs.values())
 
     minbound = (minbound[0] ,minbound[2])
     maxbound = (maxbound[0],maxbound[2])
@@ -80,7 +101,7 @@ def get_hippos(path, pad=1):
     return roomplan, hippo_objects
 
 
-def get_hippos(path, pad=1):
+def _get_hippos(path, pad=1):
     cg = load_conceptgraph(path)
     cg_objects = cg["segGroups"]
 
@@ -97,7 +118,7 @@ def get_hippos(path, pad=1):
 
         pcd = np.asarray(obj["pcd"].points)[:,[0,2,1]]
 
-        bbox = get_bounding_box(pcd)
+        bbox = get_size(pcd)
 
         #if object_name not in name2obj:
         #    name2obj[object_name] = []
@@ -152,7 +173,7 @@ def get_hippos(path, pad=1):
         print(position)
         assert (position >= (minbound+pad)).all()
         assert (position <= (maxbound-pad)).all()
-        size = get_bounding_box(pcd, as_dict=False)
+        size = get_size(pcd, as_dict=False)
         hippo_objects[i] = hippo_objects[i].replace(position=position, _desired_size=size)
 
     minbound = (minbound[0] ,minbound[2])

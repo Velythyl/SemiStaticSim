@@ -1,3 +1,4 @@
+
 import uuid
 from dataclasses import field, dataclass
 from typing import Tuple, Any, List, Union
@@ -5,7 +6,7 @@ from typing import Tuple, Any, List, Union
 import numpy as np
 
 from hippo.flaxdataclass import selfdataclass, SelfDataclass
-from hippo.spatial_utils import get_bounding_box
+from hippo.spatial_utils import get_size
 from hippo.string_utils import get_uuid
 
 
@@ -54,6 +55,9 @@ class HippoObjectPlan(_Hippo):
     _desired_size: Tuple[float, float, float] = None
 
 
+    _id: str = field(default_factory=lambda: str(uuid.uuid4().hex))
+
+
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores):
         return self.replace(
@@ -78,7 +82,7 @@ class HippoObjectPlan(_Hippo):
 
     @property
     def id(self):
-        return self.object_name + f"-{get_uuid(numchars=8)}"
+        return self.object_name + f"-{self._id}"
 
     def asholodeckdict(self):
         asdict = super().asdict()

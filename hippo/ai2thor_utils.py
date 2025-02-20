@@ -1,6 +1,6 @@
 import numpy as np
 
-from hippo.spatial_utils import get_bounding_box
+from hippo.spatial_utils import get_size
 
 
 def real_object_to_sim_object(real_object):
@@ -14,7 +14,7 @@ def real_object_to_sim_object(real_object):
 
     sim_object = {
 
-        "assetMetadata": get_bounding_box(pcd, as_dict=True, array_backend=np)
+        "assetMetadata": get_size(pcd, as_dict=True, array_backend=np)
     }
 
     bject_type = target_object_information["object_name"]
