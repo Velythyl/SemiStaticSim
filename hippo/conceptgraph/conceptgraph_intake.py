@@ -62,7 +62,7 @@ def load_conceptgraph(path):
 
 
 if __name__ == "__main__":
-    PATH = "../rgbd_interactions_2_l14"
+    PATH = "../sacha_kitchen"
     #load_clip_features(PATH)
 
     x = load_conceptgraph(PATH)

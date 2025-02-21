@@ -12,7 +12,7 @@ from ai2holodeck.generation.utils import get_bbox_dims, get_annotations
 from hippo.scenedata import HippoRoomPlan, HippoObjectPlan
 
 
-class Hippo:
+class AssetLookup:
 
     def __init__(self, objaverse_asset_dir: str, do_weighted_random_selection: bool, similarity_threshold: float, consider_size: bool):
         confirm_paths_exist()
@@ -62,36 +62,6 @@ class Hippo:
         rooms = self.floor_generator.get_plan("programmatic floor query", plan)
         scene["rooms"] = rooms
         return scene
-
-    def compute_size_difference(self, target_size, candidates):
-
-        candidate_sizes = []
-        for i, (uid, score) in enumerate(candidates):
-            size = get_bbox_dims(self.database[uid])
-            size_list = [size["x"], size["y"], size["z"]]
-            candidates[i] = (uid, score, tuple(size_list))
-            candidate_sizes.append(size_list)
-
-        candidate_sizes = torch.tensor(candidate_sizes)
-
-        target_size_list = list(target_size)
-        target_size = torch.tensor(target_size_list)
-
-        size_difference = abs(candidate_sizes - target_size).mean(axis=1) / 100
-        size_difference = size_difference.tolist()
-
-        candidates_with_size_difference = []
-        for i, (uid, score) in enumerate(candidates):
-            candidates_with_size_difference.append(
-                (uid, score - size_difference[i] * 10)
-            )
-
-        # sort the candidates by score
-        candidates_with_size_difference = sorted(
-            candidates_with_size_difference, key=lambda x: x[1], reverse=True
-        )
-
-        return candidates_with_size_difference
 
     def lookup_assets(self, obj: HippoObjectPlan, size_comparison_tresh=0.1):
         candidates = self.object_retriever.retrieve(
@@ -159,7 +129,7 @@ class Hippo:
         if 'objects' not in scene:
             scene['objects'] = []
 
-        new_object = object_dict.asholodeckdict()
+        new_object = object_dict.as_holodeckdict()
 
         # Add the new object to the scene
         scene['objects'].append(new_object)

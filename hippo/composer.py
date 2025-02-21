@@ -65,7 +65,7 @@ class ObjectComposer(SelfDataclass):
             if 'objects' not in scene:
                 scene['objects'] = []
 
-            new_object = obj.asholodeckdict()
+            new_object = obj.as_holodeckdict()
 
             # Add the new object to the scene
             scene['objects'].append(new_object)

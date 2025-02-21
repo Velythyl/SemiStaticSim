@@ -31,7 +31,7 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
             HippoObjectPlan(
                 object_name=object_name,
                 object_description=object_description,
-                roomId=None, position=None, _clip_features=clip_features,
+                roomId=None, _position=None, _clip_features=clip_features,
                 _desired_size=None)
         )
 
@@ -79,7 +79,7 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
         assert (position >= (minbound+pad)).all()
 #        assert (position <= (maxbound-pad)).all()
         size = get_size(pcd, as_dict=False)
-        hippo_object = hippo_object.replace(position=position, _desired_size=size)
+        hippo_object = hippo_object.replace(_position=position, _desired_size=size)
 
         if hippo_object.object_name not in name2objs:
             name2objs[hippo_object.object_name] = []

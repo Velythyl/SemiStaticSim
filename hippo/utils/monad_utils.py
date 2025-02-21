@@ -36,6 +36,3 @@ def monadic(monad_argnums=None, monad_argnames=None):
         return wrapper
 
     return decorator
-
-if __name__ == "__main__":
-    

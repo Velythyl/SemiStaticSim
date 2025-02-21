@@ -8,6 +8,7 @@ import numpy as np
 from ai2thor.util.runtime_assets import save_thor_asset_file
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
+from hippo.utils.dict_utils import recursive_map
 from hippo.utils.selfdataclass import SelfDataclass
 
 from hippo.utils.spatial_utils import scale_ai2thor_object
@@ -16,8 +17,9 @@ from hippo.utils.spatial_utils import scale_ai2thor_object
 @dataclass
 class _Hippo(SelfDataclass):
     def asdict(self):
-        return {k:v for k,v in super().asdict().items() if not k.startswith("_")}
-
+        dico = super().asdict()
+        dico = recursive_map(dico, lambda x: x if not isinstance(x, np.ndarray) else x.tolist())
+        return dico
 
 @dataclass
 class HippoRoomPlan(_Hippo):
@@ -42,8 +44,8 @@ class HippoObjectPlan(_Hippo):
     object_description: str
     roomId: Union[HippoRoomPlan, str]
 
-    position: Tuple[float, float, float] = (0, 0, 0)
-    rotation: Tuple[float, float, float] = (0, 0, 0)
+    _position: Tuple[float, float, float] = (0, 0, 0)
+    _rotation: Tuple[float, float, float] = (0, 0, 0)
 
     _found_assetIds: Tuple[str] = tuple()
     _found_sizes: Tuple[Tuple[float,float,float]] = tuple()
@@ -73,7 +75,7 @@ class HippoObjectPlan(_Hippo):
     def id(self):
         return self.object_name + f"-{self._id}"
 
-    def asholodeckdict(self):
+    def as_holodeckdict(self):
         asdict = super().asdict()
         if isinstance(asdict["roomId"], HippoRoomPlan):
             asdict["roomId"] = asdict["roomId"].id
@@ -88,10 +90,14 @@ class HippoObjectPlan(_Hippo):
 
         asdict["assetId"] = self._concrete_assetIds[0]
         asdict["id"] = self._concrete_assetIds[0]
-        asdict["position"] = xyztuple2dict(asdict["position"])
-        asdict["rotation"] = xyztuple2dict(asdict["rotation"])
+        asdict["position"] = xyztuple2dict(asdict["_position"])
+        asdict["rotation"] = xyztuple2dict(asdict["_rotation"])
 
         return asdict
+
+    @classmethod
+    def from_holodeckdict(cls, holodeck_dict):
+        return cls.fromdict(holodeck_dict)
 
     def __len__(self) -> int:
         return len(self._found_assetIds)

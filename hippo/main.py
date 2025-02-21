@@ -4,19 +4,20 @@ import shutil
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from ai2holodeck.generation.utils import get_top_down_frame
-from hippo.assetlookup import Hippo
+from hippo.ai2thor_hippo_controller import get_hippo_controller
+from hippo.assetlookup import AssetLookup
 from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
 from hippo.composer import ObjectComposer
 from hippo.utils.file_utils import get_tmp_folder
 
 if __name__ == '__main__':
 
-    hippo = Hippo(OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
+    hippo = AssetLookup(OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 
     with open("../ai2holodeck/generation/empty_house.json", "r") as f:
         scene = json.load(f)
 
-    hipporoom, objects = get_hippos("./rgbd_interactions_2_l14")
+    hipporoom, objects = get_hippos("sacha_kitchen")
     print(hipporoom.coords)
 
     KEEP_TOP_K = 3
@@ -30,10 +31,13 @@ if __name__ == '__main__':
     os.makedirs("./sampled_scenes", exist_ok=True)
     for i, sampled_scene in enumerate(composer.generate_compositions_in_order()):
         os.makedirs(f"./sampled_scenes/{i}", exist_ok=True)
-        top_image = get_top_down_frame(sampled_scene, composer.target_dir, 1024, 1024)
-        top_image.save(f"./sampled_scenes/{i}/topdown.png")
+
         with open(f"./sampled_scenes/{i}/scene.json", "w") as f:
             json.dump(new_scene, f, indent=4)
+
+        controller = get_hippo_controller(f"./sampled_scenes/{i}/scene.json", OBJATHOR_ASSETS_DIR)
+        top_image = get_top_down_frame(controller, composer.target_dir, 1024, 1024)
+        top_image.save(f"./sampled_scenes/{i}/topdown.png")
         break
     exit()
 
