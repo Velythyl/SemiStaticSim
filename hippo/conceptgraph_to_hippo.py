@@ -1,15 +1,16 @@
 import itertools
 import uuid
+from typing import Callable
 
 from hippo.conceptgraph_intake import load_conceptgraph
 from hippo.scenedata import HippoObjectPlan, HippoRoomPlan
-from hippo.spatial_utils import get_size, disambiguate, get_bounding_box
+from hippo.spatial_utils import get_size, disambiguate, get_bounding_box, filter_points_by_y_quartile
 from hippo.string_utils import get_uuid
 
 import numpy as np
 
 
-def get_hippos(path, pad=1):
+def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
     cg = load_conceptgraph(path)
     cg_objects = cg["segGroups"]
 
@@ -20,6 +21,7 @@ def get_hippos(path, pad=1):
         object_name = obj["label"].lower().replace(":","").replace(",", " ").strip()
 
         pcd = np.asarray(obj["pcd"].points)[:,[0,2,1]]
+
 
         object_description = obj["caption"]
         clip_features = obj["clip_features"]
@@ -37,6 +39,18 @@ def get_hippos(path, pad=1):
     allpoints = np.concatenate(pcds)
     _minbound, maxbound = allpoints.min(axis=0), allpoints.max(axis=0)
 
+    bounddists = maxbound - _minbound
+
+    if isinstance(pad, int) or isinstance(pad, float):
+        pad = np.ones(3) * pad
+    elif isinstance(pad, np.ndarray) or isinstance(pad, tuple) or isinstance(pad, list):
+        pad = np.array(pad)
+        pad[1] = 0
+    elif isinstance(pad, Callable):
+        pad = pad(bounddists)
+        pad = np.array(pad)
+        pad[1] = 0
+
     pad = np.ones(3) * pad
     pad[1] = 0
 
@@ -53,17 +67,24 @@ def get_hippos(path, pad=1):
     id2objs = {}
     name2objs = {}
     for hippo_object, pcd in (zip(hippo_objects,pcds)):
+        original_pcd = pcd
+
+        pcd = filter_points_by_y_quartile(pcd, 1, 90)
+
         position = np.median(pcd, axis=0)
         position[1] = np.min(pcd[:,1])
+        #if position[1] < 0.1:
+        #    position[1] = 0.0
+
         print(position)
         assert (position >= (minbound+pad)).all()
-        assert (position <= (maxbound-pad)).all()
+#        assert (position <= (maxbound-pad)).all()
         size = get_size(pcd, as_dict=False)
         hippo_object = hippo_object.replace(position=position, _desired_size=size)
 
         if hippo_object.object_name not in name2objs:
             name2objs[hippo_object.object_name] = []
-        name2objs[hippo_object.object_name].append((hippo_object, get_bounding_box(pcd), len(pcd)))
+        name2objs[hippo_object.object_name].append((hippo_object, get_bounding_box(original_pcd), len(original_pcd)))
         id2objs[hippo_object.id] = hippo_object
 
     def keep_delete(keep, id):
@@ -82,8 +103,7 @@ def get_hippos(path, pad=1):
             if keep1 == keep2:  # either true, true or false, false
                 keep_delete(keep1, obj1.id)
                 keep_delete(keep2, obj2.id)
-
-            if keep1 != keep2:
+            elif keep1 != keep2:    # same thing as else lol
                 if num_pcd2 > num_pcd1:
                     keep_delete(False, obj1.id)
                 else:

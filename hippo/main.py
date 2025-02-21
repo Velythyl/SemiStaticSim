@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import itertools
 import json
@@ -12,6 +13,7 @@ import open_clip
 import torch
 import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from ai2holodeck.generation.holodeck import confirm_paths_exist
@@ -19,6 +21,7 @@ from ai2holodeck.generation.objaverse_retriever import ObjathorRetriever
 from ai2holodeck.generation.rooms import FloorPlanGenerator
 from ai2holodeck.generation.utils import get_annotations, get_bbox_dims, get_top_down_frame, room_video
 from hippo.conceptgraph_to_hippo import get_hippos
+from hippo.file_utils import get_tmp_folder
 from hippo.flaxdataclass import selfdataclass, SelfDataclass
 from hippo.scenedata import HippoRoomPlan, HippoObjectPlan
 
@@ -203,7 +206,9 @@ class Hippo:
 
 @dataclasses.dataclass
 class ObjectComposer(SelfDataclass):
-    objectplans: Tuple[HippoObjectPlan] = tuple()
+    target_dir: str
+    objectplans: Tuple[HippoObjectPlan]
+    asset_dir: str
     scene: Dict = dataclasses.field(default_factory=dict)
 
     @property
@@ -218,41 +223,18 @@ class ObjectComposer(SelfDataclass):
         product = list(itertools.product(*self._object_indices))
         return product
 
-
-    def _add_object_(self, object_dict: Union[List[HippoObjectPlan], HippoObjectPlan]):
-        """
-                Add an object to the scene.
-
-                Parameters:
-                - scene (dict): The scene dictionary.
-                - object_dict (dict): Dictionary containing object properties.
-                  Required keys:
-                    - assetId (str): The asset ID of the object.
-                    - position (dict): A dictionary with 'x', 'y', and 'z' coordinates.
-                    - roomId (str): The room where the object will be placed.
-                  Optional keys:
-                    - rotation (dict): A dictionary with 'x', 'y', and 'z' rotation values. Default is no rotation.
-                    - object_name (str): A name for the object. Default is based on assetId.
-                """
-
-        # Ensure the 'objects' list exists in the scene
-        if 'objects' not in scene:
-            scene['objects'] = []
-
-        new_object = object_dict.asholodeckdict()
-
-        # Add the new object to the scene
-        scene['objects'].append(new_object)
-        return self.replace(scene=scene)
+    def __len__(self):
+        return len(self._object_indices_prod)
 
     def generate_compositions_in_order(self, prod=None):
         if prod is None:
             prod = self._object_indices_prod
 
         for possible_scene in prod:
+            new_objectplans = []
             for i, obj_i in enumerate(possible_scene):
-                self = self._add_object_(self.objectplans[i][obj_i])
-            yield self.scene
+                new_objectplans.append(self.objectplans[i][obj_i])
+            yield self.replace(objectplans=tuple(new_objectplans)).get_scene()
 
     def sample_composition(self):
         prod = self._object_indices_prod
@@ -263,6 +245,27 @@ class ObjectComposer(SelfDataclass):
             randprod.append(obj)
 
         yield from self.generate_compositions_in_order(prod)
+
+    def get_scene(self):
+        scene = copy.deepcopy(self.scene)
+        for obj in self.objectplans:
+
+            if len(obj) > 1:
+                obj = obj[0]
+
+            obj.concretize(self.target_dir, self.asset_dir)
+
+            # Ensure the 'objects' list exists in the scene
+            if 'objects' not in scene:
+                scene['objects'] = []
+
+            new_object = obj.asholodeckdict()
+
+            # Add the new object to the scene
+            scene['objects'].append(new_object)
+
+        return scene
+
 
 
 
@@ -276,22 +279,32 @@ if __name__ == '__main__':
     with open("../ai2holodeck/generation/empty_house.json", "r") as f:
         scene = json.load(f)
 
-
-    #hipporoom = HippoRoomPlan("locobot scene")
-
     hipporoom, objects = get_hippos("./rgbd_interactions_2_l14")
     print(hipporoom.coords)
 
+    KEEP_TOP_K = 3
     new_scene = hippo.generate_rooms(scene, hipporoom.asholodeckstr())
-    objects = [hippo.lookup_assets(obj) for obj in objects]
+    objects = [hippo.lookup_assets(obj)[:KEEP_TOP_K] for obj in objects]
 
-    composer = ObjectComposer(new_scene, objects)
+    composer = ObjectComposer(target_dir=get_tmp_folder(), objectplans=objects, scene=new_scene, asset_dir=OBJATHOR_ASSETS_DIR)
+    new_scene = composer.get_scene()
+
+    os.makedirs("./sampled_scenes", exist_ok=True)
+    for i, sampled_scene in enumerate(composer.generate_compositions_in_order()):
+        top_image = get_top_down_frame(sampled_scene, composer.target_dir, 1024, 1024)
+        top_image.save(f"./sampled_scenes/{i}.png")
+    exit()
+
+
+    objects = [obj[0] for obj in objects]
+    for obj in tqdm(objects, desc="Concretizing..."):
+        obj.concretize(target_dir, OBJATHOR_ASSETS_DIR)
 
     for obj in objects:
-        print(obj.object_name)
-        print(obj.position)
-        print(obj._selected_size)
-        obj = obj.replace(position=(obj.position[0], 0.1, obj.position[2]))
+        #print(obj.object_name)
+        #print(obj.position)
+        #print(obj._selected_size)
+        obj = obj.replace(position=(obj.position[0], obj.position[1], obj.position[2]))
         #obj["position"] = (obj["position"][0], obj["position"][1], 0)
         new_scene = hippo.add_object(new_scene, obj)
 
@@ -299,8 +312,9 @@ if __name__ == '__main__':
     with open("./temp.json", "w") as f:
         json.dump(new_scene, f, indent=4)
 
-    # top_image = get_top_down_frame(new_scene, OBJATHOR_ASSETS_DIR, 1024, 1024)
-    # top_image.show()
+    top_image = get_top_down_frame(new_scene, target_dir, 1024, 1024)
+    top_image.show()
+    exit()
     #top_image.save("./temp.png")
 
     final_video = room_video(scene, OBJATHOR_ASSETS_DIR, 1024, 1024, camera_height=0.3)
