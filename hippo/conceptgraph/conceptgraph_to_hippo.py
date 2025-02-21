@@ -1,11 +1,10 @@
 import itertools
-import uuid
 from typing import Callable
 
-from hippo.conceptgraph_intake import load_conceptgraph
+from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph
 from hippo.scenedata import HippoObjectPlan, HippoRoomPlan
-from hippo.spatial_utils import get_size, disambiguate, get_bounding_box, filter_points_by_y_quartile
-from hippo.string_utils import get_uuid
+from hippo.utils.spatial_utils import get_size, disambiguate, get_bounding_box, filter_points_by_y_quartile
+from hippo.utils.string_utils import get_uuid
 
 import numpy as np
 

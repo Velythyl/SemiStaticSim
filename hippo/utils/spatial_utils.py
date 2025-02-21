@@ -220,7 +220,7 @@ def filter_points_by_y_quartile(points, lower_percentile=5, upper_percentile=95)
 if __name__ == '__main__':
     x = load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, "546bb213065c45b4aa3267e85d03e725/546bb213065c45b4aa3267e85d03e725")
 
-    save_thor_asset_file(x, "./temp.pkl.gz")
+    save_thor_asset_file(x, "../temp.pkl.gz")
 
     vis_ai2thor_object(x)
     exit()

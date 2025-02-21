@@ -2,15 +2,15 @@ import os
 import shutil
 import uuid
 from dataclasses import field, dataclass
-from typing import Tuple, Any, List, Union
+from typing import Tuple, List, Union
 
 import numpy as np
 from ai2thor.util.runtime_assets import save_thor_asset_file
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
-from hippo.flaxdataclass import selfdataclass, SelfDataclass
-from hippo.spatial_utils import get_size, scale_ai2thor_object
-from hippo.string_utils import get_uuid
+from hippo.utils.selfdataclass import SelfDataclass
+
+from hippo.utils.spatial_utils import scale_ai2thor_object
 
 
 @dataclass
@@ -148,33 +148,3 @@ class HippoObjectPlan(_Hippo):
             for other_file in os.listdir(original_asset_dir):
                 shutil.copy(os.path.join(original_asset_dir, other_file), os.path.join(target_directory_for_this_self, other_file))
 
-
-
-
-
-
-
-
-
-
-from enum import Enum
-
-# class syntax
-
-class PositionalRelationType(Enum):
-    ON=1
-    BESIDE=2
-
-
-@dataclass
-class PositionalRelation:
-    type: PositionalRelationType
-    obj1: HippoObjectPlan
-    obj2: HippoObjectPlan
-
-    @classmethod
-    def set(cls, type, obj1, obj2):
-        self = cls(type, obj1, obj2)
-        obj1._positional_relation.append(self)
-        obj2._positional_relation.append(self)
-        return self
