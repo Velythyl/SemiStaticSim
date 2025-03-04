@@ -1,8 +1,9 @@
+import json
 import os
 import shutil
 import uuid
 from dataclasses import field, dataclass
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Dict, Any
 
 import numpy as np
 from ai2thor.util.runtime_assets import save_thor_asset_file
@@ -55,6 +56,7 @@ class HippoObjectPlan(_Hippo):
     _desired_size: Tuple[float, float, float] = None
 
     _id: str = field(default_factory=lambda: str(uuid.uuid4().hex))
+    _assetMetadata: Dict[str,Any] = field(default_factory=dict)
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores):
         return self.replace(
@@ -153,4 +155,13 @@ class HippoObjectPlan(_Hippo):
             original_asset_dir = os.path.join(objathor_asset_directory, assetId)
             for other_file in os.listdir(original_asset_dir):
                 shutil.copy(os.path.join(original_asset_dir, other_file), os.path.join(target_directory_for_this_self, other_file))
+
+            # todo ask chatgpt for these properties, as well as the ones related to ai2thor skills such as isToggleavle isBreakable isFillable etc
+            with open(os.path.join(target_directory_for_this_self, "thor_metadata.json"), "w") as f:
+                json.dump({"assetMetadata":{
+                    "primaryProperty": "CanPickup",
+                    "secondaryProperties": [
+                        "Receptacle"
+                    ]
+                }}, f, indent=4) #json.dump(self._assetMetadata, f, indent=4)
 
