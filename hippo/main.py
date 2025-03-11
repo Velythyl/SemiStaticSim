@@ -17,27 +17,30 @@ if __name__ == '__main__':
     with open("../ai2holodeck/generation/empty_house.json", "r") as f:
         scene = json.load(f)
 
-    hipporoom, objects = get_hippos("sacha_kitchen")
+    hipporoom, objects = get_hippos("sacha_kitchen", pad=2)
     print(hipporoom.coords)
 
     KEEP_TOP_K = 3
-    new_scene = hippo.generate_rooms(scene, hipporoom.asholodeckstr())
+    new_scene = hippo.generate_rooms(scene, hipporoom=hipporoom)
     objects = [hippo.lookup_assets(obj)[:KEEP_TOP_K] for obj in objects]
 
     composer = ObjectComposer(target_dir=get_tmp_folder(), objectplans=objects, scene=new_scene, asset_dir=OBJATHOR_ASSETS_DIR)
     new_scene = composer.get_scene()
 
-    shutil.rmtree("./sampled_scenes")
+    #shutil.rmtree("./sampled_scenes")
     os.makedirs("./sampled_scenes", exist_ok=True)
+    runid = len(os.listdir("./sampled_scenes"))
+    os.makedirs(f"./sampled_scenes/{runid}", exist_ok=True)
     for i, sampled_scene in enumerate(composer.generate_compositions_in_order()):
-        os.makedirs(f"./sampled_scenes/{i}", exist_ok=True)
+        os.makedirs(f"./sampled_scenes/{runid}/{i}", exist_ok=True)
 
-        with open(f"./sampled_scenes/{i}/scene.json", "w") as f:
+        with open(f"./sampled_scenes/{runid}/{i}/scene.json", "w") as f:
             json.dump(new_scene, f, indent=4)
 
-        controller = get_hippo_controller(f"./sampled_scenes/{i}/scene.json", OBJATHOR_ASSETS_DIR)
+        temp_folder = get_tmp_folder()
+        controller = get_hippo_controller(f"./sampled_scenes/{runid}/{i}/scene.json", temp_folder)
         top_image = get_top_down_frame(controller, composer.target_dir, 1024, 1024)
-        top_image.save(f"./sampled_scenes/{i}/topdown.png")
+        top_image.save(f"./sampled_scenes/{runid}/{i}/topdown.png")
         break
     exit()
 
