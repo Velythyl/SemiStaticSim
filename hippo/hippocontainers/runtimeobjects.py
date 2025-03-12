@@ -1,0 +1,411 @@
+import copy
+import functools
+import struct
+from dataclasses import field
+from typing import List, Dict, Tuple, Any
+
+import jax
+import numpy as np
+from typing_extensions import Self
+
+import jax.numpy as jnp
+
+
+from hippo.hippocontainers.proximity_spatial_funcs import isOnTop, isInside, isBeside, distance
+from hippo.hippocontainers.scenedata import dict2xyztuple, HippoObject, _Hippo, xyztuple_precision
+from hippo.hippocontainers.skills import *
+
+@dataclass
+class RuntimeObject(_Hippo):
+    #object_name: str
+    #object_description: str
+    id: str
+
+    position: jnp.ndarray
+    rotation: jnp.ndarray
+    size: jnp.ndarray
+
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    heldBy: str = None
+
+    breakable: bool = False
+    isBroken: bool = False
+
+    def change_posrotsize(self, position, rotation, size) -> Self:
+        if isinstance(position, dict):
+            position = dict2xyztuple(position)
+
+        if isinstance(rotation, dict):
+            rotation = dict2xyztuple(rotation)
+
+        if isinstance(size, dict):
+            size = dict2xyztuple(size)
+
+        position = xyztuple_precision(position)
+        rotation = xyztuple_precision(rotation)
+        size = xyztuple_precision(size)
+
+        position = jnp.array(position)
+        rotation = jnp.array(rotation)
+        size = jnp.array(size)
+        return self.replace(position=position, rotation=rotation, size=size)
+
+    def BreakObject(self):
+        if not self.breakable:
+            raise ObjectNotBreakable()
+
+        if self.isBroken:
+            raise ObjectAlreadyBroken()
+
+        return self.replace(isBroken=True)
+
+    toggleable: bool = False
+    isToggled: bool = False
+
+    def ToggleObjectOn(self):
+        if not self.toggleable:
+            raise ObjectNotToggleable()
+
+        return self.replace(isToggled=True)
+
+    def ToggleObjectOff(self):
+        if not self.toggleable:
+            raise ObjectNotToggleable()
+
+        return self.replace(isToggled=False)
+
+    sliceable: bool = False
+    isSliced: bool = False
+
+    def SliceObject(self):
+        if not self.sliceable:
+            raise ObjectNotSliceable()
+
+        if self.isSliced:
+            raise ObjectAlreadySliced()
+        return self.replace(isSliced=True)
+    
+    def as_llmjson(self):
+        dico = self.asdict()
+
+        import numpy as np
+        def arr2tup(key):
+            arr = dico[key]
+            arr = np.array(arr)
+            arr = arr.tolist()
+            dico[key] = (arr[0], arr[1], arr[2])
+        arr2tup("position"); arr2tup("rotation"); arr2tup("size")
+
+        dico.update(dico["metadata"])
+        del dico["metadata"]
+        del dico["size"] # todo do we need to keep this ?
+        del dico["rotation"] # todo do we need to keep this ?
+        return dico
+
+    @classmethod
+    def from_hippoobject(cls, hippoobject):
+        dico = hippoobject.as_holodeckdict()
+
+        skill_metadata = dico["_skill_metadata"]
+        for k in ["breakable", "toggleable", "sliceable"]:
+            assert k in skill_metadata
+
+        for k in ["isBroken", "isToggled", "isSliced"]:
+            if k not in skill_metadata:
+                skill_metadata[k] = False
+
+        dico.update(skill_metadata)
+        return cls.fromdict(dico)
+
+    @classmethod
+    def fromdict(cls, dico):
+        #object_name = dico["object_name"]
+        #object_description = dico["object_description"]
+        id = dico["id"]
+        position = dico["position"]
+        rotation = dico["rotation"]
+        size = dico["size"]
+
+        if isinstance(position, dict):
+            position = dict2xyztuple(position)
+
+        if isinstance(rotation, dict):
+            rotation = dict2xyztuple(rotation)
+
+        if isinstance(size, dict):
+            size = dict2xyztuple(size)
+
+        position = jnp.array(position)
+        rotation = jnp.array(rotation)
+        size = jnp.array(size)
+
+        self = cls(
+            id=id,
+            position=position,
+            rotation=rotation,
+            size=size,
+            heldBy=dico["heldBy"] if "heldBy" in dico else None,
+            breakable=dico["breakable"],
+            isBroken=dico["isBroken"],
+            toggleable=dico["toggleable"],
+            isToggled=dico["isToggled"],
+            sliceable=dico["sliceable"],
+            isSliced=dico["isSliced"]
+        )
+
+        return self
+
+from deepdiff import DeepDiff
+
+
+@dataclass
+class RuntimeObjectContainer(_Hippo):
+    object_names: List[str]
+    objects_map: Dict[str, RuntimeObject]
+
+    obj_isOnTopOf: jnp.ndarray
+
+    @property
+    def obj_hasOnTopOf(self):
+        return self.obj_isOnTopOf.T
+
+    obj_isInsideOf: jnp.ndarray
+
+    @property
+    def obj_hasInsideOf(self):
+        return self.obj_isInsideOf.T
+
+    obj_isBesideOf: jnp.ndarray # symmetric
+
+    @property
+    def obj_hasBesideOf(self):
+        return self.obj_isBesideOf  # symmetric
+
+    obj_distances: jnp.ndarray
+
+    @classmethod
+    def coerce_ai2thor_metadata_objects(cls, metadata_objects):
+        ret = []
+        for o in metadata_objects:
+            # removes
+            if o["assetId"] == "":
+                continue
+
+
+            # cleans
+            if "objectId" in o and o["objectId"]:
+                o["id"] = o["objectId"]
+            else:
+                o["id"] = o["name"]
+
+            o["size"] = o["axisAlignedBoundingBox"]["size"]
+
+            ret.append(o)
+
+        return ret
+
+
+    @classmethod
+    def create(cls, objects: List[RuntimeObject] | List[Dict] | List[HippoObject], is_ai2thor_metadata=False):
+        if is_ai2thor_metadata:
+            objects = cls.coerce_ai2thor_metadata_objects(objects)
+
+        object_names = []
+        objects_map = {}
+        for o in objects:
+
+             if isinstance(o, dict):
+                 o = RuntimeObject.fromdict(o)
+             if isinstance(o, HippoObject):
+                 o = RuntimeObject.from_hippoobject(o)
+
+             objects_map[o.id] = o
+             object_names.append(o.id)
+
+
+        proto = jnp.zeros((len(objects), len(objects)), dtype=bool)
+
+        self = cls(
+            object_names,
+            objects_map,
+            obj_isOnTopOf=proto,
+            obj_isInsideOf=proto,
+            obj_isBesideOf=proto,
+            obj_distances=proto.astype(jnp.float32),
+        )
+
+
+        positions = [self.objects_map[o].position for o in self.object_names]
+        positions = jnp.stack(positions)
+
+        sizes = [self.objects_map[o].size for o in self.object_names]
+        sizes = jnp.stack(sizes)
+
+        return self.replace(
+            **resolve_spatial_attributes(positions, sizes)
+        )
+
+
+    def bool_spatial_attribute_to_list(self, j, attrvec):
+        attrvec = np.array(attrvec).squeeze()
+        attrvec[j] = False
+        valid_indices = np.arange(len(attrvec))[attrvec]
+
+        return attrvec[valid_indices]
+
+    def float_spatial_attribute_to_dict(self, j, attrvec):
+        attrvec = np.array(attrvec).squeeze()
+        attrvec[j] = False
+        valid_indices = np.arange(len(attrvec))[attrvec > 0]
+
+        ret = {}
+        for valid_index in valid_indices:
+            ret[self.object_names[valid_index]] = attrvec[valid_index]
+        return ret
+
+    def update_from_ai2thor(self, objects: List[Dict]):
+        objects = RuntimeObjectContainer.coerce_ai2thor_metadata_objects(objects)
+
+        NUM_UPDATED_OBJECTS = 0
+
+        dico = {}
+        for object in objects:
+            id = object["id"]
+
+            if id not in self.objects_map:
+                continue
+
+            existing_object = self.objects_map[id]
+            existing_object = existing_object.change_posrotsize(object["position"], object["rotation"], object["size"])
+            existing_object = existing_object.replace(heldBy="robot" if object["isPickedUp"] else None)   # todo fixme multiagent unsupported
+
+            dico[id] = existing_object
+
+            NUM_UPDATED_OBJECTS += 1
+        assert NUM_UPDATED_OBJECTS == len(self.objects_map)
+        return self.replace(objects_map=dico)
+
+    def diff(self, new_runtimecontainer: Self):
+        selfdict = self.as_llmjson()
+        newdict = new_runtimecontainer.as_llmjson()
+
+        diff = DeepDiff(selfdict, newdict, ignore_order=True)
+
+        changes = []
+
+        # Handle value changes
+        for path, change in diff.get("values_changed", {}).items():
+            changes.append({
+                path: {
+                "old_value": change["old_value"],
+                "new_value": change["new_value"]
+            }})
+
+        # Handle type changes
+        for path, change in diff.get("type_changes", {}).items():
+            changes.append({
+                path: {
+                "old_value": change["old_value"],
+                "new_value": change["new_value"]
+                }})
+
+        # TODO not supposed to happen, right?
+        """
+        # Handle additions
+        for path, value in diff.get("iterable_item_added", {}).items():
+            changes.append({
+                "path": path,
+                "type": "added",
+                "new_value": value
+            })
+
+        # Handle removals
+        for path, value in diff.get("iterable_item_removed", {}).items():
+            changes.append({
+                "path": path,
+                "type": "removed",
+                "old_value": value
+            })
+        """
+
+        ret = {}
+        for change in changes:
+            ret.update(change)
+        return ret
+
+    def _assert_object_exist(self, object_id):
+        if object_id not in self.object_names:
+            raise ObjectDoesNotExist(f"Object with id {object_id} not found in container")
+
+    def _update_object(self, object) -> Self:
+        dico = copy.deepcopy(self.objects_map)
+        dico[object.id] = object
+        return self.replace(objects_map=dico)
+
+    def BreakObject(self, object_id):
+        self._assert_object_exist(object_id)
+        return self._update_object(self.objects_map[object_id].BreakObject())
+
+    def ToggleObjectOn(self, object_id):
+        self._assert_object_exist(object_id)
+        return self._update_object(self.objects_map[object_id].ToggleObjectOn())
+
+    def ToggleObjectOff(self, object_id):
+        self._assert_object_exist(object_id)
+        return self._update_object(self.objects_map[object_id].ToggleObjectOff())
+
+    def SliceObject(self, object_id):
+        self._assert_object_exist(object_id)
+        return self._update_object(self.objects_map[object_id].SliceObject())
+    
+    def as_llmjson(self):
+
+        obj_isOnTopOf = np.array(self.obj_isOnTopOf)
+        obj_isInsideOf = np.array(self.obj_isInsideOf)
+        obj_isBesideOf = np.array(self.obj_isBesideOf)
+        obj_distances = np.array(self.obj_distances)
+
+        final_dict = {}
+        for i, name in enumerate(self.object_names):
+            objdict = self.objects_map[name].as_llmjson()
+
+            objdict["isOnTopOf"] = self.bool_spatial_attribute_to_list(i, obj_isOnTopOf[i])
+            objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
+            objdict["isBesideOf"] = self.bool_spatial_attribute_to_list(i, obj_isBesideOf[i])
+            objdict["object_distances"] = self.float_spatial_attribute_to_dict(i, obj_distances[i])
+
+            final_dict[name] = objdict
+
+        return final_dict
+
+
+
+
+@jax.jit
+def swap_yz(mat):
+    Z = mat[:,-1]
+    return mat.at[:,-1].set(mat[:,-2]).at[:,-2].set(Z)
+
+@jax.jit
+def resolve_spatial_attributes(positions, sizes):
+
+    def for_each_object(positions, sizes, p1,s1):
+        def each_other_object(p1, s1, p2,s2):
+            return isOnTop(p1,s1,p2,s2), isInside(p1,s1,p2,s2), isBeside(p1,s1,p2,s2), distance(p1,s1,p2,s2)
+        return jax.vmap(functools.partial(each_other_object, p1, s1))(positions, sizes)
+
+    positions = swap_yz(positions)
+    sizes = swap_yz(sizes)
+
+    obj_isOnTopOf, obj_isInsideOf, obj_isBesideOf, obj_distances = jax.vmap(functools.partial(for_each_object, positions, sizes))(positions, sizes)
+
+    return {
+        "obj_isOnTopOf": obj_isOnTopOf.squeeze(),
+        "obj_isInsideOf": obj_isInsideOf.squeeze(),
+        "obj_isBesideOf": obj_isBesideOf.squeeze(),
+        "obj_distances": obj_distances.squeeze(),
+    }
+
+
+

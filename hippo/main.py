@@ -8,6 +8,7 @@ from hippo.ai2thor_hippo_controller import get_hippo_controller
 from hippo.assetlookup import AssetLookup
 from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
 from hippo.composer import ObjectComposer
+from hippo.hippocontainers.runtimeobjects import RuntimeObjectContainer
 from hippo.utils.file_utils import get_tmp_folder
 
 if __name__ == '__main__':
@@ -26,6 +27,10 @@ if __name__ == '__main__':
 
     composer = ObjectComposer(target_dir=get_tmp_folder(), objectplans=objects, scene=new_scene, asset_dir=OBJATHOR_ASSETS_DIR)
     new_scene = composer.get_scene()
+
+    temp = RuntimeObjectContainer.create(composer.objectplans)
+
+    print(temp.as_llmjson())
 
     #shutil.rmtree("./sampled_scenes")
     os.makedirs("./sampled_scenes", exist_ok=True)

@@ -25,3 +25,7 @@ compress-json
 black
 objathor
 editdistance
+
+flax
+jax
+jaxlib

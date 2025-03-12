@@ -2,7 +2,7 @@ import itertools
 from typing import Callable
 
 from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph
-from hippo.scenedata import HippoObjectPlan, HippoRoomPlan
+from hippo.hippocontainers.scenedata import HippoObject, HippoRoomPlan
 from hippo.utils.spatial_utils import get_size, disambiguate, get_bounding_box, filter_points_by_y_quartile
 from hippo.utils.string_utils import get_uuid
 
@@ -28,7 +28,7 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
         pcds.append(pcd)
 
         hippo_objects.append(
-            HippoObjectPlan(
+            HippoObject(
                 object_name=object_name,
                 object_description=object_description,
                 roomId=None, _position=None, _clip_features=clip_features,
@@ -84,7 +84,7 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
         if hippo_object.object_name not in name2objs:
             name2objs[hippo_object.object_name] = []
         name2objs[hippo_object.object_name].append((hippo_object, get_bounding_box(original_pcd), len(original_pcd)))
-        id2objs[hippo_object.id] = hippo_object
+        id2objs[hippo_object.object_name_id] = hippo_object
 
     def keep_delete(keep, id):
         if not keep:
@@ -100,13 +100,13 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
             keep1, keep2 = disambiguate(bbox1, bbox2)
 
             if keep1 == keep2:  # either true, true or false, false
-                keep_delete(keep1, obj1.id)
-                keep_delete(keep2, obj2.id)
+                keep_delete(keep1, obj1.object_name_id)
+                keep_delete(keep2, obj2.object_name_id)
             elif keep1 != keep2:    # same thing as else lol
                 if num_pcd2 > num_pcd1:
-                    keep_delete(False, obj1.id)
+                    keep_delete(False, obj1.object_name_id)
                 else:
-                    keep_delete(False, obj2.id)
+                    keep_delete(False, obj2.object_name_id)
 
 
     hippo_objects = list(id2objs.values())
@@ -116,6 +116,8 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
     roomId = cg["sceneId"] + f"-{get_uuid()}"
     coords = ((minbound[0], minbound[1]), (minbound[0], maxbound[1]), (maxbound[0], maxbound[1]), (maxbound[0], minbound[1]))
     roomplan = HippoRoomPlan(id=roomId, coords=coords)
+
+    hippo_objects = [h.replace(roomId=roomId) for h in hippo_objects]
 
     return roomplan, hippo_objects
 
@@ -163,7 +165,7 @@ def _get_hippos(path, pad=1):
         #print(np.array(obj["centroid"]) * 100)
 
         hippo_objects.append(
-            HippoObjectPlan(
+            HippoObject(
                 object_name=object_name,
                 object_description=object_description,
                 roomId=None, position=None, _clip_features=clip_features,
@@ -204,4 +206,5 @@ def _get_hippos(path, pad=1):
     return roomplan, hippo_objects
 
 if __name__ == "__main__":
-    get_hippoplans("./rgbd_interactions_2_l14")
+    _, hippos = get_hippos("../sacha_kitchen", pad=2)
+    hippos = [hippo.to_runtimeobject() for hippo in hippos]

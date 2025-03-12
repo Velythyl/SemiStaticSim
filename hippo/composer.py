@@ -6,14 +6,14 @@ from typing import Tuple, Dict
 
 import numpy as np
 
-from hippo.scenedata import HippoObjectPlan
+from hippo.hippocontainers.scenedata import HippoObject
 from hippo.utils.selfdataclass import SelfDataclass
 
 
 @dataclasses.dataclass
 class ObjectComposer(SelfDataclass):
     target_dir: str
-    objectplans: Tuple[HippoObjectPlan]
+    objectplans: Tuple[HippoObject]
     asset_dir: str
     scene: Dict = dataclasses.field(default_factory=dict)
 

@@ -3,7 +3,6 @@ from typing import Any, Callable
 
 import numpy as np
 import open_clip
-import torch
 from sentence_transformers import SentenceTransformer
 
 from ai2holodeck.generation.holodeck import confirm_paths_exist
@@ -11,7 +10,7 @@ from ai2holodeck.generation.objaverse_retriever import ObjathorRetriever
 from ai2holodeck.generation.rooms import FloorPlanGenerator
 from ai2holodeck.generation.utils import get_bbox_dims, get_annotations
 from ai2holodeck.generation.walls import WallGenerator
-from hippo.scenedata import HippoRoomPlan, HippoObjectPlan
+from hippo.hippocontainers.scenedata import HippoRoomPlan, HippoObject
 
 
 class AssetLookup:
@@ -101,7 +100,7 @@ class AssetLookup:
 
         return scene
 
-    def lookup_assets(self, obj: HippoObjectPlan, size_comparison_tresh=0.1):
+    def lookup_assets(self, obj: HippoObject, size_comparison_tresh=0.1):
         candidates = self.object_retriever.retrieve(
             [f"a 3D model of {obj.object_name}, {obj.object_description}"],
             self.similarity_threshold,

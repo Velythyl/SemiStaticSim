@@ -4,6 +4,7 @@ import shutil
 import uuid
 from dataclasses import field, dataclass
 from typing import Tuple, List, Union, Dict, Any
+from typing_extensions import Self
 
 import numpy as np
 from ai2thor.util.runtime_assets import save_thor_asset_file
@@ -39,8 +40,14 @@ class HippoRoomPlan(_Hippo):
 def xyztuple2dict(tup):
     return {'x': tup[0], 'y': tup[1], 'z': tup[2]}
 
+def dict2xyztuple(dic):
+    return (dic['x'], dic['y'], dic['z'])
+
+def xyztuple_precision(tup):
+    return (round(tup[0], 3), round(tup[1],3), round(tup[2],3))
+
 @dataclass
-class HippoObjectPlan(_Hippo):
+class HippoObject(_Hippo):
     object_name: str
     object_description: str
     roomId: Union[HippoRoomPlan, str]
@@ -55,8 +62,10 @@ class HippoObjectPlan(_Hippo):
     _clip_features: np.ndarray = None
     _desired_size: Tuple[float, float, float] = None
 
-    _id: str = field(default_factory=lambda: str(uuid.uuid4().hex))
+    _id: str = field(default_factory=lambda: str(uuid.uuid4().hex)[:4])
     _assetMetadata: Dict[str,Any] = field(default_factory=dict)
+
+    _skill_metadata: Dict[str, bool] = field(default_factory=lambda: {"breakable": None, "toggleable": None, "sliceable": None})
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores):
         return self.replace(
@@ -65,19 +74,24 @@ class HippoObjectPlan(_Hippo):
             _found_scores=found_scores,
         )
 
+    def add_skill_metadata(self, skill_metadata):
+        return self.replace(_skill_metadata=skill_metadata)
+
     @property
     def _concrete_assetIds(self):
-        return [f"{self.id}-{id}" for id in self._found_assetIds]
+        return [f"{self.object_name_id}-{id[:4]}" for id in self._found_assetIds]
 
     @property
     def _found_size_scaling(self):
         return np.array(self._desired_size) / np.array(self._found_sizes)
 
     @property
-    def id(self):
+    def object_name_id(self):
         return self.object_name + f"-{self._id}"
 
     def as_holodeckdict(self):
+        assert len(self._concrete_assetIds) >= 1
+
         asdict = super().asdict()
         if isinstance(asdict["roomId"], HippoRoomPlan):
             asdict["roomId"] = asdict["roomId"].id
@@ -92,14 +106,30 @@ class HippoObjectPlan(_Hippo):
 
         asdict["assetId"] = self._concrete_assetIds[0]
         asdict["id"] = self._concrete_assetIds[0]
+        size = (self._found_sizes[0][0], self._desired_size[1], self._found_sizes[0][2])
+        asdict["size"] = size
         asdict["position"] = xyztuple2dict(asdict["_position"])
         asdict["rotation"] = xyztuple2dict(asdict["_rotation"])
 
+        del asdict["_position"]
+        del asdict["_rotation"]
+
+        asdict["IS_HIPPO"] = True
+
         return asdict
+
+    def to_runtimeobject(self):
+        from hippo.hippocontainers.runtimeobjects import RuntimeObject
+        return RuntimeObject.from_hippoobject(self)
 
     @classmethod
     def from_holodeckdict(cls, holodeck_dict):
-        return cls.fromdict(holodeck_dict)
+        self = cls.fromdict(holodeck_dict)
+        self = self.replace(
+            _position=dict2xyztuple(holodeck_dict["position"]),
+            _rotation=dict2xyztuple(holodeck_dict["rotation"]),
+        )
+        return self
 
     def __len__(self) -> int:
         return len(self._found_assetIds)

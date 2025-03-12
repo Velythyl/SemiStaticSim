@@ -217,6 +217,8 @@ def filter_points_by_y_quartile(points, lower_percentile=5, upper_percentile=95)
 
     return filtered_points #, bbox_min, bbox_max
 
+
+
 if __name__ == '__main__':
     x = load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, "546bb213065c45b4aa3267e85d03e725/546bb213065c45b4aa3267e85d03e725")
 

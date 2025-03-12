@@ -6,7 +6,8 @@ from ai2thor.hooks.procedural_asset_hook import ProceduralAssetHookRunner
 from tqdm import tqdm
 
 from ai2holodeck.constants import THOR_COMMIT_ID, OBJATHOR_ASSETS_DIR
-from hippo.scenedata import HippoObjectPlan
+from hippo.hippocontainers.runtimeobjects import RuntimeObjectContainer
+from hippo.hippocontainers.scenedata import HippoObject
 from hippo.utils.file_utils import get_tmp_folder
 
 def _get_self_install_dir():
@@ -23,20 +24,25 @@ def _get_ai2thorbuilds_dir(which="fixed"):
     return _get_self_install_dir() + f"/ai2thorbuilds/{which}"
 
 
-def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASSETS_DIR,  **kwargs):
+def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASSETS_DIR, get_runtime_container=False,  **kwargs):
     if isinstance(scene, str) and scene.endswith(".json"):
         with open(scene, "r") as f:
             scene = json.load(f)
 
     if isinstance(scene, dict):
-        try:
+        if scene["objects"][0]["IS_HIPPO"] is True:
             if target_dir is None:
                 target_dir = get_tmp_folder()
 
+            hippo_objects = []
             for object in tqdm(scene["objects"], desc="Concretizing objects..."):
-                HippoObjectPlan.from_holodeckdict(object).concretize(target_dir, objathor_asset_dir)
-        except:
+                ho = HippoObject.from_holodeckdict(object)
+                ho.concretize(target_dir, objathor_asset_dir)
+                hippo_objects.append(ho)
+            runtime_container = RuntimeObjectContainer.create(hippo_objects, is_ai2thor_metadata=False)
+        else:
             target_dir = objathor_asset_dir
+            runtime_container = None
 
     try:
         os.unlink(_get_ai2thor_install_build_dir())
@@ -61,7 +67,16 @@ def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASS
         ),
         **kwargs
     )
-    return controller
+
+    if get_runtime_container:
+        ai2thor_objects = controller.last_event.metadata["objects"]
+        if runtime_container is None:
+            runtime_container = RuntimeObjectContainer.create(ai2thor_objects, is_ai2thor_metadata=True)
+        else:
+            runtime_container = runtime_container.update_from_ai2thor(ai2thor_objects)
+        return controller, runtime_container
+    else:
+        return controller
 
 def get_hippo_controller_OLD(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASSETS_DIR, **kwargs):
     if isinstance(scene, str) and scene.endswith(".json"):
@@ -72,7 +87,7 @@ def get_hippo_controller_OLD(scene, target_dir=None, objathor_asset_dir=OBJATHOR
         target_dir = get_tmp_folder()
 
     for object in tqdm(scene["objects"], desc="Concretizing objects..."):
-        HippoObjectPlan.from_holodeckdict(object).concretize(target_dir, objathor_asset_dir)
+        HippoObject.from_holodeckdict(object).concretize(target_dir, objathor_asset_dir)
 
     controller = Controller(
         commit_id=THOR_COMMIT_ID,
