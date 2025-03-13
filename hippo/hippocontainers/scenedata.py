@@ -65,7 +65,7 @@ class HippoObject(_Hippo):
     _id: str = field(default_factory=lambda: str(uuid.uuid4().hex)[:4])
     _assetMetadata: Dict[str,Any] = field(default_factory=dict)
 
-    _skill_metadata: Dict[str, bool] = field(default_factory=lambda: {"breakable": None, "toggleable": None, "sliceable": None})
+    _skill_metadata: Tuple[str] = ("can be turned on/off", "can be picked up", "objects can be put down on this", "can be opened and closed", "can be sliced", "can be broken")
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores):
         return self.replace(
@@ -186,6 +186,16 @@ class HippoObject(_Hippo):
             for other_file in os.listdir(original_asset_dir):
                 shutil.copy(os.path.join(original_asset_dir, other_file), os.path.join(target_directory_for_this_self, other_file))
 
+
+            with open(os.path.join(target_directory_for_this_self, "thor_metadata.json"), "w") as f:
+                json.dump({"assetMetadata": {
+                "primaryProperty": "CanPickup" if "can be picked up" in self._skill_metadata else None,
+                "secondaryProperties": [
+                    "Receptacle"
+                ] if "objects can be put down on this" in self._skill_metadata else []
+            }}, f, indent=4)
+
+            return
             # todo ask chatgpt for these properties, as well as the ones related to ai2thor skills such as isToggleavle isBreakable isFillable etc
             with open(os.path.join(target_directory_for_this_self, "thor_metadata.json"), "w") as f:
                 json.dump({"assetMetadata":{

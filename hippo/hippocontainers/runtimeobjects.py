@@ -1,7 +1,7 @@
 import copy
 import functools
 import struct
-from dataclasses import field
+from dataclasses import field, dataclass
 from typing import List, Dict, Tuple, Any
 
 import jax
@@ -13,7 +13,9 @@ import jax.numpy as jnp
 
 from hippo.hippocontainers.proximity_spatial_funcs import isOnTop, isInside, isBeside, distance
 from hippo.hippocontainers.scenedata import dict2xyztuple, HippoObject, _Hippo, xyztuple_precision
-from hippo.hippocontainers.skills import *
+
+
+#from hippo.hippocontainers.skills import *
 
 @dataclass
 class RuntimeObject(_Hippo):
@@ -25,12 +27,12 @@ class RuntimeObject(_Hippo):
     rotation: jnp.ndarray
     size: jnp.ndarray
 
+
+    skill_portfolio: Any
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     heldBy: str = None
 
-    breakable: bool = False
-    isBroken: bool = False
 
     def change_posrotsize(self, position, rotation, size) -> Self:
         if isinstance(position, dict):
@@ -51,40 +53,6 @@ class RuntimeObject(_Hippo):
         size = jnp.array(size)
         return self.replace(position=position, rotation=rotation, size=size)
 
-    def BreakObject(self):
-        if not self.breakable:
-            raise ObjectNotBreakable()
-
-        if self.isBroken:
-            raise ObjectAlreadyBroken()
-
-        return self.replace(isBroken=True)
-
-    toggleable: bool = False
-    isToggled: bool = False
-
-    def ToggleObjectOn(self):
-        if not self.toggleable:
-            raise ObjectNotToggleable()
-
-        return self.replace(isToggled=True)
-
-    def ToggleObjectOff(self):
-        if not self.toggleable:
-            raise ObjectNotToggleable()
-
-        return self.replace(isToggled=False)
-
-    sliceable: bool = False
-    isSliced: bool = False
-
-    def SliceObject(self):
-        if not self.sliceable:
-            raise ObjectNotSliceable()
-
-        if self.isSliced:
-            raise ObjectAlreadySliced()
-        return self.replace(isSliced=True)
     
     def as_llmjson(self):
         dico = self.asdict()
@@ -97,6 +65,9 @@ class RuntimeObject(_Hippo):
             dico[key] = (arr[0], arr[1], arr[2])
         arr2tup("position"); arr2tup("rotation"); arr2tup("size")
 
+        del dico["skill_portfolio"]
+        dico.update(self.skill_portfolio.output_dict())
+
         dico.update(dico["metadata"])
         del dico["metadata"]
         del dico["size"] # todo do we need to keep this ?
@@ -107,15 +78,15 @@ class RuntimeObject(_Hippo):
     def from_hippoobject(cls, hippoobject):
         dico = hippoobject.as_holodeckdict()
 
-        skill_metadata = dico["_skill_metadata"]
-        for k in ["breakable", "toggleable", "sliceable"]:
-            assert k in skill_metadata
+        #skill_metadata = dico["_skill_metadata"]
+        #for k in ["breakable", "toggleable", "sliceable"]:
+        #    assert k in skill_metadata
 
-        for k in ["isBroken", "isToggled", "isSliced"]:
-            if k not in skill_metadata:
-                skill_metadata[k] = False
+        #for k in ["isBroken", "isToggled", "isSliced"]:
+        #    if k not in skill_metadata:
+        #        skill_metadata[k] = False
 
-        dico.update(skill_metadata)
+        #dico.update(skill_metadata)
         return cls.fromdict(dico)
 
     @classmethod
@@ -140,18 +111,19 @@ class RuntimeObject(_Hippo):
         rotation = jnp.array(rotation)
         size = jnp.array(size)
 
+        if "_skill_metadata" not in dico:
+            raise NotImplementedError()
+
+        from hippo.hippocontainers.skills import SkillPortfolio
+        skill_portfolio = SkillPortfolio.create(dico["_skill_metadata"])
+
         self = cls(
             id=id,
             position=position,
             rotation=rotation,
             size=size,
             heldBy=dico["heldBy"] if "heldBy" in dico else None,
-            breakable=dico["breakable"],
-            isBroken=dico["isBroken"],
-            toggleable=dico["toggleable"],
-            isToggled=dico["isToggled"],
-            sliceable=dico["sliceable"],
-            isSliced=dico["isSliced"]
+            skill_portfolio=skill_portfolio
         )
 
         return self
@@ -334,11 +306,14 @@ class RuntimeObjectContainer(_Hippo):
             ret.update(change)
         return ret
 
+    def get_object_by_id(self, object_id):
+        return self.objects_map[object_id]
+
     def _assert_object_exist(self, object_id):
         if object_id not in self.object_names:
             raise ObjectDoesNotExist(f"Object with id {object_id} not found in container")
 
-    def _update_object(self, object) -> Self:
+    def update_object(self, object) -> Self:
         dico = copy.deepcopy(self.objects_map)
         dico[object.id] = object
         return self.replace(objects_map=dico)
