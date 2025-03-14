@@ -43,6 +43,8 @@ class Simulator:
         result_sas = target_object.skill_portfolio.apply(sas)
         self.transations.append(result_sas.post_container)
 
+        print(self.transations[-2].diff(self.transations[-1]))
+
 
     def _exec_actions(self):
         # create new folders to save the images from the agents
@@ -85,6 +87,12 @@ class Simulator:
                         multi_agent_event = self.controller.step(action="RotateRight", degrees=act['degrees'],
                                                    agentId=act['agent_id'])
 
+                    elif act["action"] == "LookUp":
+                        multi_agent_event = self.controller.step(action="LookUp", agentId=act["agent_id"])
+
+                    elif act["action"] == "LookDown":
+                        multi_agent_event = self.controller.step(action="LookDown", agentId=act["agent_id"])
+
                     elif act['action'] == 'PickupObject':
                         def PickupObjectCallback():
                             self.total_exec += 1
@@ -97,22 +105,27 @@ class Simulator:
                         self.apply_skill('PickupObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=PickupObjectCallback)
 
                     elif act['action'] == 'PutObject':
-                        self.total_exec += 1
-                        multi_agent_event = self.controller.step(action="PutObject", objectId=act['objectId'],
-                                                   agentId=act['agent_id'], forceAction=True)
-                        if multi_agent_event.metadata['errorMessage'] != "":
-                            print(multi_agent_event.metadata['errorMessage'])
-                        else:
-                            self.success_exec += 1
+                        def PutObjectCallback():
+                            self.total_exec += 1
+                            multi_agent_event = self.controller.step(action="PutObject", objectId=act['objectId'],
+                                                       agentId=act['agent_id'], forceAction=True)
+                            if multi_agent_event.metadata['errorMessage'] != "":
+                                print(multi_agent_event.metadata['errorMessage'])
+                            else:
+                                self.success_exec += 1
+                        self.apply_skill('PutObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=PutObjectCallback)
 
                     elif act['action'] == 'ToggleObjectOn':
                         self.total_exec += 1
-                        multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
-                                                   agentId=act['agent_id'], forceAction=True)
-                        if multi_agent_event.metadata['errorMessage'] != "":
-                            print(multi_agent_event.metadata['errorMessage'])
-                        else:
-                            self.success_exec += 1
+
+                        self.apply_skill('ToggleObjectOn', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        #multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
+                        #                           agentId=act['agent_id'], forceAction=True)
+                        #if multi_agent_event.metadata['errorMessage'] != "":
+                        #    print(multi_agent_event.metadata['errorMessage'])
+                        #else:
+                        # todo check for return of apply_skill
+                        self.success_exec += 1
 
                     elif act['action'] == 'ToggleObjectOff':
                         self.total_exec += 1

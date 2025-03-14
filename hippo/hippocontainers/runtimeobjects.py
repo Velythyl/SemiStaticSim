@@ -13,6 +13,7 @@ import jax.numpy as jnp
 
 from hippo.hippocontainers.proximity_spatial_funcs import isOnTop, isInside, isBeside, distance
 from hippo.hippocontainers.scenedata import dict2xyztuple, HippoObject, _Hippo, xyztuple_precision
+from hippo.utils.git_diff import git_diff
 
 
 #from hippo.hippocontainers.skills import *
@@ -62,7 +63,7 @@ class RuntimeObject(_Hippo):
             arr = dico[key]
             arr = np.array(arr)
             arr = arr.tolist()
-            dico[key] = (arr[0], arr[1], arr[2])
+            dico[key] = (float(arr[0]), float(arr[1]), float(arr[2]))
         arr2tup("position"); arr2tup("rotation"); arr2tup("size")
 
         del dico["skill_portfolio"]
@@ -207,16 +208,18 @@ class RuntimeObjectContainer(_Hippo):
             obj_distances=proto.astype(jnp.float32),
         )
 
+        return self.resolve_spatial_attributes()
 
+    def resolve_spatial_attributes(self) -> Self:
         positions = [self.objects_map[o].position for o in self.object_names]
         positions = jnp.stack(positions)
 
         sizes = [self.objects_map[o].size for o in self.object_names]
         sizes = jnp.stack(sizes)
 
-        return self.replace(
-            **resolve_spatial_attributes(positions, sizes)
-        )
+        kwargs = resolve_spatial_attributes(positions, sizes)
+
+        return self.replace(**kwargs)
 
 
     def bool_spatial_attribute_to_list(self, j, attrvec):
@@ -224,7 +227,10 @@ class RuntimeObjectContainer(_Hippo):
         attrvec[j] = False
         valid_indices = np.arange(len(attrvec))[attrvec]
 
-        return attrvec[valid_indices]
+        ret = []
+        for valid_index in valid_indices:
+            ret.append(self.object_names[valid_index])
+        return ret
 
     def float_spatial_attribute_to_dict(self, j, attrvec):
         attrvec = np.array(attrvec).squeeze()
@@ -233,7 +239,7 @@ class RuntimeObjectContainer(_Hippo):
 
         ret = {}
         for valid_index in valid_indices:
-            ret[self.object_names[valid_index]] = attrvec[valid_index]
+            ret[self.object_names[valid_index]] = float(attrvec[valid_index])
         return ret
 
     def update_from_ai2thor(self, objects: List[Dict]):
@@ -256,83 +262,21 @@ class RuntimeObjectContainer(_Hippo):
 
             NUM_UPDATED_OBJECTS += 1
         assert NUM_UPDATED_OBJECTS == len(self.objects_map)
-        return self.replace(objects_map=dico)
+        return self.replace(objects_map=dico).resolve_spatial_attributes()
 
     def diff(self, new_runtimecontainer: Self):
         selfdict = self.as_llmjson()
         newdict = new_runtimecontainer.as_llmjson()
 
-        diff = DeepDiff(selfdict, newdict, ignore_order=True)
-
-        changes = []
-
-        # Handle value changes
-        for path, change in diff.get("values_changed", {}).items():
-            changes.append({
-                path: {
-                "old_value": change["old_value"],
-                "new_value": change["new_value"]
-            }})
-
-        # Handle type changes
-        for path, change in diff.get("type_changes", {}).items():
-            changes.append({
-                path: {
-                "old_value": change["old_value"],
-                "new_value": change["new_value"]
-                }})
-
-        # TODO not supposed to happen, right?
-        """
-        # Handle additions
-        for path, value in diff.get("iterable_item_added", {}).items():
-            changes.append({
-                "path": path,
-                "type": "added",
-                "new_value": value
-            })
-
-        # Handle removals
-        for path, value in diff.get("iterable_item_removed", {}).items():
-            changes.append({
-                "path": path,
-                "type": "removed",
-                "old_value": value
-            })
-        """
-
-        ret = {}
-        for change in changes:
-            ret.update(change)
-        return ret
+        return git_diff(selfdict, newdict)
 
     def get_object_by_id(self, object_id):
         return self.objects_map[object_id]
-
-    def _assert_object_exist(self, object_id):
-        if object_id not in self.object_names:
-            raise ObjectDoesNotExist(f"Object with id {object_id} not found in container")
 
     def update_object(self, object) -> Self:
         dico = copy.deepcopy(self.objects_map)
         dico[object.id] = object
         return self.replace(objects_map=dico)
-
-    def BreakObject(self, object_id):
-        self._assert_object_exist(object_id)
-        return self._update_object(self.objects_map[object_id].BreakObject())
-
-    def ToggleObjectOn(self, object_id):
-        self._assert_object_exist(object_id)
-        return self._update_object(self.objects_map[object_id].ToggleObjectOn())
-
-    def ToggleObjectOff(self, object_id):
-        self._assert_object_exist(object_id)
-        return self._update_object(self.objects_map[object_id].ToggleObjectOff())
-
-    def SliceObject(self, object_id):
-        self._assert_object_exist(object_id)
-        return self._update_object(self.objects_map[object_id].SliceObject())
     
     def as_llmjson(self):
 
@@ -353,8 +297,6 @@ class RuntimeObjectContainer(_Hippo):
             final_dict[name] = objdict
 
         return final_dict
-
-
 
 
 @jax.jit

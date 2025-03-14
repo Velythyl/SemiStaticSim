@@ -10,28 +10,6 @@ from hippo.hippocontainers.sas import SimulationActionState
 from hippo.utils.selfdataclass import SelfDataclass
 
 
-class _MultiException(Exception):
-    def __init__(self, exceptions):
-        super().__init__()
-        self.exceptions = exceptions
-
-class PreconditionFailed(_MultiException):
-    pass
-
-class PostconditionFailed(_MultiException):
-    pass
-
-def maybe_raise_many_exceptions(e_list, type: _MultiException):
-    e_list = list(filter(lambda e: isinstance(e, Exception), e_list))
-    if len(e_list) > 0:
-        raise type(e_list)
-
-def coerce_as_list(x):
-    if isinstance(x, list):
-        return x
-    else:
-        return [x]
-
 @dataclass
 class _Skill(SelfDataclass):
     enabled_name: str = None
@@ -41,67 +19,23 @@ class _Skill(SelfDataclass):
     is_enabled: bool = None
     state_value: Any = None
 
-    def pre_conditions(self):
+    def default_pre_conditions(self):
         return [COND_ObjectExists, COND_SkillEnabled]
 
-    def _pre_conditions(self):
+    def specific_pre_conditions(self):
         return []
 
-    def post_conditions(self):
+    def default_post_conditions(self):
         return []
 
-    def _post_conditions(self):
+    def specific_post_conditions(self):
         return []
-
-    def _verify_object_exists(self, sas):
-        if sas.get_object_from_controller(sas.target_object) is None:
-            assert sas.pre_container.get_object_by_id(sas.target_object) is not None, f"If this happened, somehow the runtime object container is desynchronized from the controller. Why????"
-            return ObjectDoesNotExist(f"Object {sas.target_object} does not exist in the scene.")
-
-    def _verify_robot_exists(self, sas):
-        return True # fixme
-
-    def _verify_skill_enabled(self):
-        if not self.is_enabled:
-            return SkillNotSupported(self.enabled_name)
 
     def verify_preconditions(self, sas):
-        return verify_all_conditions(sas, self.pre_conditions() + self._pre_conditions())
-        conditions = [c(sas) for c in (self.pre_conditions() + self._pre_conditions())]
-        # fixme raise exceptions
-        return
-
-        exceptions = [self._verify_skill_enabled(), self._verify_robot_exists(sas), self._verify_object_exists(sas)]
-
-        skill_specific = coerce_as_list(self._verify_precondition(sas))
-
-        maybe_raise_many_exceptions(exceptions + skill_specific, PreconditionFailed)
-
-    def _verify_precondition(self, sas):
-        return True
+        return verify_all_conditions(sas, self.default_pre_conditions() + self.specific_pre_conditions())
 
     def verify_postconditions(self, sas):
-        conditions = [c(sas) for c in (self.post_conditions() + self._post_conditions())]
-        # fixme raise exceptions
-        return
-
-        exceptions = [self._verify_robot_exists(sas)]
-
-        skill_specific = coerce_as_list(self._verify_postcondition(sas))
-
-        maybe_raise_many_exceptions(exceptions + skill_specific, PostconditionFailed)
-
-    def _verify_postcondition(self, sas):
-        return True
-
-    def _verify_isInteractable(self, sas):
-        object_exists_error = self._verify_object_exists(sas)
-        if object_exists_error is not None:
-            return object_exists_error
-
-        object = sas.get_object_from_controller(sas.target_object)
-        if not object["isInteractable"]:
-            return ObjectNotInProximity()
+        return verify_all_conditions(sas, self.default_post_conditions() + self.specific_post_conditions())
 
     def has_skill_of_name(self, skill_name: str | SimulationActionState):
         if isinstance(skill_name, SimulationActionState):
@@ -123,9 +57,6 @@ class _Skill(SelfDataclass):
             return {self.state_name: self.state_value, self.enabled_name: self.is_enabled}
         return {}
 
-class UpdateFromAi2Thor_FLAG:
-    pass
-
 @lru_cache(maxsize=128)
 def find_skillname_2_enabledname(skill_name):
     attribute_enabled_name = None
@@ -134,8 +65,6 @@ def find_skillname_2_enabledname(skill_name):
             attribute_enabled_name = skill.enabled_name
             break
     return attribute_enabled_name
-
-
 
 @dataclass
 class SkillPortfolio(SelfDataclass):
@@ -192,12 +121,10 @@ class SkillPortfolio(SelfDataclass):
 
         return sas
 
-
     def effectuate_skill(self, skill):
         skills = copy.deepcopy(self.skills)
         skills[skill.enabled_name] = skill
         return self.replace(skills=skills)
-
 
     def output_dict(self):
         ret = {}
@@ -210,7 +137,7 @@ class _ToggleObject(_Skill):
     enabled_name: str = "toggleable"
     state_name: str = "isToggled"
 
-    def _pre_conditions(self):
+    def specific_pre_conditions(self):
         return [COND_IsInProximity]
 
 @dataclass
@@ -262,14 +189,14 @@ class PickupObject(_Ai2ThorSkill):
 
     llm_name: str = "can be picked up"
 
-    def _pre_conditions(self):
+    def specific_pre_conditions(self):
         return [COND_IsInProximity, COND_AttributeEnabledInAi2Thor]
 
     def PickupObject(self, sas: SimulationActionState):
         sas.action_callback()
         return None
 
-    def _post_conditions(self):
+    def specific_post_conditions(self):
         return []# fixme make condition that checks that (1) item has isPickedUp and also that (2) robot has it in the inventory
 
 @dataclass
@@ -281,10 +208,10 @@ class PutObject(_Ai2ThorSkill):
         sas.action_callback()
         return None
 
-    def _pre_conditions(self):
+    def specific_pre_conditions(self):
         return [COND_IsInProximity, COND_AttributeEnabledInAi2Thor] # fixme checks for the post conditions of PickupObject. So, the robot must have an object in its inventory.  Note: the target_object is the target surface, not the object that will be put down!
 
-    def _post_conditions(self):
+    def specific_post_conditions(self):
         return [] # fixme  checks that the runtime container says the object that was in the inventory is now placed on the target object "isOnTop" on whatever
 
 
@@ -293,7 +220,7 @@ class _OpenableObject(_Skill):
     enabled_name: str = "openable"
     state_name: str = "isOpen"
 
-    def _pre_conditions(self):
+    def specific_pre_conditions(self):
         return [COND_IsInProximity]
 
 @dataclass
@@ -328,7 +255,7 @@ class SliceObject(_Skill):
 
     llm_name: str = "can be sliced"
 
-    def _pre_conditions(self):
+    def specific_pre_conditions(self):
         return [COND_IsInProximity]
 
     def SliceObject(self, sas: SimulationActionState):
@@ -341,7 +268,7 @@ class BreakObject(_Skill):
 
     llm_name: str = "can be broken"
 
-    def _pre_conditions(self):
+    def specific_pre_conditions(self):
         return [COND_IsInProximity]
 
     def BreakObject(self, sas: SimulationActionState):
@@ -401,5 +328,5 @@ def get_exclusive_llm_names():
 
 
 if __name__ == "__main__":
-    temp = get_enabledname_2_skills()
+    temp = get_exclusive_llm_names()
     i=0
