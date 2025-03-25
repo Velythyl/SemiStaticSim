@@ -4,13 +4,8 @@ from typing import Any
 import numpy as np
 from typing_extensions import Self
 
-def recursive_map(data, func):
-    if isinstance(data, dict):
-        return {k: recursive_map(v, func) for k, v in data.items()}
-    elif isinstance(data, (list, tuple, set)):
-        return type(data)(recursive_map(v, func) for v in data)
-    else:
-        return func(data)
+from hippo.utils.dict_utils import recursive_map
+
 
 def try_marshall(field_value):
     field = field_value.arg1

@@ -1,8 +1,7 @@
 import copy
 import functools
-import struct
 from dataclasses import field, dataclass
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Any
 
 import jax
 import numpy as np
@@ -11,8 +10,8 @@ from typing_extensions import Self
 import jax.numpy as jnp
 
 
-from hippo.hippocontainers.proximity_spatial_funcs import isOnTop, isInside, isBeside, distance
-from hippo.hippocontainers.scenedata import dict2xyztuple, HippoObject, _Hippo, xyztuple_precision
+from hippo.simulation.spatialutils.proximity_spatial_funcs import isOnTop, isInside, isBeside, distance
+from hippo.reconstruction.scenedata import dict2xyztuple, HippoObject, _Hippo, xyztuple_precision
 from hippo.utils.git_diff import git_diff
 
 
@@ -27,7 +26,6 @@ class RuntimeObject(_Hippo):
     position: jnp.ndarray
     rotation: jnp.ndarray
     size: jnp.ndarray
-
 
     skill_portfolio: Any
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -54,6 +52,12 @@ class RuntimeObject(_Hippo):
         size = jnp.array(size)
         return self.replace(position=position, rotation=rotation, size=size)
 
+    def cast_precision(self):
+        return self.replace(
+            position=jnp.round(self.position, 3),
+            rotation=jnp.round(self.rotation, 3),
+            size=jnp.round(self.size, 3)
+        )
     
     def as_llmjson(self):
         dico = self.asdict()
@@ -115,7 +119,7 @@ class RuntimeObject(_Hippo):
         if "_skill_metadata" not in dico:
             raise NotImplementedError()
 
-        from hippo.hippocontainers.skills import SkillPortfolio
+        from hippo.simulation.skillsandconditions.skills_abstract import SkillPortfolio
         skill_portfolio = SkillPortfolio.create(dico["_skill_metadata"])
 
         self = cls(
@@ -127,9 +131,7 @@ class RuntimeObject(_Hippo):
             skill_portfolio=skill_portfolio
         )
 
-        return self
-
-from deepdiff import DeepDiff
+        return self.cast_precision()
 
 
 @dataclass
@@ -316,6 +318,8 @@ def resolve_spatial_attributes(positions, sizes):
     sizes = swap_yz(sizes)
 
     obj_isOnTopOf, obj_isInsideOf, obj_isBesideOf, obj_distances = jax.vmap(functools.partial(for_each_object, positions, sizes))(positions, sizes)
+
+    obj_distances = jax.vmap(lambda x: jnp.round(x, decimals=2))(obj_distances.squeeze())
 
     return {
         "obj_isOnTopOf": obj_isOnTopOf.squeeze(),

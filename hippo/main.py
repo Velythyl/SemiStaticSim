@@ -1,15 +1,24 @@
 import json
 import os
-import shutil
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from ai2holodeck.generation.utils import get_top_down_frame
-from hippo.ai2thor_hippo_controller import get_hippo_controller
-from hippo.assetlookup import AssetLookup
+from hippo.ai2thor_hippo_controller import get_hippo_controller_OLDNOW, get_hippo_controller
+from hippo.reconstruction.composer import SceneComposer
+from hippo.reconstructor.assetlookup import AssetLookup
 from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
-from hippo.composer import ObjectComposer
-from hippo.hippocontainers.runtimeobjects import RuntimeObjectContainer
+from hippo.reconstruction.composer import ObjectComposer
+from hippo.simulation.runtimeobjects import RuntimeObjectContainer
 from hippo.utils.file_utils import get_tmp_folder
+
+def get_target_dir(target_dir="./sampled_scenes"):
+    os.makedirs(target_dir, exist_ok=True)
+    runid = len(os.listdir(target_dir))
+
+    TARGET_DIR = f"{target_dir}/{runid}"
+    os.makedirs(TARGET_DIR, exist_ok=True)
+    return TARGET_DIR
+
 
 if __name__ == '__main__':
 
@@ -19,6 +28,19 @@ if __name__ == '__main__':
         scene = json.load(f)
 
     hipporoom, objects = get_hippos("sacha_kitchen", pad=2)
+
+
+    composer = SceneComposer.create(asset_lookup=hippo, target_dir=get_target_dir(), objectplans=objects, roomplan=hipporoom)
+    composer.write_compositions_in_order(1)
+
+    composer.take_topdown()
+    exit()
+
+    controller = get_hippo_controller(composer.done_paths[0] + "/scene.json")
+    top_image = get_top_down_frame(controller, 1024, 1024)
+    top_image.save(f"{composer.done_paths[0]}/topdown.png")
+    exit()
+
     print(hipporoom.coords)
 
     KEEP_TOP_K = 3
@@ -43,7 +65,7 @@ if __name__ == '__main__':
             json.dump(new_scene, f, indent=4)
 
         temp_folder = get_tmp_folder()
-        controller = get_hippo_controller(f"./sampled_scenes/{runid}/{i}/scene.json", temp_folder)
+        controller = get_hippo_controller_OLDNOW(f"./sampled_scenes/{runid}/{i}/scene.json", temp_folder)
         top_image = get_top_down_frame(controller, composer.target_dir, 1024, 1024)
         top_image.save(f"./sampled_scenes/{runid}/{i}/topdown.png")
         break

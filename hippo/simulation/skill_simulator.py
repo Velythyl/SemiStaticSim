@@ -2,13 +2,13 @@ import os
 import threading
 import time
 
-from hippo.hippocontainers.runtimeobjects import RuntimeObjectContainer
+from hippo.simulation.runtimeobjects import RuntimeObjectContainer
 
 import cv2
 
-from hippo.hippocontainers.sas import SimulationActionState
+from hippo.simulation.skillsandconditions.sas import SimulationActionState
 
-
+import re
 class Simulator:
     def __init__(self, controller, no_robots, objects: RuntimeObjectContainer):
         self.controller = controller
@@ -27,8 +27,7 @@ class Simulator:
     def objects(self):
         return self.transations[-1]
 
-
-    def apply_skill(self, skill_name, agent_id, target_object_id, callback=None):
+    def get_sas(self, skill_name, agent_id, target_object_id, callback=None):
         target_object = self.objects.get_object_by_id(target_object_id)
 
         sas = SimulationActionState(
@@ -39,6 +38,94 @@ class Simulator:
             action_callback=callback,
             skill_name=skill_name,
         )
+
+        object_skill_portfolio = target_object.skill_portfolio
+        object_skill = object_skill_portfolio.find_skill(sas)
+
+        sas = sas.replace(skill_object=object_skill)
+        sas = sas.replace(skill_method=object_skill.get_skill_of_name(sas))
+        sas = sas.replace(skill_portfolio=object_skill_portfolio)
+
+        return sas
+
+    def preconditions_sas(self, sas):
+        preconditions = sas.eval_preconditions()
+        preconditions = sas.skill_object.verify_preconditions(sas)
+        return preconditions
+
+    def postconditions_sas(self, sas):
+        postconditions = sas.skill_object.verify_postconditions(sas)
+        return postconditions
+
+    def apply_sas(self, sas):
+        result = sas.skill_method(sas)
+        from hippo.simulation.skillsandconditions.skills_abstract import _Skill
+        if isinstance(result, _Skill):
+            new_portfolio = sas.skill_portfolio.effectuate_skill(result)
+            target_object_instance = sas.target_object.replace(skill_portfolio=new_portfolio)
+            new_object_container = sas.pre_container.update_object(target_object_instance)
+        elif result is None:
+            new_object_container = sas.pre_container.update_from_ai2thor(sas.get_object_list_from_controller())
+        else:
+            raise AssertionError(
+                "Could not recognize the result of the skill method. Make sure that the skill method returns either a skill or None.")
+
+        sas = sas.replace(post_container=new_object_container)
+        return sas
+
+
+    def apply_skill(self, skill_name, agent_id, target_object_id, callback=None):
+        sas = self.get_sas(skill_name, agent_id, target_object_id, callback)
+
+        preconditions = self.preconditions_sas(sas)
+        if all(preconditions):
+            sas = self.apply_sas(sas)
+            postconditions = self.postconditions_sas(sas)
+            if all(postconditions):
+                self.transations.append(sas.post_container)
+
+                print(self.transations[-2].diff(self.transations[-1]))
+        return
+
+
+        target_object = self.objects.get_object_by_id(target_object_id)
+
+        sas = SimulationActionState(
+            pre_container=self.objects,
+            robot=agent_id,
+            target_object=target_object,
+            controller=self.controller,
+            action_callback=callback,
+            skill_name=skill_name,
+        )
+
+        object_skill_portfolio = target_object.skill_portfolio
+        object_skill = object_skill_portfolio.find_skill(sas)
+        preconditions = object_skill.verify_preconditions(sas)
+
+        # todo the stuff below probably belongs in simulator...
+        if all(preconditions):
+            skill_method = object_skill.get_skill_of_name(sas)
+
+            result = skill_method(sas)
+            from hippo.simulation.skillsandconditions.skills_abstract import _Skill
+            if isinstance(result, _Skill):
+                new_portfolio = object_skill_portfolio.effectuate_skill(result)
+                target_object_instance = sas.target_object.replace(skill_portfolio=new_portfolio)
+                new_object_container = sas.pre_container.update_object(target_object_instance)
+            elif result is None:
+                new_object_container = sas.pre_container.update_from_ai2thor(sas.get_object_list_from_controller())
+            else:
+                raise AssertionError(
+                    "Could not recognize the result of the skill method. Make sure that the skill method returns either a skill or None.")
+
+            sas = sas.replace(post_container=new_object_container)
+            if all(object_skill.verify_postconditions(sas)):
+                self.transations.append(sas.post_container)
+
+                print(self.transations[-2].diff(self.transations[-1]))
+        return
+
 
         result_sas = target_object.skill_portfolio.apply(sas)
         self.transations.append(result_sas.post_container)
@@ -73,25 +160,32 @@ class Simulator:
 
                         if next_action != None:
                             multi_agent_event = self.controller.step(action=next_action, agentId=act['agent_id'], forceAction=True)
+                    elif act['action'] == "GoToObject_PreConditionCheck":
+                        sas = self.get_sas("GoToObject", act['agent_id'], act['objectId'], callback=None)
+                        self.preconditions_sas(sas)
+
+                    elif act['action'] == "GoToObject_PostConditionCheck":
+                        sas = self.get_sas("GoToObject", act['agent_id'], act['objectId'], callback=None)
+                        self.postconditions_sas(sas)
 
                     elif act['action'] == 'MoveAhead':
-                        multi_agent_event = self.controller.step(action="MoveAhead", agentId=act['agent_id'])
+                        self.controller.step(action="MoveAhead", agentId=act['agent_id'])
 
                     elif act['action'] == 'MoveBack':
-                        multi_agent_event = self.controller.step(action="MoveBack", agentId=act['agent_id'])
+                        self.controller.step(action="MoveBack", agentId=act['agent_id'])
 
                     elif act['action'] == 'RotateLeft':
-                        multi_agent_event = self.controller.step(action="RotateLeft", degrees=act['degrees'], agentId=act['agent_id'])
+                        self.controller.step(action="RotateLeft", degrees=act['degrees'], agentId=act['agent_id'])
 
                     elif act['action'] == 'RotateRight':
-                        multi_agent_event = self.controller.step(action="RotateRight", degrees=act['degrees'],
+                        self.controller.step(action="RotateRight", degrees=act['degrees'],
                                                    agentId=act['agent_id'])
 
                     elif act["action"] == "LookUp":
-                        multi_agent_event = self.controller.step(action="LookUp", agentId=act["agent_id"])
+                        self.controller.step(action="LookUp", agentId=act["agent_id"])
 
                     elif act["action"] == "LookDown":
-                        multi_agent_event = self.controller.step(action="LookDown", agentId=act["agent_id"])
+                        self.controller.step(action="LookDown", agentId=act["agent_id"])
 
                     elif act['action'] == 'PickupObject':
                         def PickupObjectCallback():
@@ -187,13 +281,14 @@ class Simulator:
 
 
                     elif act['action'] == 'Done':
-                        multi_agent_event = self.controller.step(action="Done")
+                        self.controller.step(action="Done")
 
 
                 except Exception as e:
+                    raise e
                     print(e)
 
-                for i, e in enumerate(multi_agent_event.events):
+                for i, e in enumerate(self.controller.last_event.events):
                     cv2.imshow('agent%s' % i, e.cv2img)
                     f_name = os.path.dirname(__file__) + "/agent_" + str(i + 1) + "/img_" + str(img_counter).zfill(
                         5) + ".png"
@@ -221,3 +316,36 @@ class Simulator:
 
     def push_action(self, action):
         self.action_queue.append(action)
+
+    def _get_robot_name(self, robot):
+        return robot['name']
+
+    def _get_agent_id(self, robot):
+        return int(robot['name'][-1]) - 1
+
+    def _get_position(self, robot):
+        return robot['position']
+
+    def _get_rotation(self, robot):
+        return robot['rotation']
+
+    def _get_object_id(self, target_obj):
+        objs = list(set([obj["objectId"] for obj in self.controller.last_event.metadata["objects"]]))
+
+        sw_obj_id = target_obj
+
+        for obj in objs:
+            match = re.match(target_obj, obj)
+            if match is not None:
+                sw_obj_id = obj
+                break  # find the first instance
+
+        return sw_obj_id
+
+
+    # ========= SKILLS =========
+
+    def SwitchOn(self, robot, object):
+        self.push_action({'action': 'ToggleObjectOn', 'objectId': self._get_object_id(object), 'agent_id': self._get_agent_id(robot)})
+
+

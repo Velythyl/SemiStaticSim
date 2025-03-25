@@ -21,6 +21,6 @@ def git_diff(thing1, thing2, skillname=None):
 
     clean_f2 = "./perception_after_action.json" if skillname is None else f"./perception_after_{skillname}.json"
 
-    result = result.replace(f"a{f1}", "./perception_before_action.json").replace(f"b{f2}", clean_f2)#.replace("\\ No newline at end of file", "")
+    result = result.replace(f"a{f1}", "./perception_before_action.json").replace(f"b{f2}", clean_f2).replace("\\ No newline at end of file", "")
 
     return result.strip()

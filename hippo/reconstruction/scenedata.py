@@ -4,7 +4,6 @@ import shutil
 import uuid
 from dataclasses import field, dataclass
 from typing import Tuple, List, Union, Dict, Any
-from typing_extensions import Self
 
 import numpy as np
 from ai2thor.util.runtime_assets import save_thor_asset_file
@@ -119,7 +118,7 @@ class HippoObject(_Hippo):
         return asdict
 
     def to_runtimeobject(self):
-        from hippo.hippocontainers.runtimeobjects import RuntimeObject
+        from hippo.simulation.runtimeobjects import RuntimeObject
         return RuntimeObject.from_hippoobject(self)
 
     @classmethod

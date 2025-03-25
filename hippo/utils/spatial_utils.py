@@ -175,16 +175,6 @@ def vis_ai2thor_object(obj):
 
     o3d.visualization.draw_geometries([mesh])
     return
-    # Create Open3D triangle mesh
-    mesh = o3d.geometry.TriangleMesh()
-    mesh.vertices = o3d.utility.Vector3dVector(read_list_dictpoints(obj, "vertices"))
-    mesh.triangles = o3d.utility.Vector3iVector(obj["triangles"])
-
-    # Optional: Compute vertex normals for better visualization
-    mesh.compute_vertex_normals()
-
-    # Visualize
-    o3d.visualization.draw_geometries([mesh])
 
 
 def filter_points_by_y_quartile(points, lower_percentile=5, upper_percentile=95):
@@ -232,15 +222,4 @@ if __name__ == '__main__':
     print(x.keys())
 
     rescale_asset(OBJATHOR_ASSETS_DIR, "9c219d7d26ac47beaa46539a9a4fa8da/9c219d7d26ac47beaa46539a9a4fa8da.pkl.gz", None)
-
-
-
-# Example usage
-#pos1 = (1, 1, 1)
-#bbox1 = (0, 0, 0, 2, 2, 2)
-#pos2 = (1.5, 1.5, 1.5)
-#bbox2 = (1, 1, 1, 2.5, 2.5, 2.5)
-
-#keep = disambiguate(pos1, bbox1, pos2, bbox2)
-#print(keep)  # Should print a tuple like (True, False) or (True, True)
 

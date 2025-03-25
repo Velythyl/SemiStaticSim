@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Dict
 
-from hippo.hippocontainers.conditions import COND_ObjectExists, COND_AttributeEnabled, \
-    COND_IsInProximity, COND_SkillEnabled, verify_all_conditions, COND_AttributeEnabledInAi2Thor
-from hippo.hippocontainers.sas import SimulationActionState
+from hippo.simulation.skillsandconditions.conditions import COND_ObjectExists, COND_SkillEnabled, verify_all_conditions
+from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.utils.selfdataclass import SelfDataclass
 
 
@@ -19,23 +18,22 @@ class _Skill(SelfDataclass):
     is_enabled: bool = None
     state_value: Any = None
 
-    def default_pre_conditions(self):
-        return [COND_ObjectExists, COND_SkillEnabled]
+    def __post_init__(self):
+        import_concrete_skills()
 
-    def specific_pre_conditions(self):
+    @property
+    def pre_conditions(self):
         return []
 
-    def default_post_conditions(self):
-        return []
-
-    def specific_post_conditions(self):
+    @property
+    def post_conditions(self):
         return []
 
     def verify_preconditions(self, sas):
-        return verify_all_conditions(sas, self.default_pre_conditions() + self.specific_pre_conditions())
+        return verify_all_conditions(sas, self.pre_conditions)
 
     def verify_postconditions(self, sas):
-        return verify_all_conditions(sas, self.default_post_conditions() + self.specific_post_conditions())
+        return verify_all_conditions(sas, self.post_conditions)
 
     def has_skill_of_name(self, skill_name: str | SimulationActionState):
         if isinstance(skill_name, SimulationActionState):
@@ -57,6 +55,7 @@ class _Skill(SelfDataclass):
             return {self.state_name: self.state_value, self.enabled_name: self.is_enabled}
         return {}
 
+
 @lru_cache(maxsize=128)
 def find_skillname_2_enabledname(skill_name):
     attribute_enabled_name = None
@@ -66,12 +65,19 @@ def find_skillname_2_enabledname(skill_name):
             break
     return attribute_enabled_name
 
+def import_concrete_skills():
+    import hippo.simulation.skillsandconditions.skills  # noqa
+    return
+
+
 @dataclass
 class SkillPortfolio(SelfDataclass):
     skills: Dict[str, _Skill] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def create(cls, skill_metadata):
+        import_concrete_skills()
+
         llmname_2_skillobj = get_llm_name_2_skill()
 
         ret = []
@@ -91,6 +97,7 @@ class SkillPortfolio(SelfDataclass):
         return cls(ret)
 
     def find_skill(self, sas):
+        import hippo.simulation.skillsandconditions.skills  # noqa
         attribute_enabled_name = find_skillname_2_enabledname(skill_name=sas.skill_name)
         assert attribute_enabled_name is not None
         return self.skills[attribute_enabled_name]
@@ -132,147 +139,6 @@ class SkillPortfolio(SelfDataclass):
             ret.update(v.output_dict())
         return ret
 
-@dataclass
-class _ToggleObject(_Skill):
-    enabled_name: str = "toggleable"
-    state_name: str = "isToggled"
-
-    def specific_pre_conditions(self):
-        return [COND_IsInProximity]
-
-@dataclass
-class ToggleObjectOnAndOff(_ToggleObject):
-    llm_name: str = "can be turned on/off"
-
-    def ToggleObjectOn(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
-
-    def ToggleObjectOff(self, sas: SimulationActionState):
-        return self.replace(state_value=False)
-
-@dataclass
-class ToggleObjectOn(_ToggleObject):
-    llm_name: str = "can only be turned on"
-
-    def ToggleObjectOn(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
-
-@dataclass
-class ToggleObjectOff(_ToggleObject):
-    llm_name: str = "can only be turned off"
-
-    def ToggleObjectOff_(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
-
-@dataclass
-class _Ai2ThorSkill(_Skill):
-    # movement skill, always supported
-    state_value: bool = None    # must be inferred from the controller, so runtimeobject handles it...
-    state_name: str = None
-
-@dataclass
-class GoToObject(_Ai2ThorSkill):
-    # movement skill, always supported
-    enabled_name: str = "navigable"
-    is_enabled: bool = True # always enabled
-
-    llm_name: str = None    # LLM cant turn on/off
-
-    def GoToObject(self, sas: SimulationActionState):
-        sas.action_callback()
-        return None
-
-@dataclass
-class PickupObject(_Ai2ThorSkill):
-    # movement skill, always supported
-    enabled_name: str = "pickupable"  # LLM CAN turn on/off
-
-    llm_name: str = "can be picked up"
-
-    def specific_pre_conditions(self):
-        return [COND_IsInProximity, COND_AttributeEnabledInAi2Thor]
-
-    def PickupObject(self, sas: SimulationActionState):
-        sas.action_callback()
-        return None
-
-    def specific_post_conditions(self):
-        return []# fixme make condition that checks that (1) item has isPickedUp and also that (2) robot has it in the inventory
-
-@dataclass
-class PutObject(_Ai2ThorSkill):
-    enabled_name: str = "receptacle"  # LLM CAN turn on/off
-    llm_name: str = "objects can be put down on this"
-
-    def PutObject(self, sas: SimulationActionState):
-        sas.action_callback()
-        return None
-
-    def specific_pre_conditions(self):
-        return [COND_IsInProximity, COND_AttributeEnabledInAi2Thor] # fixme checks for the post conditions of PickupObject. So, the robot must have an object in its inventory.  Note: the target_object is the target surface, not the object that will be put down!
-
-    def specific_post_conditions(self):
-        return [] # fixme  checks that the runtime container says the object that was in the inventory is now placed on the target object "isOnTop" on whatever
-
-
-@dataclass
-class _OpenableObject(_Skill):
-    enabled_name: str = "openable"
-    state_name: str = "isOpen"
-
-    def specific_pre_conditions(self):
-        return [COND_IsInProximity]
-
-@dataclass
-class OpenAndCloseObject(_OpenableObject):
-    llm_name: str = "can be opened and closed"
-
-    def OpenObject(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
-
-    def CloseObject(self, sas: SimulationActionState):
-        return self.replace(state_value=False)
-
-
-@dataclass
-class OpenObject(_OpenableObject):
-    llm_name: str = "can only be opened"
-
-    def OpenObject(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
-
-@dataclass
-class CloseObject(_OpenableObject):
-    llm_name: str = "can only be closed"
-
-    def CloseObject(self, sas: SimulationActionState):
-        return self.replace(state_value=False)
-
-@dataclass
-class SliceObject(_Skill):
-    enabled_name: str = "sliceable"
-    state_name: str = "isSliced"
-
-    llm_name: str = "can be sliced"
-
-    def specific_pre_conditions(self):
-        return [COND_IsInProximity]
-
-    def SliceObject(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
-
-@dataclass
-class BreakObject(_Skill):
-    enabled_name: str = "breakable"
-    state_name: str = "isBroken"
-
-    llm_name: str = "can be broken"
-
-    def specific_pre_conditions(self):
-        return [COND_IsInProximity]
-
-    def BreakObject(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
 
 def _get_final_subclasses(cls):
     subclasses = cls.__subclasses__()
@@ -283,8 +149,10 @@ def _get_final_subclasses(cls):
         final_nodes.extend(_get_final_subclasses(subclass))  # Recursive call
     return final_nodes
 
+
 def get_all_possible_skills():
     return _get_final_subclasses(_Skill)
+
 
 def get_enabledname_2_skills():
     all_possible_skills = get_all_possible_skills()
@@ -296,6 +164,7 @@ def get_enabledname_2_skills():
         ret[skill.enabled_name].append(skill)
 
     return ret
+
 
 def get_enabled_2_llm_name():
     temp = get_enabledname_2_skills()
@@ -311,6 +180,7 @@ def get_enabled_2_llm_name():
             del ret[k]
     return ret
 
+
 def get_llm_name_2_skill():
     all_possible_skills = get_all_possible_skills()
 
@@ -322,11 +192,7 @@ def get_llm_name_2_skill():
 
     return ret
 
+
 def get_exclusive_llm_names():
     temp = get_enabled_2_llm_name()
     return list(temp.values())
-
-
-if __name__ == "__main__":
-    temp = get_exclusive_llm_names()
-    i=0

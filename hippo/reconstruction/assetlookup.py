@@ -10,7 +10,7 @@ from ai2holodeck.generation.objaverse_retriever import ObjathorRetriever
 from ai2holodeck.generation.rooms import FloorPlanGenerator
 from ai2holodeck.generation.utils import get_bbox_dims, get_annotations
 from ai2holodeck.generation.walls import WallGenerator
-from hippo.hippocontainers.scenedata import HippoRoomPlan, HippoObject
+from hippo.reconstruction.scenedata import HippoRoomPlan, HippoObject
 
 
 class AssetLookup:

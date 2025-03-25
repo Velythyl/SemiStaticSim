@@ -3,7 +3,7 @@ from typing import Callable, List
 
 from typing_extensions import Self
 
-from hippo.hippocontainers.sas import SimulationActionState
+from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.utils.selfdataclass import SelfDataclass
 
 
@@ -13,20 +13,26 @@ class _Condition(Callable, SelfDataclass):
     state: bool = None
     sas: SimulationActionState = None
 
-    prev: Callable = None
+    prev: Self = None
     success: bool = None
 
     def __bool__(self):
         return self.success
 
-    def error_message(self):
+    def error_message(self) -> List[str]:
         if self.state is None:
             raise AssertionError("You tried to get the Condition's error message, but it has not been evaluated yet.")
 
         if self.state is True:
-            return None
+            return []
 
-        return self._error_message()
+        acc = [] + self.prev.error_message()
+
+        acc = acc + [self._error_message()]
+
+        acc = list(filter(lambda x: x is not None, acc))
+
+        return acc
 
     def _error_message(self):
         raise NotImplementedError()
@@ -47,6 +53,9 @@ class TrivialCondition(_Condition):
 
     def __call__(self, sas: SimulationActionState) -> Self:
         return self.replace(sas=sas)
+
+    def _error_message(self):
+        return None
 
 
 @dataclass
@@ -130,14 +139,10 @@ class COND_SkillEnabled(Condition):
         return sas.skill_object.has_skill_of_name(sas)
 
 def verify_all_conditions(sas: SimulationActionState, condlist: List[_Condition]):
-    ret = [c()(sas) for c in condlist]
+    ret = [c(sas) for c in condlist]
     return ret
-def all_conditions_success(condlist: List[_Condition]):
-    succ = True
-    for cond in condlist:
-        if cond.success is False:
-            succ = False
-    return succ
+
+
 
 if __name__ == "__main__":
     c = COND_SkillEnabled()
