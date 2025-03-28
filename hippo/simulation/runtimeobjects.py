@@ -258,7 +258,12 @@ class RuntimeObjectContainer(_Hippo):
 
             existing_object = self.objects_map[id]
             existing_object = existing_object.change_posrotsize(object["position"], object["rotation"], object["size"])
-            existing_object = existing_object.replace(heldBy="robot" if object["isPickedUp"] else None)   # todo fixme multiagent unsupported
+
+            heldBy = object.get("heldBy", None)
+            if object["isPickedUp"]:
+                assert heldBy is not None, f"object {id} is picked up but has no heldBy"
+
+            existing_object = existing_object.replace(heldBy=heldBy)
 
             dico[id] = existing_object
 

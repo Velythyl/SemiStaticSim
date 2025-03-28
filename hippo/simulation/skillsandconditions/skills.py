@@ -1,19 +1,21 @@
 from dataclasses import dataclass
 
-from hippo.simulation.skillsandconditions.conditions import COND_IsInProximity, COND_AttributeEnabledInAi2Thor, \
-    COND_ObjectExists, COND_AttributeEnabled, COND_SkillEnabled
+from hippo.simulation.skillsandconditions.conditions import COND_IsInProximity, \
+    COND_ObjectExists, COND_SkillEnabled, COND_AuxiliaryObjectIsInInventory, COND_SlicingImplementInInventory
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
-from hippo.simulation.skillsandconditions.skills_abstract import _Skill, get_exclusive_llm_names
+from hippo.simulation.skillsandconditions.skills_abstract import _Skill
+
 
 
 @dataclass
 class _ToggleObject(_Skill):
     enabled_name: str = "toggleable"
     state_name: str = "isToggled"
+    anti_llm_name: str = "cannot be turned on or off"
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(), COND_AttributeEnabled(), COND_SkillEnabled()]
+        return [COND_ObjectExists(), COND_IsInProximity(), COND_SkillEnabled()]
 
 
 
@@ -63,16 +65,18 @@ class GoToObject(_Ai2ThorSkill):
     def pre_conditions(self):
         return [COND_ObjectExists()]
 
+
+
 @dataclass
 class PickupObject(_Ai2ThorSkill):
     # movement skill, always supported
     enabled_name: str = "pickupable"  # LLM CAN turn on/off
-
     llm_name: str = "can be picked up"
+    anti_llm_name: str = "cannot be picked up"
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(), COND_AttributeEnabled(),  COND_AttributeEnabledInAi2Thor(), COND_SkillEnabled()]
+        return [COND_ObjectExists(), COND_IsInProximity(), COND_SkillEnabled()]
 
     def PickupObject(self, sas: SimulationActionState):
         sas.action_callback()
@@ -82,9 +86,25 @@ class PickupObject(_Ai2ThorSkill):
         return []# fixme make condition that checks that (1) item has isPickedUp and also that (2) robot has it in the inventory
 
 @dataclass
+class ThrowObject(_Ai2ThorSkill):
+    enabled_name: str = "throwable" # used when mapping llm names to skills, if "can be picked up" is not specified, we'll have to set ThrowObject to disabled
+    llm_name: str = "can be picked up"
+    anti_llm_name: str = "cannot be picked up"
+
+    @property
+    def pre_conditions(self):
+        return [COND_ObjectExists(),
+                COND_SkillEnabled()]
+
+    def ThrowObject(self, sas: SimulationActionState):
+        sas.action_callback()
+        return None
+
+@dataclass
 class PutObject(_Ai2ThorSkill):
     enabled_name: str = "receptacle"  # LLM CAN turn on/off
     llm_name: str = "objects can be put down on this"
+    anti_llm_name: str = "objects can't or shouldn't be put down on this"
 
     def PutObject(self, sas: SimulationActionState):
         sas.action_callback()
@@ -93,7 +113,7 @@ class PutObject(_Ai2ThorSkill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(), COND_AttributeEnabled(),  COND_AttributeEnabledInAi2Thor(), COND_SkillEnabled()]
+        return [COND_ObjectExists(), COND_IsInProximity(),  COND_SkillEnabled(), COND_AuxiliaryObjectIsInInventory()]
     # fixme checks for the post conditions of PickupObject. So, the robot must have an object in its inventory.  Note: the target_object is the target surface, not the object that will be put down!
 
     @property
@@ -101,14 +121,17 @@ class PutObject(_Ai2ThorSkill):
         return [] # fixme  checks that the runtime container says the object that was in the inventory is now placed on the target object "isOnTop" on whatever
 
 
+
 @dataclass
 class _OpenableObject(_Skill):
     enabled_name: str = "openable"
     state_name: str = "isOpen"
 
+    anti_llm_name: str = "cannot be opened or closed"
+
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(), COND_AttributeEnabled(), COND_SkillEnabled()]
+        return [COND_ObjectExists(), COND_IsInProximity(),  COND_SkillEnabled()]
 
 
 @dataclass
@@ -141,14 +164,33 @@ class SliceObject(_Skill):
     enabled_name: str = "sliceable"
     state_name: str = "isSliced"
 
+    tool_llm_name:str = "is a slicing implement"
+    anti_tool_llm_name:str = "cannot use this object to slice things with"
+
     llm_name: str = "can be sliced"
+    anti_llm_name: str = "cannot be sliced in most situations"
 
     def SliceObject(self, sas: SimulationActionState):
         return self.replace(state_value=True)
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(), COND_AttributeEnabled(),
+        return [COND_ObjectExists(), COND_IsInProximity(),
+                COND_SkillEnabled(), COND_SlicingImplementInInventory()]
+
+@dataclass
+class SlicingTool(_Skill):
+    enabled_name: str = "slicing implement"
+
+    llm_name: str = "is a slicing implement"
+    anti_llm_name: str = "cannot use this object to slice things with"
+
+    def SlicingTool(self, sas: SimulationActionState):
+        raise AssertionError("This is a tool-skill, and should never be called. Please report this bug.")
+
+    @property
+    def pre_conditions(self):
+        return [COND_ObjectExists(), COND_IsInProximity(),
                 COND_SkillEnabled()]
 
 
@@ -158,16 +200,27 @@ class BreakObject(_Skill):
     state_name: str = "isBroken"
 
     llm_name: str = "can be broken"
+    anti_llm_name: str = "cannot be broken in most situations"
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(), COND_AttributeEnabled(),
+        return [COND_ObjectExists(), COND_IsInProximity(),
                 COND_SkillEnabled()]
 
     def BreakObject(self, sas: SimulationActionState):
         return self.replace(state_value=True)
 
+@dataclass
+class CleanObject(_Skill):
+    enabled_name: str = "dirtyable"
+    state_name: str = "isDirty"
+    llm_name: str = "can be considered dirty or clean"
+    anti_llm_name: str = "most people wouldn't use 'dirty' or 'clean' to describe this object"
 
-if __name__ == "__main__":
-    temp = get_exclusive_llm_names()
-    i=0
+    @property
+    def pre_conditions(self):
+        return [COND_ObjectExists(), COND_IsInProximity(),
+                COND_SkillEnabled()]
+
+    def CleanObject(self, sas: SimulationActionState):
+        return self.replace(state_value=True)

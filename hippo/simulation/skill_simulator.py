@@ -2,6 +2,7 @@ import os
 import threading
 import time
 
+from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller, get_robot_inventory
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
 
 import cv2
@@ -27,8 +28,18 @@ class Simulator:
     def objects(self):
         return self.transations[-1]
 
-    def get_sas(self, skill_name, agent_id, target_object_id, callback=None):
+    def get_sas(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None, callback=None):
         target_object = self.objects.get_object_by_id(target_object_id)
+
+        #inventory = get_robot_inventory(self.controller, agent_id)
+        #if len(inventory) == 0:
+        #    auxiliary_object = None
+        #else:
+        #    assert len(inventory) == 1, "More than one object in the robot's inventory. Should have been caught by precondition, please report this bug."
+        if auxiliary_object_id is not None:
+            auxiliary_object = self.objects.get_object_by_id(auxiliary_object_id)
+        else:
+            auxiliary_object = None
 
         sas = SimulationActionState(
             pre_container=self.objects,
@@ -37,6 +48,7 @@ class Simulator:
             controller=self.controller,
             action_callback=callback,
             skill_name=skill_name,
+            auxiliary_object=auxiliary_object
         )
 
         object_skill_portfolio = target_object.skill_portfolio
@@ -50,11 +62,10 @@ class Simulator:
 
     def preconditions_sas(self, sas):
         preconditions = sas.eval_preconditions()
-        preconditions = sas.skill_object.verify_preconditions(sas)
         return preconditions
 
-    def postconditions_sas(self, sas):
-        postconditions = sas.skill_object.verify_postconditions(sas)
+    def postconditions_sas(self, sas):  # todo maybe some postconditions effect change...
+        postconditions = sas.eval_postconditions()
         return postconditions
 
     def apply_sas(self, sas):
@@ -65,17 +76,18 @@ class Simulator:
             target_object_instance = sas.target_object.replace(skill_portfolio=new_portfolio)
             new_object_container = sas.pre_container.update_object(target_object_instance)
         elif result is None:
-            new_object_container = sas.pre_container.update_from_ai2thor(sas.get_object_list_from_controller())
+            new_object_container = sas.pre_container #.update_from_ai2thor(sas.get_object_list_from_controller())
         else:
             raise AssertionError(
                 "Could not recognize the result of the skill method. Make sure that the skill method returns either a skill or None.")
+        new_object_container = new_object_container.update_from_ai2thor(get_object_list_from_controller(self.controller))
 
         sas = sas.replace(post_container=new_object_container)
         return sas
 
 
-    def apply_skill(self, skill_name, agent_id, target_object_id, callback=None):
-        sas = self.get_sas(skill_name, agent_id, target_object_id, callback)
+    def apply_skill(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None, callback=None):
+        sas = self.get_sas(skill_name, agent_id, target_object_id, auxiliary_object_id, callback)
 
         preconditions = self.preconditions_sas(sas)
         if all(preconditions):
@@ -86,51 +98,6 @@ class Simulator:
 
                 print(self.transations[-2].diff(self.transations[-1]))
         return
-
-
-        target_object = self.objects.get_object_by_id(target_object_id)
-
-        sas = SimulationActionState(
-            pre_container=self.objects,
-            robot=agent_id,
-            target_object=target_object,
-            controller=self.controller,
-            action_callback=callback,
-            skill_name=skill_name,
-        )
-
-        object_skill_portfolio = target_object.skill_portfolio
-        object_skill = object_skill_portfolio.find_skill(sas)
-        preconditions = object_skill.verify_preconditions(sas)
-
-        # todo the stuff below probably belongs in simulator...
-        if all(preconditions):
-            skill_method = object_skill.get_skill_of_name(sas)
-
-            result = skill_method(sas)
-            from hippo.simulation.skillsandconditions.skills_abstract import _Skill
-            if isinstance(result, _Skill):
-                new_portfolio = object_skill_portfolio.effectuate_skill(result)
-                target_object_instance = sas.target_object.replace(skill_portfolio=new_portfolio)
-                new_object_container = sas.pre_container.update_object(target_object_instance)
-            elif result is None:
-                new_object_container = sas.pre_container.update_from_ai2thor(sas.get_object_list_from_controller())
-            else:
-                raise AssertionError(
-                    "Could not recognize the result of the skill method. Make sure that the skill method returns either a skill or None.")
-
-            sas = sas.replace(post_container=new_object_container)
-            if all(object_skill.verify_postconditions(sas)):
-                self.transations.append(sas.post_container)
-
-                print(self.transations[-2].diff(self.transations[-1]))
-        return
-
-
-        result_sas = target_object.skill_portfolio.apply(sas)
-        self.transations.append(result_sas.post_container)
-
-        print(self.transations[-2].diff(self.transations[-1]))
 
 
     def _exec_actions(self):
@@ -207,7 +174,7 @@ class Simulator:
                                 print(multi_agent_event.metadata['errorMessage'])
                             else:
                                 self.success_exec += 1
-                        self.apply_skill('PutObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=PutObjectCallback)
+                        self.apply_skill('PutObject', agent_id=act['agent_id'], target_object_id=act['objectId'], auxiliary_object_id=act["auxiliaryObjectId"], callback=PutObjectCallback)
 
                     elif act['action'] == 'ToggleObjectOn':
                         self.total_exec += 1
@@ -253,13 +220,24 @@ class Simulator:
                             self.success_exec += 1
 
                     elif act['action'] == 'SliceObject':
+                        #self.total_exec += 1
+                        #multi_agent_event = self.controller.step(action="SliceObject", objectId=act['objectId'],
+                        #                           agentId=act['agent_id'], forceAction=True)
+                        #if multi_agent_event.metadata['errorMessage'] != "":
+                        #    print(multi_agent_event.metadata['errorMessage'])
+                        #else:
+                        #    self.success_exec += 1
                         self.total_exec += 1
-                        multi_agent_event = self.controller.step(action="SliceObject", objectId=act['objectId'],
-                                                   agentId=act['agent_id'], forceAction=True)
-                        if multi_agent_event.metadata['errorMessage'] != "":
-                            print(multi_agent_event.metadata['errorMessage'])
-                        else:
-                            self.success_exec += 1
+
+                        self.apply_skill('SliceObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        # multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
+                        #                           agentId=act['agent_id'], forceAction=True)
+                        # if multi_agent_event.metadata['errorMessage'] != "":
+                        #    print(multi_agent_event.metadata['errorMessage'])
+                        # else:
+                        # todo check for return of apply_skill
+                        self.success_exec += 1
+
 
                     elif act['action'] == 'ThrowObject':
                         self.total_exec += 1

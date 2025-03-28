@@ -12,11 +12,13 @@ from tqdm import tqdm
 from ai2holodeck.generation.utils import get_top_down_frame
 from hippo.ai2thor_hippo_controller import get_hippo_controller
 from hippo.reconstruction.assetlookup import AssetLookup
+from hippo.reconstruction.llm_annotation import LLM_annotate
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
 from hippo.utils.selfdataclass import SelfDataclass
+import multiprocessing as mp
 
 
-with open("../../ai2holodeck/generation/empty_house.json", "r") as f:
+with open("../ai2holodeck/generation/empty_house.json", "r") as f:
     DEFAULT_SCENE = json.load(f)
 
 @dataclasses.dataclass
@@ -32,7 +34,13 @@ class SceneComposer(SelfDataclass):
         looked_up_objectplans = []
         for obj in objectplans:
             looked_up_obj = asset_lookup.lookup_assets(obj)[:KEEP_TOP_K]
-            looked_up_objectplans.append(looked_up_obj)
+
+            looked_up_obj2 = LLM_annotate(looked_up_obj)
+
+            looked_up_objectplans.append(looked_up_obj2)
+
+
+
         #objectplans = tuple([asset_lookup.lookup_assets(x,asset_lookup.objaverse_asset_dir)[:KEEP_TOP_K] for x in objectplans])
         scene = asset_lookup.generate_rooms(DEFAULT_SCENE, hipporoom=roomplan)
 

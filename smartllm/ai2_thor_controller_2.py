@@ -46,7 +46,7 @@ def generate_video(input_path, prefix, char_id=0, image_synthesis=['normal'], fr
 robots = [{'name': 'robot1', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}, 
           {'name': 'robot2', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}]
 
-floor_no = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/71/in_order_0/scene.json"  # 1
+floor_no = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/115knife/in_order_0/scene.json"  # 1
 
 
 c, runtime_container, no_robot, reachable_positions = get_sim(floor_no)
@@ -243,7 +243,7 @@ def PutObject(robot, put_obj, recp):
                 recp_obj_id = obj
                 dest_obj_center = objs_center[idx]
                 dist_to_recp = dist
-    simulator.push_action({'action':'PutObject', 'objectId':recp_obj_id, 'agent_id':agent_id})
+    simulator.push_action({'action':'PutObject', 'objectId':recp_obj_id, 'agent_id':agent_id, 'auxiliaryObjectId': simulator._get_object_id(put_obj)})
          
 def SwitchOn(robot, sw_obj):
     robot_name = robot['name']
@@ -323,7 +323,8 @@ def SliceObject(robot, sw_obj):
 
     # todo do this everywhere? or just move the functions inside the simulator class? probably the latter, right?
     simulator.push_action({'action':'SliceObject', 'objectId': simulator._get_object_id(sw_obj), 'agent_id': simulator._get_agent_id(robot)})
-  
+
+
 def CleanObject(robot, sw_obj):
     robot_name = robot['name']
     agent_id = int(robot_name[-1]) - 1
@@ -333,22 +334,50 @@ def CleanObject(robot, sw_obj):
         match = re.match(sw_obj, obj)
         if match is not None:
             sw_obj_id = obj
-            break # find the first instance
+            break  # find the first instance
+    GoToObject(robot, sw_obj_id)
+    time.sleep(1)
+    simulator.push_action({'action': 'CleanObject', 'objectId': sw_obj_id, 'agent_id': agent_id})
+    time.sleep(1)
 
-    simulator.push_action({'action':'CleanObject', 'objectId':sw_obj_id, 'agent_id':agent_id})
+
+def ThrowObject(robot, sw_obj):
+    robot_name = robot['name']
+    agent_id = int(robot_name[-1]) - 1
+    objs = list(set([obj["objectId"] for obj in c.last_event.metadata["objects"]]))
+
+    for obj in objs:
+        match = re.match(sw_obj, obj)
+        if match is not None:
+            sw_obj_id = obj
+            break  # find the first instance
+
+    simulator.push_action({'action': 'ThrowObject', 'objectId': sw_obj_id, 'agent_id': agent_id})
+    time.sleep(1)
 
 def Done():
     simulator.push_action({'action': 'Done'})
  
 # LLM Generated Code
 
+
 def try_sacha_kitchen(robot):
-    GoToObject(robot, 'emergency stop button')
+    GoToObject(robot, 'knife')
     #SwitchOn(robot, 'interlocking mat')
-    PickupObject(robot, 'emergency stop button')
+    PickupObject(robot, 'knife')
     GoToObject(robot, 'small table')
-    PutObject(robot, 'emergency stop button', 'small table')
-    SwitchOn(robot, 'emergency stop button')
+    SliceObject(robot, "apple")
+    PutObject(robot, 'knife', 'small table')
+    Done()
+
+
+def try_sacha_kitchen2(robot):
+    GoToObject(robot, 'black kettle')
+    #SwitchOn(robot, 'interlocking mat')
+    PickupObject(robot, 'black kettle')
+    GoToObject(robot, 'small table')
+    PutObject(robot, 'black kettle', 'small table')
+    SwitchOn(robot, 'black kettle')
     Done()
 
 sacha_kitchen_thread = threading.Thread(target=try_sacha_kitchen, args=(robots[0],))

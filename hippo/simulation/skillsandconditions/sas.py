@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer, RuntimeObject
 from hippo.utils.selfdataclass import SelfDataclass
 
@@ -16,6 +17,7 @@ class PostconditionFailure(Exception):
 class MultiplePostconditionFailure(Exception):
     pass
 
+
 @dataclass
 class SimulationActionState(SelfDataclass):
     pre_container: RuntimeObjectContainer
@@ -28,13 +30,14 @@ class SimulationActionState(SelfDataclass):
     skill_method: Callable = None
     post_container: RuntimeObjectContainer = None
     skill_portfolio: Any = None
+    auxiliary_object: RuntimeObject = None
 
     def get_object_list_from_controller(self):
         return self.controller.last_event.metadata["objects"]
 
     def get_object_from_controller(self, target_object):
         # you should _verify_object_exists first
-        for obj in self.get_object_list_from_controller():
+        for obj in get_object_list_from_controller(self.controller):
             if obj["objectId"] == target_object.id:
                 return obj
         return None

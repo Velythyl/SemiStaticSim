@@ -4,10 +4,10 @@ import os
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from ai2holodeck.generation.utils import get_top_down_frame
 from hippo.ai2thor_hippo_controller import get_hippo_controller_OLDNOW, get_hippo_controller
+from hippo.llmqueries.llm import set_api_key
+from hippo.reconstruction.assetlookup import AssetLookup
 from hippo.reconstruction.composer import SceneComposer
-from hippo.reconstructor.assetlookup import AssetLookup
 from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
-from hippo.reconstruction.composer import ObjectComposer
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
 from hippo.utils.file_utils import get_tmp_folder
 
@@ -28,7 +28,7 @@ if __name__ == '__main__':
         scene = json.load(f)
 
     hipporoom, objects = get_hippos("sacha_kitchen", pad=2)
-
+    set_api_key("../api_key")
 
     composer = SceneComposer.create(asset_lookup=hippo, target_dir=get_target_dir(), objectplans=objects, roomplan=hipporoom)
     composer.write_compositions_in_order(1)

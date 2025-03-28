@@ -45,6 +45,7 @@ def dict2xyztuple(dic):
 def xyztuple_precision(tup):
     return (round(tup[0], 3), round(tup[1],3), round(tup[2],3))
 
+
 @dataclass
 class HippoObject(_Hippo):
     object_name: str
@@ -73,7 +74,10 @@ class HippoObject(_Hippo):
             _found_scores=found_scores,
         )
 
-    def add_skill_metadata(self, skill_metadata):
+    def set_skill_metadata(self, skill_metadata):
+
+        print(f"Object {self.object_name} has the following skills: {skill_metadata}")
+
         return self.replace(_skill_metadata=skill_metadata)
 
     @property
@@ -188,7 +192,7 @@ class HippoObject(_Hippo):
 
             with open(os.path.join(target_directory_for_this_self, "thor_metadata.json"), "w") as f:
                 json.dump({"assetMetadata": {
-                "primaryProperty": "CanPickup" if "can be picked up" in self._skill_metadata else None,
+                "primaryProperty": "CanPickup" if "can be picked up" in self._skill_metadata else "Static",
                 "secondaryProperties": [
                     "Receptacle"
                 ] if "objects can be put down on this" in self._skill_metadata else []
