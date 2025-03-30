@@ -10,6 +10,7 @@ from typing import Tuple
 import os
 
 from SMARTLLM.smartllm.utils.get_controller import get_sim
+from hippo.llmqueries.llm import set_api_key
 from hippo.simulation.skill_simulator import Simulator
 
 
@@ -359,13 +360,14 @@ def Done():
     simulator.push_action({'action': 'Done'})
  
 # LLM Generated Code
-
+set_api_key("../api_key")
+simulator.set_task_description("slice the apple")
 
 def try_sacha_kitchen(robot):
     GoToObject(robot, 'knife')
     #SwitchOn(robot, 'interlocking mat')
     PickupObject(robot, 'knife')
-    GoToObject(robot, 'small table')
+    GoToObject(robot, 'apple')
     SliceObject(robot, "apple")
     PutObject(robot, 'knife', 'small table')
     Done()

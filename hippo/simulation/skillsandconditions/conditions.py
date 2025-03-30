@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, List
+from typing import Callable, List, Tuple, Any
 
 from typing_extensions import Self
 
@@ -163,6 +163,23 @@ class COND_SkillEnabled(Condition):
     def call(self, sas: SimulationActionState) -> bool:
         return sas.skill_object.has_skill_of_name(sas) and bool(sas.skill_object.is_enabled)
 
+def get_slicing_implement_from_inventory(sas: SimulationActionState | Tuple[Any,int, Any]):
+    if isinstance(sas, SimulationActionState):
+        controller = sas.controller
+        robot = sas.robot
+        container = sas.pre_container
+    else:
+        controller, robot, container = sas
+
+    inventory = get_robot_inventory(controller, robot)
+    for item in inventory:
+        item = container.get_object_by_id(item)
+        toolskill = item.skill_portfolio.find_skill("SlicingTool")
+        if toolskill.is_enabled:
+            return item
+    return None
+
+
 @dataclass
 class COND_SlicingImplementInInventory(Condition):
     name: str = "SlicingImplementInInventory"
@@ -172,15 +189,10 @@ class COND_SlicingImplementInInventory(Condition):
         return f"The robot does not have access to a slicing implement."
 
     def call(self, sas: SimulationActionState) -> bool:
-        inventory = get_robot_inventory(sas.controller, sas.robot)
-        found_it = False
-        for item in inventory:
-            item = sas.pre_container.get_object_by_id(item)
-            toolskill = item.skill_portfolio.find_skill("SlicingTool")
-            if toolskill.is_enabled:
-                found_it = True
-                break
-        return found_it
+        tool = get_slicing_implement_from_inventory(sas)
+        if tool is None:
+            return False
+        return True
 
 def verify_all_conditions(sas: SimulationActionState, condlist: List[_Condition]):
     ret = [c(sas) for c in condlist]

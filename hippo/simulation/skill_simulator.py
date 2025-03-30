@@ -4,7 +4,8 @@ import time
 
 from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller, get_robot_inventory
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
-
+from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff
+from hippo.simulation.skillsandconditions.conditions import get_slicing_implement_from_inventory
 import cv2
 
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
@@ -13,7 +14,7 @@ import re
 class Simulator:
     def __init__(self, controller, no_robots, objects: RuntimeObjectContainer):
         self.controller = controller
-        self.transations = [objects]
+        self.object_containers = [objects]
         
         self.total_exec = 0
         self.success_exec = 0
@@ -24,12 +25,27 @@ class Simulator:
         self.action_queue = []
         self.action_listener = None
 
+        self.task_description = None
+
+    def set_task_description(self, task_description):
+        self.task_description = task_description
+
     @property
-    def objects(self):
-        return self.transations[-1]
+    def current_object_container(self):
+        return self.object_containers[-1]
+
+    def pop_object_container(self):
+        return self.object_containers.pop()
+
+    def append_object_container(self, object_container):
+        self.object_containers.append(object_container)
+
+    def get_object_container_diff(self):
+        assert len(self.object_containers) >= 2
+        return self.object_containers[-2].diff(self.object_containers[-1])
 
     def get_sas(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None, callback=None):
-        target_object = self.objects.get_object_by_id(target_object_id)
+        target_object = self.current_object_container.get_object_by_id(target_object_id)
 
         #inventory = get_robot_inventory(self.controller, agent_id)
         #if len(inventory) == 0:
@@ -37,12 +53,12 @@ class Simulator:
         #else:
         #    assert len(inventory) == 1, "More than one object in the robot's inventory. Should have been caught by precondition, please report this bug."
         if auxiliary_object_id is not None:
-            auxiliary_object = self.objects.get_object_by_id(auxiliary_object_id)
+            auxiliary_object = self.current_object_container.get_object_by_id(auxiliary_object_id)
         else:
             auxiliary_object = None
 
         sas = SimulationActionState(
-            pre_container=self.objects,
+            pre_container=self.current_object_container,
             robot=agent_id,
             target_object=target_object,
             controller=self.controller,
@@ -94,10 +110,17 @@ class Simulator:
             sas = self.apply_sas(sas)
             postconditions = self.postconditions_sas(sas)
             if all(postconditions):
-                self.transations.append(sas.post_container)
-
-                print(self.transations[-2].diff(self.transations[-1]))
+                self.append_object_container(sas.post_container)
         return
+
+    def verify_diff_alignment(self):
+        diff = self.get_object_container_diff()
+        print("Now querying LLM to verify the safety/alignment/semantic of a diff...")
+        print("The diff:")
+        print(diff)
+        print("Querying now...")
+        LLM_verify_diff(self.task_description, diff)
+
 
 
     def _exec_actions(self):
@@ -230,6 +253,14 @@ class Simulator:
                         self.total_exec += 1
 
                         self.apply_skill('SliceObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        knife = get_slicing_implement_from_inventory((self.controller, act["agent_id"], self.current_object_container))
+                        self.apply_skill('DirtyObject', agent_id=act['agent_id'], target_object_id=knife.id)
+                        actual_container = self.pop_object_container()
+                        intermediary_container = self.pop_object_container()    # noqa
+                        self.append_object_container(actual_container)
+
+                        self.verify_diff_alignment()
+
                         # multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
                         #                           agentId=act['agent_id'], forceAction=True)
                         # if multi_agent_event.metadata['errorMessage'] != "":
@@ -265,6 +296,8 @@ class Simulator:
                 except Exception as e:
                     raise e
                     print(e)
+
+#                print(self.get_object_container_diff())
 
                 for i, e in enumerate(self.controller.last_event.events):
                     cv2.imshow('agent%s' % i, e.cv2img)

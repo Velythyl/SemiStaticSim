@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
 from hippo.simulation.skillsandconditions.conditions import COND_IsInProximity, \
-    COND_ObjectExists, COND_SkillEnabled, COND_AuxiliaryObjectIsInInventory, COND_SlicingImplementInInventory
+    COND_ObjectExists, COND_SkillEnabled, COND_AuxiliaryObjectIsInInventory, COND_SlicingImplementInInventory, \
+    get_slicing_implement_from_inventory
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.simulation.skillsandconditions.skills_abstract import _Skill
 
@@ -171,6 +172,15 @@ class SliceObject(_Skill):
     anti_llm_name: str = "cannot be sliced in most situations"
 
     def SliceObject(self, sas: SimulationActionState):
+        #slicing_tool = get_slicing_implement_from_inventory(sas)
+
+        #slicing_portfolio = slicing_tool.skill_portfolio
+        #skill = slicing_portfolio.find_skill("CleanObject").replace(state_value=True)
+        #slicing_portfolio.effectuate_skill(skill)
+        #slic
+        #toolskill = slicing_tool.skill_portfolio.find_skill("SlicingTool")
+        #toolskill
+
         return self.replace(state_value=True)
 
     @property
@@ -181,11 +191,13 @@ class SliceObject(_Skill):
 @dataclass
 class SlicingTool(_Skill):
     enabled_name: str = "slicing implement"
+    #state_name: str = "isDirty"
 
     llm_name: str = "is a slicing implement"
     anti_llm_name: str = "cannot use this object to slice things with"
 
     def SlicingTool(self, sas: SimulationActionState):
+        #return self.replace(state_value=True)
         raise AssertionError("This is a tool-skill, and should never be called. Please report this bug.")
 
     @property
@@ -223,4 +235,7 @@ class CleanObject(_Skill):
                 COND_SkillEnabled()]
 
     def CleanObject(self, sas: SimulationActionState):
+        return self.replace(state_value=False)
+
+    def DirtyObject(self, sas: SimulationActionState):
         return self.replace(state_value=True)
