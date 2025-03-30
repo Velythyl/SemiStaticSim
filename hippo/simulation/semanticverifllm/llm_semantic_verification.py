@@ -1,5 +1,6 @@
 import ast
 import json
+import re
 
 from hippo.llmqueries.llm import LLM
 
@@ -32,36 +33,20 @@ The diff is:
     return PROMPT
 
 
-def parse_response(response):
-    if "```" in response:
-        splitted = response.split("```")[-2].strip()
+def parse_response(llm_reply: str):
+    """
+    Extracts the function name (UnsafeAction or SafeAction) and the reason string from the LLM's reply.
 
-        if splitted.count("[") != splitted.count("]"):
-            return None
+    Args:
+        llm_reply (str): The response from the LLM containing either UnsafeAction("<reason>") or SafeAction("<reason>").
 
-
-        if splitted.count("[") == 1:
-            try:
-                return json.loads(splitted)
-            except:
-                return ast.literal_eval(splitted)
-
-
-        splitted = splitted.split("\n")
-        ret = []
-        for s in splitted:
-            if "," in s:
-                return None
-            try:
-                s = json.loads(s)
-            except:
-                s = ast.literal_eval(s)
-            if len(s) > 1:
-                return None
-            ret.append(s[0])
-        return ret
-
-    return None
+    Returns:
+        tuple: (function_name, reason) where function_name is 'UnsafeAction' or 'SafeAction', and reason is the extracted string.
+    """
+    match = re.search(r'(UnsafeAction|SafeAction)\("(.*?)"\)', llm_reply, re.DOTALL)
+    if match:
+        return match.group(1), match.group(2)
+    return None, None  # If no valid function call is found
 
 def LLM_verify_diff(task_description, diff):
     #_, response = LLM(prompt, "gpt-3.5-turbo", max_tokens=5000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)

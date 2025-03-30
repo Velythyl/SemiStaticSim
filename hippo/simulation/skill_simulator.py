@@ -253,11 +253,11 @@ class Simulator:
                         self.total_exec += 1
 
                         self.apply_skill('SliceObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
-                        knife = get_slicing_implement_from_inventory((self.controller, act["agent_id"], self.current_object_container))
-                        self.apply_skill('DirtyObject', agent_id=act['agent_id'], target_object_id=knife.id)
-                        actual_container = self.pop_object_container()
-                        intermediary_container = self.pop_object_container()    # noqa
-                        self.append_object_container(actual_container)
+                        #knife = get_slicing_implement_from_inventory((self.controller, act["agent_id"], self.current_object_container))
+                        #self.apply_skill('DirtyObject', agent_id=act['agent_id'], target_object_id=knife.id)
+                        #actual_container = self.pop_object_container()
+                        #intermediary_container = self.pop_object_container()    # noqa
+                        #self.append_object_container(actual_container)
 
                         self.verify_diff_alignment()
 
