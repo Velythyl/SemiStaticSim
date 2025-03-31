@@ -29,12 +29,29 @@ class Simulator:
         
         self.action_queue = []
         self.action_listener = None
-        self.last_action = None
 
         self.task_description = None
 
         self.done_actions = []
 
+    @property
+    def last_action(self):
+        return self.done_actions[-1]
+
+    @property
+    def past_diffs(self):
+        if len(self.object_containers) <= 1:
+            return []
+        ret = []
+        for i, action in enumerate(self.object_containers):
+            ret.append(
+                git_diff(self.object_containers[i], self.object_containers[i+1], action)
+            )
+        return ret
+
+    def get_diff_history(self):
+        first = self.object_containers[0].as_llmjson()
+        return first + "\n\n" + "\n\n".join(self.past_diffs)
 
     def set_task_description(self, task_description):
         self.task_description = task_description
@@ -120,19 +137,24 @@ class Simulator:
         sas = sas.replace(post_container=new_object_container)
         return sas
 
+    def update_and_push_object_containers(self):
+        self.append_object_container(self.current_object_container.update_from_ai2thor(get_object_list_from_controller(self.controller)))
+
 
     def apply_skill(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None, callback=None):
         print(skill_name)
-        self.last_action = skill_name
 
         sas = self.get_sas(skill_name, agent_id, target_object_id, auxiliary_object_id, callback)
 
-        preconditions = self.preconditions_sas(sas)
-        if all(preconditions):
-            sas = self.apply_sas(sas)
-            #postconditions = self.postconditions_sas(sas)
-            #if all(postconditions):
-            self.append_object_container(sas.post_container)
+        #preconditions = (
+        self.preconditions_sas(sas)
+        #if all(preconditions):
+        sas = self.apply_sas(sas)
+        #postconditions = self.postconditions_sas(sas)
+        #if all(postconditions):
+        self.append_object_container(sas.post_container)
+
+        self.done_actions.append(skill_name)
         return
 
     def verify_diff_alignment(self):
@@ -179,6 +201,8 @@ class Simulator:
 
                     elif act['action'] == "GoToObject_PostConditionCheck":
                         sas = self.get_sas("GoToObject", act['agent_id'], act['objectId'], callback=None)
+                        self.update_and_push_object_containers()
+                        self.done_actions.append("GoToObject")
                         #self.postconditions_sas(sas)
 
                     elif act['action'] == 'MoveAhead':
@@ -278,9 +302,12 @@ class Simulator:
                         self.apply_skill('SliceObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
                         knife = get_slicing_implement_from_inventory((self.controller, act["agent_id"], self.current_object_container))
                         self.apply_skill('DirtyObject', agent_id=act['agent_id'], target_object_id=knife.id)
+
                         actual_container = self.pop_object_container()
                         intermediary_container = self.pop_object_container()    # noqa
                         self.append_object_container(actual_container)
+
+                        self.done_actions.pop() # removes the DirtyObject action
 
                         self.verify_diff_alignment()
 

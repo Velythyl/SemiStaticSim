@@ -12,11 +12,11 @@ def _write(data):
             f.write("\n")
         return filename
 
-def git_diff(thing1, thing2, skillname=None):
+def git_diff(thing1, thing2, skillname=None, fulldiff=False):
     f1 = _write(thing1)
     f2 = _write(thing2)
 
-    result = subprocess.run(f"git diff -U1000 --no-index {f1} {f2}", capture_output=True, text=True, universal_newlines=True, shell=True)
+    result = subprocess.run(f"git diff {'-U1000' if fulldiff else ''} --no-index {f1} {f2}", capture_output=True, text=True, universal_newlines=True, shell=True)
     result = result.stdout
 
     clean_f2 = "./perception_after_action.json" if skillname is None else f"./perception_after_{skillname}.json"
