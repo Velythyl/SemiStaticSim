@@ -4,13 +4,18 @@ import time
 
 from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller, get_robot_inventory
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
-from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff
-from hippo.simulation.skillsandconditions.conditions import get_slicing_implement_from_inventory
+from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff, UnsafeAction
+from hippo.simulation.skillsandconditions.conditions import get_slicing_implement_from_inventory, eval_conditions, \
+    maybe_raise_llmcondition_exception
 import cv2
 
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 
 import re
+
+from hippo.utils.git_diff import git_diff
+
+
 class Simulator:
     def __init__(self, controller, no_robots, objects: RuntimeObjectContainer):
         self.controller = controller
@@ -24,8 +29,12 @@ class Simulator:
         
         self.action_queue = []
         self.action_listener = None
+        self.last_action = None
 
         self.task_description = None
+
+        self.done_actions = []
+
 
     def set_task_description(self, task_description):
         self.task_description = task_description
@@ -40,8 +49,18 @@ class Simulator:
     def append_object_container(self, object_container):
         self.object_containers.append(object_container)
 
-    def get_object_container_diff(self):
+    def get_object_container_diff(self, last_action=None):
         assert len(self.object_containers) >= 2
+
+        if last_action is None:
+            last_action = self.last_action
+
+        json_old = self.object_containers[-2].as_llmjson()
+        json_new = self.object_containers[-1].as_llmjson()
+
+        diff = git_diff(json_old, json_new, last_action)
+        return diff
+
         return self.object_containers[-2].diff(self.object_containers[-1])
 
     def get_sas(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None, callback=None):
@@ -77,12 +96,12 @@ class Simulator:
         return sas
 
     def preconditions_sas(self, sas):
-        preconditions = sas.eval_preconditions()
-        return preconditions
+        return eval_conditions(sas)
 
     def postconditions_sas(self, sas):  # todo maybe some postconditions effect change...
-        postconditions = sas.eval_postconditions()
-        return postconditions
+        raise NotImplementedError("Do we even need this? ")
+        #postconditions = sas.eval_postconditions()
+        #return postconditions
 
     def apply_sas(self, sas):
         result = sas.skill_method(sas)
@@ -103,14 +122,17 @@ class Simulator:
 
 
     def apply_skill(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None, callback=None):
+        print(skill_name)
+        self.last_action = skill_name
+
         sas = self.get_sas(skill_name, agent_id, target_object_id, auxiliary_object_id, callback)
 
         preconditions = self.preconditions_sas(sas)
         if all(preconditions):
             sas = self.apply_sas(sas)
-            postconditions = self.postconditions_sas(sas)
-            if all(postconditions):
-                self.append_object_container(sas.post_container)
+            #postconditions = self.postconditions_sas(sas)
+            #if all(postconditions):
+            self.append_object_container(sas.post_container)
         return
 
     def verify_diff_alignment(self):
@@ -119,7 +141,8 @@ class Simulator:
         print("The diff:")
         print(diff)
         print("Querying now...")
-        LLM_verify_diff(self.task_description, diff)
+        llmsemantic = LLM_verify_diff(self.task_description, diff)
+        maybe_raise_llmcondition_exception(llmsemantic)
 
 
 
@@ -156,7 +179,7 @@ class Simulator:
 
                     elif act['action'] == "GoToObject_PostConditionCheck":
                         sas = self.get_sas("GoToObject", act['agent_id'], act['objectId'], callback=None)
-                        self.postconditions_sas(sas)
+                        #self.postconditions_sas(sas)
 
                     elif act['action'] == 'MoveAhead':
                         self.controller.step(action="MoveAhead", agentId=act['agent_id'])
@@ -253,11 +276,11 @@ class Simulator:
                         self.total_exec += 1
 
                         self.apply_skill('SliceObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
-                        #knife = get_slicing_implement_from_inventory((self.controller, act["agent_id"], self.current_object_container))
-                        #self.apply_skill('DirtyObject', agent_id=act['agent_id'], target_object_id=knife.id)
-                        #actual_container = self.pop_object_container()
-                        #intermediary_container = self.pop_object_container()    # noqa
-                        #self.append_object_container(actual_container)
+                        knife = get_slicing_implement_from_inventory((self.controller, act["agent_id"], self.current_object_container))
+                        self.apply_skill('DirtyObject', agent_id=act['agent_id'], target_object_id=knife.id)
+                        actual_container = self.pop_object_container()
+                        intermediary_container = self.pop_object_container()    # noqa
+                        self.append_object_container(actual_container)
 
                         self.verify_diff_alignment()
 

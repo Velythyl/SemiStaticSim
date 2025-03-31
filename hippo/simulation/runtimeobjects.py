@@ -271,11 +271,11 @@ class RuntimeObjectContainer(_Hippo):
         assert NUM_UPDATED_OBJECTS == len(self.objects_map)
         return self.replace(objects_map=dico).resolve_spatial_attributes()
 
-    def diff(self, new_runtimecontainer: Self):
-        selfdict = self.as_llmjson()
-        newdict = new_runtimecontainer.as_llmjson()
-
-        return git_diff(selfdict, newdict)
+    #def diff(self, new_runtimecontainer: Self, last_action=None):
+    #    selfdict = self.as_llmjson()
+    #    newdict = new_runtimecontainer.as_llmjson()
+    #
+    #    return git_diff(selfdict, newdict)
 
     def get_object_by_id(self, object_id):
         return self.objects_map[object_id]

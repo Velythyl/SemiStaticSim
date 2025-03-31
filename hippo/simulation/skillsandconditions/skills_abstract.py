@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any, Dict
 
 from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller
-from hippo.simulation.skillsandconditions.conditions import verify_all_conditions
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 
 from hippo.utils.selfdataclass import SelfDataclass
@@ -28,11 +27,11 @@ class _Skill(SelfDataclass):
     def post_conditions(self):
         return []
 
-    def verify_preconditions(self, sas):
-        return verify_all_conditions(sas, self.pre_conditions)
+    #def verify_preconditions(self, sas):
+    #    return verify_all_conditions(sas, self.pre_conditions)
 
-    def verify_postconditions(self, sas):
-        return verify_all_conditions(sas, self.post_conditions)
+    #def verify_postconditions(self, sas):
+    #    return verify_all_conditions(sas, self.post_conditions)
 
     def has_skill_of_name(self, skill_name: str | SimulationActionState):
         if isinstance(skill_name, SimulationActionState):

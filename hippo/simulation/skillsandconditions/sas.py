@@ -5,17 +5,6 @@ from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_contro
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer, RuntimeObject
 from hippo.utils.selfdataclass import SelfDataclass
 
-class PreconditionFailure(Exception):
-    pass
-
-class MultiplePreconditionFailure(Exception):
-    pass
-
-class PostconditionFailure(Exception):
-    pass
-
-class MultiplePostconditionFailure(Exception):
-    pass
 
 
 @dataclass
@@ -42,14 +31,15 @@ class SimulationActionState(SelfDataclass):
                 return obj
         return None
 
-    def eval_preconditions(self):
-        preconditions = [c(self) for c in self.skill_object.pre_conditions]
-        return self.maybe_raise_condition_exception(preconditions, PreconditionFailure, MultiplePreconditionFailure)
+    #def eval_preconditions(self):
+    #    preconditions = [c(self) for c in self.skill_object.pre_conditions]
+    #    return self.maybe_raise_condition_exception(preconditions, PreconditionFailure, MultiplePreconditionFailure)
 
-    def eval_postconditions(self):
-        postconditions = [c(self) for c in self.skill_object.post_conditions]
-        return self.maybe_raise_condition_exception(postconditions, PostconditionFailure, MultiplePostconditionFailure)
+    #def eval_postconditions(self):
+    #    postconditions = [c(self) for c in self.skill_object.post_conditions]
+    #    return self.maybe_raise_condition_exception(postconditions, PostconditionFailure, MultiplePostconditionFailure)
 
+    """
     def maybe_raise_condition_exception(self, condlist, single_exception_class, multiple_exception_class):
         if all(condlist):
             return condlist
@@ -62,4 +52,4 @@ class SimulationActionState(SelfDataclass):
         if len(errors) == 1:
             raise single_exception_class(errors[0])
         else:
-            raise multiple_exception_class(errors)
+            raise multiple_exception_class(errors)"""

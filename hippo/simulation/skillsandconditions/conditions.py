@@ -4,6 +4,7 @@ from typing import Callable, List, Tuple, Any
 from typing_extensions import Self
 
 from hippo.simulation.ai2thor_metadata_reader import get_robot_inventory, get_object_list_from_controller
+from hippo.simulation.semanticverifllm.llm_semantic_verification import _LLMSemanticVerification, UnsafeAction
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.utils.selfdataclass import SelfDataclass
 
@@ -194,10 +195,59 @@ class COND_SlicingImplementInInventory(Condition):
             return False
         return True
 
-def verify_all_conditions(sas: SimulationActionState, condlist: List[_Condition]):
-    ret = [c(sas) for c in condlist]
-    return ret
+#def verify_all_conditions(sas: SimulationActionState, condlist: List[_Condition]):
+#    ret = [c(sas) for c in condlist]
+#    return ret
 
+class ConditionFailure(Exception):
+    pass
+
+class _PreconditionFailure(ConditionFailure):
+    pass
+
+class SinglePreconditionFailure(_PreconditionFailure):
+    pass
+
+class MultiplePreconditionFailure(_PreconditionFailure):
+    pass
+
+class _PostconditionFailure(ConditionFailure):
+    pass
+
+class PostconditionFailure(_PostconditionFailure):
+    pass
+
+class MultiplePostconditionFailure(_PostconditionFailure):
+    pass
+
+class LLMVerificationFailure(_PostconditionFailure):
+    pass
+
+
+
+def eval_conditions(sas):
+    preconditions = [c(sas) for c in sas.skill_object.pre_conditions]
+    return maybe_raise_condition_exception(preconditions, SinglePreconditionFailure, MultiplePreconditionFailure)
+
+
+def maybe_raise_condition_exception(condlist, single_exception_class, multiple_exception_class):
+    if all(condlist):
+        return condlist
+
+    errors = []
+    for cond in condlist:
+        if cond.success is False:
+            errors.append(cond.error_message())
+
+    if len(errors) == 1:
+        raise single_exception_class(errors[0])
+    else:
+        raise multiple_exception_class(errors)
+
+
+def maybe_raise_llmcondition_exception(llmreturn: _LLMSemanticVerification):
+    if isinstance(llmreturn, UnsafeAction):
+        raise LLMVerificationFailure(llmreturn.reason)
 
 
 if __name__ == "__main__":
