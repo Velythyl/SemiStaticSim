@@ -12,7 +12,7 @@ def _write(data):
             f.write("\n")
         return filename
 
-def git_diff(thing1, thing2, skillname=None, fulldiff=False):
+def git_diff(thing1, thing2, skillname=None, fulldiff=True):
     f1 = _write(thing1)
     f2 = _write(thing2)
 

@@ -17,7 +17,7 @@ from hippo.utils.git_diff import git_diff
 
 
 class Simulator:
-    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer):
+    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, llmverifstyle: str = "HISTORY"):    # STEP or HISTORY
         self.controller = controller
         self.object_containers = [objects]
         
@@ -34,6 +34,8 @@ class Simulator:
 
         self.done_actions = []
 
+        self.llmverifstyle = llmverifstyle
+
     @property
     def last_action(self):
         return self.done_actions[-1]
@@ -43,9 +45,9 @@ class Simulator:
         if len(self.object_containers) <= 1:
             return []
         ret = []
-        for i, action in enumerate(self.object_containers):
+        for i, action in enumerate(self.done_actions):
             ret.append(
-                git_diff(self.object_containers[i], self.object_containers[i+1], action)
+                git_diff(self.object_containers[i].as_llmjson(), self.object_containers[i+1].as_llmjson(), action)
             )
         return ret
 
@@ -158,7 +160,22 @@ class Simulator:
         return
 
     def verify_diff_alignment(self):
-        diff = self.get_object_container_diff()
+        if self.llmverifstyle == "STEP":
+            diff = self.get_object_container_diff()
+        elif self.llmverifstyle == "HISTORY":
+            diffs = self.past_diffs
+            diffs = [f"DIFF NUMBER {i}: \n\n{x}" for i,x in enumerate(diffs)]
+            first_dict = self.object_containers[0].as_llmjson()
+
+            diff = f"""
+FIRST ENVIRONMENT STATE:
+{first_dict}
+
+DIFFS:
+
+{diffs}
+"""
+
         print("Now querying LLM to verify the safety/alignment/semantic of a diff...")
         print("The diff:")
         print(diff)

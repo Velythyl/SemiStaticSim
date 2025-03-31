@@ -1,3 +1,5 @@
+import copy
+
 
 def get_robot_inventory(controller, agent_id):
     inventory = controller.last_event.events[agent_id].metadata["inventoryObjects"]
@@ -7,6 +9,7 @@ def get_robot_inventory(controller, agent_id):
 
 def get_object_list_from_controller(controller):
     objects = controller.last_event.metadata["objects"]
+    objects = copy.deepcopy(objects)
 
     held_objects = {} # id: robot
     for i, robot_event in enumerate(controller.last_event.events):
@@ -17,13 +20,15 @@ def get_object_list_from_controller(controller):
         robot_dict = {
             "assetId": f"", # makes robot not considered as runtime object
             "objectId": f"robot{i+1}",
+            "id": i,
             "position": robot_metadata["agent"]['position'],
             "rotation": robot_metadata["agent"]['rotation'],
-            "inventory": inventory
+            "size": {'x': 0.4, 'y': 1.0, 'z': 0.4},
+            "inventory": inventory,
+            "ISROBOT": True
         }
         for obj in inventory:
             held_objects[obj["objectId"]] = f"robot{i+1}"
-
 
         objects.append(robot_dict)
 

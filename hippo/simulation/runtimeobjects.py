@@ -50,7 +50,7 @@ class RuntimeObject(_Hippo):
         position = jnp.array(position)
         rotation = jnp.array(rotation)
         size = jnp.array(size)
-        return self.replace(position=position, rotation=rotation, size=size)
+        return self.replace(position=position, rotation=rotation, size=size).cast_precision()
 
     def cast_precision(self):
         return self.replace(
@@ -133,11 +133,112 @@ class RuntimeObject(_Hippo):
 
         return self.cast_precision()
 
+@dataclass
+class RuntimeRobot(_Hippo):
+    id: int
+
+    @property
+    def name(self):
+        return f"robot{self.id+1}"
+
+    position: jnp.ndarray
+    rotation: jnp.ndarray
+    size: jnp.ndarray
+    holding: str
+
+    @classmethod
+    def fromdict(cls, dico):
+        # object_name = dico["object_name"]
+        # object_description = dico["object_description"]
+        id = dico["id"]
+        position = dico["position"]
+        rotation = dico["rotation"]
+
+        if isinstance(position, dict):
+            position = dict2xyztuple(position)
+
+        if isinstance(rotation, dict):
+            rotation = dict2xyztuple(rotation)
+
+
+        position = jnp.array(position)
+        rotation = jnp.array(rotation)
+
+
+        self = cls(
+            id=id,
+            position=position,
+            rotation=rotation,
+            holding=None
+        )
+
+        self = self.set_holding(dico["inventory"])
+
+        return self.cast_precision()
+
+    def cast_precision(self):
+        return self.replace(
+            position=jnp.round(self.position, 3),
+            rotation=jnp.round(self.rotation, 3),
+            size=jnp.round(self.size, 3)
+        )
+
+    def set_holding(self, inventory):
+        assert len(inventory) <= 1
+        if len(inventory) == 1:
+            holding = inventory[0]["objectId"]
+        else:
+            holding = None
+
+        return self.replace(holding=holding)
+
+    def change_posrotsize(self, position, rotation, size) -> Self:
+        if isinstance(position, dict):
+            position = dict2xyztuple(position)
+
+        if isinstance(rotation, dict):
+            rotation = dict2xyztuple(rotation)
+
+        if isinstance(size, dict):
+            size = dict2xyztuple(size)
+
+        position = xyztuple_precision(position)
+        rotation = xyztuple_precision(rotation)
+        size = xyztuple_precision(size)
+
+        position = jnp.array(position)
+        rotation = jnp.array(rotation)
+        size = jnp.array(size)
+        return self.replace(position=position, rotation=rotation, size=size).cast_precision()
+
+    def as_llmjson(self):
+        dico = self.asdict()
+
+        import numpy as np
+        def arr2tup(key):
+            arr = dico[key]
+            arr = np.array(arr)
+            arr = arr.tolist()
+            dico[key] = (float(arr[0]), float(arr[1]), float(arr[2]))
+        arr2tup("position"); arr2tup("rotation"); arr2tup("size")
+
+        #del dico["skill_portfolio"]
+        #dico.update(self.skill_portfolio.output_dict())
+
+        #dico.update(dico["metadata"])
+        #del dico["metadata"]
+        dico["id"] = self.name
+        del dico["size"] # todo do we need to keep this ?
+        del dico["rotation"] # todo do we need to keep this ?
+        return dico
 
 @dataclass
 class RuntimeObjectContainer(_Hippo):
     object_names: List[str]
     objects_map: Dict[str, RuntimeObject]
+
+    robot_names: List[str]
+    robots_map: Dict[str, RuntimeRobot]
 
     obj_isOnTopOf: jnp.ndarray
 
@@ -163,6 +264,10 @@ class RuntimeObjectContainer(_Hippo):
     def coerce_ai2thor_metadata_objects(cls, metadata_objects):
         ret = []
         for o in metadata_objects:
+            if o.get("ISROBOT", False):
+                ret.append(o)
+                continue
+
             # removes
             if o["assetId"] == "":
                 continue
@@ -204,6 +309,8 @@ class RuntimeObjectContainer(_Hippo):
         self = cls(
             object_names,
             objects_map,
+            robots_map={},
+            robot_names=[],
             obj_isOnTopOf=proto,
             obj_isInsideOf=proto,
             obj_isBesideOf=proto,
@@ -214,9 +321,10 @@ class RuntimeObjectContainer(_Hippo):
 
     def resolve_spatial_attributes(self) -> Self:
         positions = [self.objects_map[o].position for o in self.object_names]
+        positions = positions + [self.robots_map[o].position for o in self.robot_names]
         positions = jnp.stack(positions)
 
-        sizes = [self.objects_map[o].size for o in self.object_names]
+        sizes = [self.objects_map[o].size for o in self.object_names] + [self.robots_map[o].position for o in self.robot_names]
         sizes = jnp.stack(sizes)
 
         kwargs = resolve_spatial_attributes(positions, sizes)
@@ -229,31 +337,56 @@ class RuntimeObjectContainer(_Hippo):
         attrvec[j] = False
         valid_indices = np.arange(len(attrvec))[attrvec]
 
+        robot_names = [f"robot{i+1}" for i in self.robot_names]
+
         ret = []
         for valid_index in valid_indices:
-            ret.append(self.object_names[valid_index])
+            ret.append((self.object_names+robot_names)[valid_index])
         return ret
 
     def float_spatial_attribute_to_dict(self, j, attrvec):
         attrvec = np.array(attrvec).squeeze()
         attrvec[j] = False
         valid_indices = np.arange(len(attrvec))[attrvec > 0]
-
+        robot_names = [f"robot{i + 1}" for i in self.robot_names]
         ret = {}
         for valid_index in valid_indices:
-            ret[self.object_names[valid_index]] = float(attrvec[valid_index])
+            ret[(self.object_names+robot_names)[valid_index]] = float(attrvec[valid_index])
         return ret
+
+    def set_robots(self, objects: List[Dict]):
+        robot_names = []
+        robotdico = {}
+        for object in objects:
+            if object.get("ISROBOT", False) is False:
+                continue
+
+            id = object["id"]
+            existing_robot = RuntimeRobot(id, None, None, None, None)
+            existing_robot = existing_robot.change_posrotsize(object["position"], object["rotation"], object["size"])
+            existing_robot = existing_robot.set_holding(object["inventory"])
+            robotdico[id] = existing_robot
+            robot_names.append(id)
+        return self.replace(robots_map=robotdico, robot_names=robot_names)
 
     def update_from_ai2thor(self, objects: List[Dict]):
         objects = RuntimeObjectContainer.coerce_ai2thor_metadata_objects(objects)
 
         NUM_UPDATED_OBJECTS = 0
 
+        robotdico = {}
         dico = {}
         for object in objects:
             id = object["id"]
 
             if id not in self.objects_map:
+
+                if object.get("ISROBOT", False):
+                    assert id in self.robots_map
+                    existing_robot = self.robots_map[id]
+                    existing_robot = existing_robot.change_posrotsize(object["position"], object["rotation"], object["size"])
+                    existing_robot = existing_robot.set_holding(object["inventory"])
+                    robotdico[id] = existing_robot
                 continue
 
             existing_object = self.objects_map[id]
@@ -269,7 +402,7 @@ class RuntimeObjectContainer(_Hippo):
 
             NUM_UPDATED_OBJECTS += 1
         assert NUM_UPDATED_OBJECTS == len(self.objects_map)
-        return self.replace(objects_map=dico).resolve_spatial_attributes()
+        return self.replace(objects_map=dico, robots_map=robotdico).resolve_spatial_attributes()
 
     #def diff(self, new_runtimecontainer: Self, last_action=None):
     #    selfdict = self.as_llmjson()
@@ -293,8 +426,11 @@ class RuntimeObjectContainer(_Hippo):
         obj_distances = np.array(self.obj_distances)
 
         final_dict = {}
-        for i, name in enumerate(self.object_names):
-            objdict = self.objects_map[name].as_llmjson()
+        for i, name in enumerate((self.object_names+self.robot_names)):
+            if isinstance(name, str):   # fixme this is gross
+                objdict = self.objects_map[name].as_llmjson()
+            else:
+                objdict = self.robots_map[name].as_llmjson()
 
             objdict["isOnTopOf"] = self.bool_spatial_attribute_to_list(i, obj_isOnTopOf[i])
             objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
