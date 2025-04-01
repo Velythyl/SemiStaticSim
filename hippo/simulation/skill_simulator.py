@@ -4,7 +4,8 @@ import time
 
 from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller, get_robot_inventory
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
-from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff, UnsafeAction
+from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff, UnsafeAction, \
+    LLM_verify_final_state
 from hippo.simulation.skillsandconditions.conditions import get_slicing_implement_from_inventory, eval_conditions, \
     maybe_raise_llmcondition_exception
 import cv2
@@ -17,7 +18,7 @@ from hippo.utils.git_diff import git_diff
 
 
 class Simulator:
-    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, llmverifstyle: str = "HISTORY"):    # STEP or HISTORY
+    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, llmverifstyle: str = "STEP"):    # STEP or HISTORY
         self.controller = controller
         self.object_containers = [objects]
         
@@ -142,6 +143,13 @@ class Simulator:
     def update_and_push_object_containers(self):
         self.append_object_container(self.current_object_container.update_from_ai2thor(get_object_list_from_controller(self.controller)))
 
+    def get_skill_prettyprint(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None):
+        temp = f'{skill_name}(robot="robot{agent_id}", target_object="{target_object_id}"'
+
+        if auxiliary_object_id is not None:
+            temp += f', auxiliary_object="{auxiliary_object_id}"'
+        temp += ')'
+        return temp
 
     def apply_skill(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None, callback=None):
         print(skill_name)
@@ -156,12 +164,43 @@ class Simulator:
         #if all(postconditions):
         self.append_object_container(sas.post_container)
 
-        self.done_actions.append(skill_name)
+        self.done_actions.append(self.get_skill_prettyprint(skill_name, agent_id, target_object_id, auxiliary_object_id))
         return
 
-    def verify_diff_alignment(self):
+    def llm_verify_final_state(self):
+        first_state = self.object_containers[0].as_llmjson()
+        last_state = self.current_object_container.as_llmjson()
+
+        diff = git_diff(first_state, last_state, "Executing_The_Plan")
+        action_history = [f'{i}: {x}' for i, x in enumerate(self.done_actions)]
+        action_history = "\n".join(action_history)
+        diff = f"""
+EXECUTED PLAN: 
+{action_history}
+
+DIFF BETWEEN FIRST AND FINAL STATES:
+{diff}
+"""
+
+        print("Now querying LLM to verify the safety/alignment/semantic of the final state...")
+        print("The diff:")
+        print(diff)
+        print("Querying now...")
+        llmsemantic = LLM_verify_final_state(self.task_description, diff)
+        maybe_raise_llmcondition_exception(llmsemantic)
+
+    def llm_verify_diff_alignment(self):
         if self.llmverifstyle == "STEP":
             diff = self.get_object_container_diff()
+            action_history = [f'{i}: {x}' for i, x in enumerate(self.done_actions)]
+            action_history = "\n".join(action_history)
+            diff = f"""
+ALL ACTIONS TO DATE:
+{action_history}
+
+DIFF OF LAST ACTION:
+{diff}
+"""
         elif self.llmverifstyle == "HISTORY":
             diffs = self.past_diffs
             diffs = [f"DIFF NUMBER {i}: \n\n{x}" for i,x in enumerate(diffs)]
@@ -219,7 +258,8 @@ DIFFS:
                     elif act['action'] == "GoToObject_PostConditionCheck":
                         sas = self.get_sas("GoToObject", act['agent_id'], act['objectId'], callback=None)
                         self.update_and_push_object_containers()
-                        self.done_actions.append("GoToObject")
+                        self.done_actions.append(self.get_skill_prettyprint("GoToObject", act['agent_id'], act['objectId'], None))
+                        self.llm_verify_diff_alignment()
                         #self.postconditions_sas(sas)
 
                     elif act['action'] == 'MoveAhead':
@@ -243,28 +283,30 @@ DIFFS:
 
                     elif act['action'] == 'PickupObject':
                         def PickupObjectCallback():
-                            self.total_exec += 1
+                            #self.total_exec += 1
                             multi_agent_event = self.controller.step(action="PickupObject", objectId=act['objectId'],
                                                        agentId=act['agent_id'], forceAction=True)
                             if multi_agent_event.metadata['errorMessage'] != "":
-                                print(multi_agent_event.metadata['errorMessage'])
-                            else:
-                                self.success_exec += 1
+                                raise Exception(multi_agent_event.metadata['errorMessage'])
+                            #else:
+                            #    self.success_exec += 1
                         self.apply_skill('PickupObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=PickupObjectCallback)
+                        self.llm_verify_diff_alignment()
 
                     elif act['action'] == 'PutObject':
                         def PutObjectCallback():
-                            self.total_exec += 1
+                            #self.total_exec += 1
                             multi_agent_event = self.controller.step(action="PutObject", objectId=act['objectId'],
                                                        agentId=act['agent_id'], forceAction=True)
                             if multi_agent_event.metadata['errorMessage'] != "":
-                                print(multi_agent_event.metadata['errorMessage'])
-                            else:
-                                self.success_exec += 1
+                                raise Exception(multi_agent_event.metadata['errorMessage'])
+                            #else:
+                            #    self.success_exec += 1
                         self.apply_skill('PutObject', agent_id=act['agent_id'], target_object_id=act['objectId'], auxiliary_object_id=act["auxiliaryObjectId"], callback=PutObjectCallback)
+                        self.llm_verify_diff_alignment()
 
                     elif act['action'] == 'ToggleObjectOn':
-                        self.total_exec += 1
+                        #self.total_exec += 1
 
                         self.apply_skill('ToggleObjectOn', agent_id=act['agent_id'], target_object_id=act['objectId'])
                         #multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
@@ -273,38 +315,49 @@ DIFFS:
                         #    print(multi_agent_event.metadata['errorMessage'])
                         #else:
                         # todo check for return of apply_skill
-                        self.success_exec += 1
+                        #self.success_exec += 1
+                        self.llm_verify_diff_alignment()
 
                     elif act['action'] == 'ToggleObjectOff':
-                        self.total_exec += 1
-                        multi_agent_event = self.controller.step(action="ToggleObjectOff", objectId=act['objectId'],
-                                                   agentId=act['agent_id'], forceAction=True)
+                        self.apply_skill('ToggleObjectOff', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        self.llm_verify_diff_alignment()
+
+                        #self.total_exec += 1
+                        #multi_agent_event = self.controller.step(action="ToggleObjectOff", objectId=act['objectId'],
+                        #                           agentId=act['agent_id'], forceAction=True)
 
 
 
-                        if multi_agent_event.metadata['errorMessage'] != "":
-                            print(multi_agent_event.metadata['errorMessage'])
-                        else:
-                            self.success_exec += 1
+                        #if multi_agent_event.metadata['errorMessage'] != "":
+                        #    print(multi_agent_event.metadata['errorMessage'])
+                        #else:
+                        #    self.success_exec += 1
 
                     elif act['action'] == 'OpenObject':
-                        self.total_exec += 1
-                        multi_agent_event = self.controller.step(action="OpenObject", objectId=act['objectId'],
-                                                   agentId=act['agent_id'], forceAction=True)
-                        if multi_agent_event.metadata['errorMessage'] != "":
-                            print(multi_agent_event.metadata['errorMessage'])
-                        else:
-                            self.success_exec += 1
+                        self.apply_skill('OpenObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        self.llm_verify_diff_alignment()
+
+                        #self.total_exec += 1
+                        #multi_agent_event = self.controller.step(action="OpenObject", objectId=act['objectId'],
+                        #                           agentId=act['agent_id'], forceAction=True)
+                        #if multi_agent_event.metadata['errorMessage'] != "":
+                        #    print(multi_agent_event.metadata['errorMessage'])
+                        #else:
+                        #    self.success_exec += 1
 
 
                     elif act['action'] == 'CloseObject':
-                        self.total_exec += 1
-                        multi_agent_event = self.controller.step(action="CloseObject", objectId=act['objectId'],
-                                                   agentId=act['agent_id'], forceAction=True)
-                        if multi_agent_event.metadata['errorMessage'] != "":
-                            print(multi_agent_event.metadata['errorMessage'])
-                        else:
-                            self.success_exec += 1
+
+                        self.apply_skill('CloseObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        self.llm_verify_diff_alignment()
+
+                        #self.total_exec += 1
+                        #multi_agent_event = self.controller.step(action="CloseObject", objectId=act['objectId'],
+                        #                           agentId=act['agent_id'], forceAction=True)
+                        #if multi_agent_event.metadata['errorMessage'] != "":
+                        #    print(multi_agent_event.metadata['errorMessage'])
+                        #else:
+                        #    self.success_exec += 1
 
                     elif act['action'] == 'SliceObject':
                         #self.total_exec += 1
@@ -314,7 +367,7 @@ DIFFS:
                         #    print(multi_agent_event.metadata['errorMessage'])
                         #else:
                         #    self.success_exec += 1
-                        self.total_exec += 1
+                        #self.total_exec += 1
 
                         self.apply_skill('SliceObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
                         knife = get_slicing_implement_from_inventory((self.controller, act["agent_id"], self.current_object_container))
@@ -326,38 +379,56 @@ DIFFS:
 
                         self.done_actions.pop() # removes the DirtyObject action
 
-                        self.verify_diff_alignment()
+                        self.llm_verify_diff_alignment()
 
                         # multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
                         #                           agentId=act['agent_id'], forceAction=True)
                         # if multi_agent_event.metadata['errorMessage'] != "":
                         #    print(multi_agent_event.metadata['errorMessage'])
                         # else:
-                        # todo check for return of apply_skill
-                        self.success_exec += 1
+                        #
+                        #self.success_exec += 1
 
 
                     elif act['action'] == 'ThrowObject':
-                        self.total_exec += 1
-                        multi_agent_event = self.controller.step(action="ThrowObject", moveMagnitude=7, agentId=act['agent_id'],
-                                                   forceAction=True)
-                        if multi_agent_event.metadata['errorMessage'] != "":
-                            print(multi_agent_event.metadata['errorMessage'])
-                        else:
-                            self.success_exec += 1
+                        #self.total_exec += 1
+                        #multi_agent_event = self.controller.step(action="ThrowObject", moveMagnitude=7, agentId=act['agent_id'],
+                        #                           forceAction=True)
+                        #if multi_agent_event.metadata['errorMessage'] != "":
+                        #    print(multi_agent_event.metadata['errorMessage'])
+                        #else:
+                        #    self.success_exec += 1
+
+                        def ThrowObjectCallback():
+                            # self.total_exec += 1
+                            multi_agent_event = self.controller.step(action="ThrowObject", moveMagnitude=7,
+                                                                     agentId=act['agent_id'],
+                                                                     forceAction=True)
+                            if multi_agent_event.metadata['errorMessage'] != "":
+                                raise Exception(multi_agent_event.metadata['errorMessage'])
+                            # else:
+                            #    self.success_exec += 1
+
+                        self.apply_skill('ThrowObject', agent_id=act['agent_id'], target_object_id=act['objectId'],
+                                         callback=ThrowObjectCallback)
+                        self.llm_verify_diff_alignment()
 
                     elif act['action'] == 'BreakObject':
-                        self.total_exec += 1
-                        multi_agent_event = self.controller.step(action="BreakObject", objectId=act['objectId'],
-                                                   agentId=act['agent_id'], forceAction=True)
-                        if multi_agent_event.metadata['errorMessage'] != "":
-                            print(multi_agent_event.metadata['errorMessage'])
-                        else:
-                            self.success_exec += 1
+                        self.apply_skill('BreakObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        self.llm_verify_diff_alignment()
+
+                        #self.total_exec += 1
+                        #multi_agent_event = self.controller.step(action="BreakObject", objectId=act['objectId'],
+                        #                           agentId=act['agent_id'], forceAction=True)
+                        #if multi_agent_event.metadata['errorMessage'] != "":
+                        #    print(multi_agent_event.metadata['errorMessage'])
+                        #else:
+                        #    self.success_exec += 1
 
 
                     elif act['action'] == 'Done':
                         self.controller.step(action="Done")
+                        self.llm_verify_final_state()
 
 
                 except Exception as e:

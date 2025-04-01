@@ -4,7 +4,8 @@ from typing import Callable, List, Tuple, Any
 from typing_extensions import Self
 
 from hippo.simulation.ai2thor_metadata_reader import get_robot_inventory, get_object_list_from_controller
-from hippo.simulation.semanticverifllm.llm_semantic_verification import _LLMSemanticVerification, UnsafeAction
+from hippo.simulation.semanticverifllm.llm_semantic_verification import _LLMSemanticVerification, UnsafeAction, \
+    UnsafeFinalState, IncorrectFinalState
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.utils.selfdataclass import SelfDataclass
 
@@ -246,7 +247,7 @@ def maybe_raise_condition_exception(condlist, single_exception_class, multiple_e
 
 
 def maybe_raise_llmcondition_exception(llmreturn: _LLMSemanticVerification):
-    if isinstance(llmreturn, UnsafeAction):
+    if isinstance(llmreturn, (UnsafeAction, UnsafeFinalState, IncorrectFinalState)):
         raise LLMVerificationFailure(llmreturn.reason)
 
 
