@@ -26,7 +26,7 @@ def get_controller(scene, get_runtime_container=False, **kwargs):
         controller = get_hippo_controller_OLDNOW(scene, target_dir=target_dir, **kwargs)
     return controller
 
-def get_sim(floor_no):
+def get_sim_TODELETE(floor_no):
     from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
     scene = resolve_scene_id(floor_no)
 

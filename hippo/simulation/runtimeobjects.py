@@ -15,6 +15,9 @@ from hippo.reconstruction.scenedata import dict2xyztuple, HippoObject, _Hippo, x
 from hippo.utils.git_diff import git_diff
 
 
+def clip_number_string(x):
+    return str(round(x, 2))
+
 #from hippo.hippocontainers.skills import *
 
 @dataclass
@@ -67,7 +70,7 @@ class RuntimeObject(_Hippo):
             arr = dico[key]
             arr = np.array(arr)
             arr = arr.tolist()
-            dico[key] = (float(arr[0]), float(arr[1]), float(arr[2]))
+            dico[key] = (clip_number_string(float(arr[0])), clip_number_string(float(arr[1])), clip_number_string(float(arr[2])))
         arr2tup("position"); arr2tup("rotation"); arr2tup("size")
 
         del dico["skill_portfolio"]
@@ -219,7 +222,7 @@ class RuntimeRobot(_Hippo):
             arr = dico[key]
             arr = np.array(arr)
             arr = arr.tolist()
-            dico[key] = (float(arr[0]), float(arr[1]), float(arr[2]))
+            dico[key] = (clip_number_string(float(arr[0])), clip_number_string(float(arr[1])), clip_number_string(float(arr[2])))
         arr2tup("position"); arr2tup("rotation"); arr2tup("size")
 
         #del dico["skill_portfolio"]
@@ -351,7 +354,7 @@ class RuntimeObjectContainer(_Hippo):
         robot_names = [f"robot{i + 1}" for i in self.robot_names]
         ret = {}
         for valid_index in valid_indices:
-            ret[(self.object_names+robot_names)[valid_index]] = float(attrvec[valid_index])
+            ret[(self.object_names+robot_names)[valid_index]] = clip_number_string(float(attrvec[valid_index]))
         return ret
 
     def set_robots(self, objects: List[Dict]):
@@ -421,9 +424,10 @@ class RuntimeObjectContainer(_Hippo):
     def as_llmjson(self):
 
         obj_isOnTopOf = np.array(self.obj_isOnTopOf)
-        obj_isInsideOf = np.array(self.obj_isInsideOf)
+        #obj_isInsideOf = np.array(self.obj_isInsideOf)
         obj_isBesideOf = np.array(self.obj_isBesideOf)
         obj_distances = np.array(self.obj_distances)
+
 
         final_dict = {}
         for i, name in enumerate((self.object_names+self.robot_names)):
@@ -431,9 +435,10 @@ class RuntimeObjectContainer(_Hippo):
                 objdict = self.objects_map[name].as_llmjson()
             else:
                 objdict = self.robots_map[name].as_llmjson()
+                name = f"robot{name}"
 
             objdict["isOnTopOf"] = self.bool_spatial_attribute_to_list(i, obj_isOnTopOf[i])
-            objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
+            #objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
             objdict["isBesideOf"] = self.bool_spatial_attribute_to_list(i, obj_isBesideOf[i])
             objdict["object_distances"] = self.float_spatial_attribute_to_dict(i, obj_distances[i])
 

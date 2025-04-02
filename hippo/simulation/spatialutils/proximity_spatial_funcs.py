@@ -64,30 +64,45 @@ def isInside(pos1, size1, pos2, size2, tol_overlap=0.99,  tol_dist=None):
 
     return overlap_ratio >= tol_overlap
 
-def isBeside2(pos1, size1, pos2, size2, tol_overlap=None, tol_dist=0.01):
-    """Returns True if obj1 is beside obj2 within the distance tolerance."""
-    # Ensure they are at the same Z level
-    z_diff = jnp.abs(pos1[2] - pos2[2])
-    same_surface = z_diff <= tol_dist
 
-    # Check if they are adjacent in XY plane
-    adjacent_x = jnp.abs(pos1[0] - pos2[0]) <= (size1[0] + size2[0]) / 2 + tol_dist
-    adjacent_y = jnp.abs(pos1[1] - pos2[1]) <= (size1[1] + size2[1]) / 2 + tol_dist
-
-    return same_surface & (adjacent_x | adjacent_y)
-
-def isBeside(pos1, size1, pos2, size2, tol_dist=0.01):
+def isBeside_OLD(pos1, size1, pos2, size2, tol_dist=0.1):
     """Returns True if obj1 is beside obj2 within the distance tolerance."""
     # Check if the bases of both objects are at the same height (Z level)
     base_z_obj1 = pos1[2] - size1[2] / 2  # Bottom of obj1
     base_z_obj2 = pos2[2] - size2[2] / 2  # Bottom of obj2
-    same_surface = jnp.abs(base_z_obj1 - base_z_obj2) <= tol_dist
+    same_surface = jnp.abs(base_z_obj1 - base_z_obj2) <= (tol_dist / 4) # less tolerant for vertical alignment
 
     # Check if they are adjacent in the XY plane
     adjacent_x = jnp.abs(pos1[0] - pos2[0]) <= (size1[0] + size2[0]) / 2 + tol_dist
     adjacent_y = jnp.abs(pos1[1] - pos2[1]) <= (size1[1] + size2[1]) / 2 + tol_dist
 
     return same_surface & (adjacent_x | adjacent_y)
+
+
+def isBeside_EDGE(pos1, size1, pos2, size2, tol_dist=0.5):
+    """Check if edge-to-edge distance is within tolerance."""
+    same_surface = jnp.abs((pos1[2] - size1[2] / 2) - (pos2[2] - size2[2] / 2)) <= (tol_dist / 4)
+
+    # Calculate min edge-to-edge distance in XY
+    dx = jnp.abs(pos1[0] - pos2[0]) - (size1[0] + size2[0]) / 2
+    dy = jnp.abs(pos1[1] - pos2[1]) - (size1[1] + size2[1]) / 2
+    edge_dist = jnp.maximum(dx, dy)  # Or use jnp.sqrt(dx**2 + dy**2) for diagonal
+    return same_surface & (edge_dist <= tol_dist)
+
+
+def isBeside(pos1, size1, pos2, size2, tol_dist=0.5):
+    """Check if objects overlap in one axis and are close in the other."""
+    same_surface = jnp.abs((pos1[2] - size1[2] / 2) - (pos2[2] - size2[2] / 2)) <= (tol_dist / 4)
+
+    # Overlap in X and proximity in Y (or vice versa)
+    overlap_x = (jnp.abs(pos1[0] - pos2[0]) <= (size1[0] + size2[0]) / 2)
+    proximity_y = (jnp.abs(pos1[1] - pos2[1]) <= (size1[1] + size2[1]) / 2 + tol_dist)
+
+    # Overlap in Y and proximity in X (or vice versa)
+    overlap_y = (jnp.abs(pos1[1] - pos2[1]) <= (size1[1] + size2[1]) / 2)
+    proximity_x = (jnp.abs(pos1[0] - pos2[0]) <= (size1[0] + size2[0]) / 2 + tol_dist)
+
+    return same_surface & ((overlap_x & proximity_y) | (overlap_y & proximity_x))
 
 def isNear(pos1, size1, pos2, size2,tol_overlap=None, tol_dist=0.5):
     """Returns True if obj1 is near obj2 within the distance tolerance."""

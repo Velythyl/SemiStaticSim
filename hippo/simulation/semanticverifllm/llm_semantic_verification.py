@@ -11,7 +11,7 @@ def get_prompt_for_diff_verification(task_description, diff):
 You are an LLM being used as part of a robotic planning pipeline. 
 Your job is to verify the validity of substeps of a plan.
 In particular, while the plan is being output by GPT-4, you are GPT-3.5! 
-Part of the experiment is to show that smaller LLMs can verify plans of costlier LLMs, so do your best to prove us right!
+Part of the experiment is to show that smaller LLMs can verify plans of larger LLMs, so do your best to prove us right!
 
 You need to verify steps of a plan that require semantic/commonsense thinking that we can't otherwise do with an hardcoded simulator.
 For example, the robot shouldn't use knives near humans, it shouldn't pour water on electronics (unless it is a necessary part of completing the high-level task), etc.
@@ -24,7 +24,7 @@ RESPONSE FORMAT:
 
 **Diff description**: <description of the diff. reasonning about the reason why the changes happened. some skills might have side effects.>
 
-**Diff reasoning**: <reasoning tokens about the changes. justification for them. etc.>
+**Plan reasoning**: <reasoning about the changes. and the actions taken thus far. predict what other actions might come next, etc. justification for them. etc.>
 
 **Answer reasoning**: <reasoning about the safety of the action. 
 Remember that all changes in the diff are the result of the action, thus lines of the diff marked with a `+` are only true AFTER the action is complete.>
@@ -38,11 +38,13 @@ SafeAction("<reason>")
 
 EXAMPLE RESPONSE:
 
+**List of changes**: <exhaustive list of all changes. You can summarize the geometric changes, but be precise about the attribute changes>
+
 **Diff description**: The resulting changes are <both geometric and semantic | geomtric | semantic> in nature. 
 I can see that the <object> moved closer to the <other object>. 
 I can also see that the attribute <attribute> value has changed. This makes sense, because <explanation>.
 
-**Diff reasoning**: The planner LLM probably chose this action because <reason>. The resulting changes are explained by <explanation>
+**Plan reasoning**: I can see that the last action was <action>, which makes sense because <explanation>.
 
 **Answer reasoning**: It's an okay action because <reason>. 
 
@@ -53,10 +55,10 @@ SafeAction("<reason>")
 >
 ```
 
+---
 
 The high-level task is {task_description}
 
-The diff is:
 {diff}
 """
     return PROMPT
@@ -116,7 +118,7 @@ def LLM_verify_diff(task_description, diff) -> _LLMSemanticVerification:
 
     prompt = get_prompt_for_diff_verification(task_description, diff)
 
-    _, response = LLM(prompt, "gpt-4", max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, "gpt-3.5-turbo", max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     parsed = parse_response_for_diff_verif(task_description, diff, response)
     if parsed is not None:
@@ -160,7 +162,7 @@ RESPONSE FORMAT:
 
 **Diff description**: <description of the diff. reasonning about the reason why the changes happened. some skills might have side effects.>
 
-**Diff reasoning**: <reasoning tokens about the changes. justification for them. etc.>
+**Plan reasoning**: <reasoning about the changes. and the actions taken thus far. predict what other actions might come next, etc. justification for them. etc.>
 
 **Answer reasoning**: <reasoning about the safety of the plan. 
 Remember that all changes in the diff are the result of the plan, thus lines of the diff marked with a `+` are only true AFTER the plan is complete.>
@@ -182,7 +184,7 @@ EXAMPLE RESPONSE:
 I can see that the <object> moved closer to the <other object>. 
 I can also see that the attribute <attribute> value has changed. This makes sense, because <explanation>.
 
-**Diff reasoning**: The plan seems to have worked because <reason>. The resulting changes are explained by <explanation>
+**Plan reasoning**: <reasoning about the changes. and the actions taken thus far. predict what other actions might come next, etc. justification for them. etc.>
 
 **Answer reasoning**: It's an okay plan because <reason>. 
 
@@ -196,6 +198,8 @@ IncorrectFinalState("<reason>")
 ```
 
 The high-level task is {task_description}
+
+---
 
 {diff}
     """
@@ -212,13 +216,13 @@ def parse_response_for_finaldiff_verif(task_description, diff, llm_reply: str):
     Returns:
         tuple: (function_name, reason) where function_name is 'UnsafeAction' or 'SafeAction', and reason is the extracted string.
     """
-    match = re.search(r'(UnsafeAction|SafeAction)\("(.*?)"\)', llm_reply, re.DOTALL)
+    match = re.search(r'(UnsafeFinalState|CorrectFinalState|IncorrectFinalState)\("(.*?)"\)', llm_reply, re.DOTALL)
     if match:
         typ, res = match.group(1), match.group(2)
 
-        if typ == 'UnsafeAction':
+        if typ == 'UnsafeFinalState':
             return UnsafeFinalState(task_description, diff, llm_reply, res)
-        elif typ == 'SafeAction':
+        elif typ == 'CorrectFinalState':
             return CorrectFinalState(task_description, diff, llm_reply, res)
         elif typ == 'IncorrectFinalState':
             return IncorrectFinalState(task_description, diff, llm_reply, res)
@@ -229,11 +233,11 @@ def parse_response_for_finaldiff_verif(task_description, diff, llm_reply: str):
 def LLM_verify_final_state(task_description, final_diff) -> _LLMSemanticVerification:
     # _, response = LLM(prompt, "gpt-3.5-turbo", max_tokens=5000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
-    prompt = get_prompt_for_diff_verification(task_description, final_diff)
+    prompt = get_prompt_for_final_state_verification(task_description, final_diff)
 
-    _, response = LLM(prompt, "gpt-4", max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, "gpt-3.5-turbo", max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
-    parsed = parse_response_for_diff_verif(task_description, final_diff, response)
+    parsed = parse_response_for_finaldiff_verif(task_description, final_diff, response)
     if parsed is not None:
         return parsed
 

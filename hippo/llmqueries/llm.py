@@ -53,10 +53,10 @@ def enforce_rate_limit(gpt_version, requested_tokens):
 
 
 @retry(wait=wait_exponential(multiplier=1, min=4, max=30), stop=stop_after_attempt(5), before_sleep=log_retry_attempt)
-def _LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
+def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
     enforce_rate_limit(gpt_version, max_tokens)
 
-    if not isinstance(prompt, dict):
+    if (not isinstance(prompt, dict)) and (not isinstance(prompt, list)):
         prompt = [{"role": "user", "content": prompt}]
 
 
@@ -97,9 +97,19 @@ def _LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs
 cache = FanoutCache('./diskcache', size_limit=int(1e9), shards=8)
 
 @cache.memoize(typed=True)
-def LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
+def _LLM_cache(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
     print("LLM QUERY: Could not find prompt in cache, querying OpenAI API.")
-    return _LLM(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)
+    return _LLM_retry(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)
+
+#from termcolor import colored
+
+def LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
+    #print(colored(">> USER:", "orange"))
+    #print(colored(prompt, "orange"))
+    a, response = _LLM_cache(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)
+    #print(colored(f">> {gpt_version}:", "green"))
+    #print(colored(response, "green"))
+    return a, response
 
 def set_api_key(openai_api_key):
     openai.api_key = Path(openai_api_key + '.txt').read_text()
