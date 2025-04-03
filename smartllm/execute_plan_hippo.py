@@ -50,11 +50,14 @@ def compile_aithor_exec_file(expt_name):
     #terminate_plan = Path(os.getcwd() + "/data/aithor_connect/end_thread.py").read_text()
     #executable_plan += (terminate_plan + "\n")
 
-    EXECUTION_TEMPLATE = Path(os.getcwd() + "/data/hippo_executable_code_template.py").read_text()
+    try:
+        EXECUTION_TEMPLATE = Path(os.getcwd() + "/data/hippo_executable_code_template.py").read_text()
+    except FileNotFoundError:
+        EXECUTION_TEMPLATE = Path(os.getcwd() + "/smartllm/data/hippo_executable_code_template.py").read_text()
     EXECUTION_TEMPLATE = EXECUTION_TEMPLATE.replace(">>> FILL IN SETUP CODE HERE <<< # noqa\n", f"\n{SETUP_CODE}\n")
     PLAN_CODE = Path(log_path + "/code_plan.py").read_text()
 
-    from smartllm.resources.actions import ai2thor_actions_list
+    from resources.actions import ai2thor_actions_list
     for skill in ai2thor_actions_list:
         skill = skill.split(" ")[0]
         PLAN_CODE = PLAN_CODE.replace(skill, f"simulator.{skill}")
@@ -74,4 +77,4 @@ expt_name = args.command
 print (expt_name)
 ai_exec_file = compile_aithor_exec_file(expt_name)
 
-subprocess.run(["python", ai_exec_file])
+#subprocess.run(["python", ai_exec_file])

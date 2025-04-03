@@ -9,7 +9,6 @@ from typing_extensions import Self
 
 import jax.numpy as jnp
 
-
 from hippo.simulation.spatialutils.proximity_spatial_funcs import isOnTop, isInside, isBeside, distance
 from hippo.reconstruction.scenedata import dict2xyztuple, HippoObject, _Hippo, xyztuple_precision
 from hippo.utils.git_diff import git_diff
@@ -415,6 +414,16 @@ class RuntimeObjectContainer(_Hippo):
 
     def get_object_by_id(self, object_id):
         return self.objects_map[object_id]
+
+    def get_object_by_id_might_not_exist(self, object_id, sas=None):
+        try:
+            return self.get_object_by_id(object_id)
+        except KeyError:
+            if sas is None:
+                from hippo.simulation.skillsandconditions.sas import SimulationActionState
+                sas = SimulationActionState(self, None, None, object_id, None)
+            from hippo.simulation.skillsandconditions.conditions import COND_ObjectExists, maybe_raise_condition_exception
+            return maybe_raise_condition_exception([COND_ObjectExists().replace(sas=sas.replace(target_object_id=object_id), state=False, success=False)])
 
     def update_object(self, object) -> Self:
         dico = copy.deepcopy(self.objects_map)

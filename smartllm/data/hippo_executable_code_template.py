@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import threading  # noqa
 import time  # noqa
 from glob import glob
@@ -8,6 +9,11 @@ from typing import Tuple
 import numpy as np
 from scipy.spatial import distance
 
+def thread_exception_handler(args):
+    print(f"Unhandled exception in thread: {args.exc_value}")
+    sys.exit(1)
+
+threading.excepthook = thread_exception_handler
 
 def generate_video():
     frame_rate = 5

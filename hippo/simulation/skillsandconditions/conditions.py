@@ -3,7 +3,8 @@ from typing import Callable, List, Tuple, Any
 
 from typing_extensions import Self
 
-from hippo.simulation.ai2thor_metadata_reader import get_robot_inventory, get_object_list_from_controller
+from hippo.simulation.ai2thor_metadata_reader import get_robot_inventory, get_object_list_from_controller, \
+    get_object_from_controller
 from hippo.simulation.semanticverifllm.llm_semantic_verification import _LLMSemanticVerification, UnsafeAction, \
     UnsafeFinalState, IncorrectFinalState
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
@@ -94,10 +95,10 @@ class COND_ObjectExists(Condition):
     name: str = "ObjectExists"
 
     def _error_message(self):
-        return f"Object {self.sas.target_object.id} does not exist."
+        return f"Object {self.sas.target_object_id} does not exist."
 
     def call(self, sas: SimulationActionState) -> bool:
-        if sas.get_object_from_controller(sas.target_object) is None:
+        if get_object_from_controller(sas.controller, sas.target_object_id) is None:
             return False
         return True
 
@@ -107,10 +108,10 @@ class COND_IsInProximity(Condition):
     prev: _Condition = COND_ObjectExists()
 
     def _error_message(self):
-        return f"Object {self.sas.target_object.id} is not in proximity to the robot."
+        return f"Object {self.sas.target_object_id} is not in proximity to the robot."
 
     def call(self, sas: SimulationActionState) -> bool:
-        object = sas.get_object_from_controller(sas.target_object)
+        object = get_object_from_controller(sas.controller, sas.target_object_id)
         return object["isInteractable"]
 
 @dataclass
@@ -118,7 +119,7 @@ class COND_AuxiliaryObjectIsInInventory(Condition):
     name: str = "IsInInventory"
 
     def _error_message(self):
-        return f"Object {self.sas.auxiliary_object.id} is not in the robot's inventory."
+        return f"Object {self.sas.auxiliary_object_id} is not in the robot's inventory."
 
     def call(self, sas: SimulationActionState) -> bool:
         return sas.auxiliary_object.heldBy == f"robot{sas.robot+1}"
@@ -128,7 +129,7 @@ class COND_IsInInventory(Condition):
     name: str = "IsInInventory"
 
     def _error_message(self):
-        return f"Object {self.sas.target_object.id} is not in the robot's inventory."
+        return f"Object {self.sas.target_object_id} is not in the robot's inventory."
 
     def call(self, sas: SimulationActionState) -> bool:
         return sas.target_object.heldBy == f"robot{sas.robot+1}"
@@ -138,7 +139,7 @@ class _COND_AttributeEnabled(Condition):
     name: str = "AttributeEnabled"
 
     def _error_message(self):
-        return f"The object {self.sas.target_object.id} does not support attribute {self.sas.skill_object.enabled_name}."
+        return f"The object {self.sas.target_object_id} does not support attribute {self.sas.skill_object.enabled_name}."
 
     def call(self, sas: SimulationActionState) -> bool:
         return bool(sas.skill_object.is_enabled)
@@ -148,10 +149,10 @@ class __COND_AttributeEnabledInAi2Thor(Condition):
     name: str = "AI2ThorAttributeEnabled"
 
     def _error_message(self):
-        return f"The object {self.sas.target_object.id} does not support attribute {self.sas.skill_object.enabled_name}. This is likely due to a bug, and not a planning problem. Please report this bug."
+        return f"The object {self.sas.target_object_id} does not support attribute {self.sas.skill_object.enabled_name}. This is likely due to a bug, and not a planning problem. Please report this bug."
 
     def call(self, sas: SimulationActionState) -> bool:
-        obj = sas.get_object_from_controller(sas.target_object)
+        obj = get_object_from_controller(sas.controller, sas.target_object_id)
         return obj[sas.skill_object.enabled_name]
 
 @dataclass
@@ -160,7 +161,7 @@ class COND_SkillEnabled(Condition):
     prev: _Condition = _COND_AttributeEnabled()
 
     def _error_message(self):
-        return f"The object {self.sas.target_object.id} does not support the skill {self.sas.skill_name}."
+        return f"The object {self.sas.target_object_id} does not support the skill {self.sas.skill_name}."
 
     def call(self, sas: SimulationActionState) -> bool:
         return sas.skill_object.has_skill_of_name(sas) and bool(sas.skill_object.is_enabled)
@@ -203,13 +204,13 @@ class COND_SlicingImplementInInventory(Condition):
 class ConditionFailure(Exception):
     pass
 
-class _PreconditionFailure(ConditionFailure):
+class PreconditionFailure(ConditionFailure):
     pass
 
-class SinglePreconditionFailure(_PreconditionFailure):
+class SinglePreconditionFailure(PreconditionFailure):
     pass
 
-class MultiplePreconditionFailure(_PreconditionFailure):
+class MultiplePreconditionFailure(PreconditionFailure):
     pass
 
 class _PostconditionFailure(ConditionFailure):
@@ -228,27 +229,24 @@ class LLMVerificationFailure(_PostconditionFailure):
 
 def eval_conditions(sas):
     preconditions = [c(sas) for c in sas.skill_object.pre_conditions]
-    return maybe_raise_condition_exception(preconditions, SinglePreconditionFailure, MultiplePreconditionFailure)
+    return maybe_raise_condition_exception(preconditions)
 
 
-def maybe_raise_condition_exception(condlist, single_exception_class, multiple_exception_class):
+def maybe_raise_condition_exception(condlist):
     if all(condlist):
         return condlist
 
     errors = []
     for cond in condlist:
         if cond.success is False:
-            errors.append(cond.error_message())
+            errors.append(cond)
 
-    if len(errors) == 1:
-        raise single_exception_class(errors[0])
-    else:
-        raise multiple_exception_class(errors)
+    raise PreconditionFailure(errors)
 
 
 def maybe_raise_llmcondition_exception(llmreturn: _LLMSemanticVerification):
     if isinstance(llmreturn, (UnsafeAction, UnsafeFinalState, IncorrectFinalState)):
-        raise LLMVerificationFailure(llmreturn.reason)
+        raise LLMVerificationFailure(llmreturn)
 
 
 if __name__ == "__main__":

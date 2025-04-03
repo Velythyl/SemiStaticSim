@@ -7,6 +7,13 @@ def get_robot_inventory(controller, agent_id):
 
     return inventory
 
+def get_object_from_controller(controller, object_id):
+    # you should _verify_object_exists first
+    for obj in get_object_list_from_controller(controller):
+        if obj["objectId"] == object_id:
+            return obj
+    return None
+
 def get_object_list_from_controller(controller):
     objects = controller.last_event.metadata["objects"]
     objects = copy.deepcopy(objects)

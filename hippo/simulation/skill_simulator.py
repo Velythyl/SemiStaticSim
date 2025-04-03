@@ -1,28 +1,31 @@
+import json
 import math
 import os
 import threading
 import time
-from typing import Tuple
+from typing import Tuple, List
 
 from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller, get_robot_inventory
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
 from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff, UnsafeAction, \
-    LLM_verify_final_state
+    LLM_verify_final_state, _LLMSemanticVerification, UnsafeFinalState
 from hippo.simulation.skillsandconditions.conditions import get_slicing_implement_from_inventory, eval_conditions, \
-    maybe_raise_llmcondition_exception
+    maybe_raise_llmcondition_exception, ConditionFailure, LLMVerificationFailure, Condition
 import cv2
 
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 
 import re
 
+from hippo.utils.file_utils import get_next_file_counter
 from hippo.utils.git_diff import git_diff
 
 
 class Simulator:
-    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, reachable_positions, llmverifstyle: str = "STEP"):    # STEP or HISTORY
+    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, reachable_positions, llmverifstyle: str = "STEP", log_dir="/tmp/hipposimulation"):    # STEP or HISTORY
         self.controller = controller
         self.object_containers = [objects]
+
         
         self.total_exec = 0
         self.success_exec = 0
@@ -39,6 +42,8 @@ class Simulator:
 
         self.llmverifstyle = llmverifstyle
         self.reachable_positions = reachable_positions
+
+        self.log_dir = log_dir
 
     @property
     def last_action(self):
@@ -87,34 +92,36 @@ class Simulator:
         return self.object_containers[-2].diff(self.object_containers[-1])
 
     def get_sas(self, skill_name, agent_id, target_object_id, auxiliary_object_id=None, callback=None):
-        target_object = self.current_object_container.get_object_by_id(target_object_id)
+        #target_object = self.current_object_container.get_object_by_id(target_object_id)
 
         #inventory = get_robot_inventory(self.controller, agent_id)
         #if len(inventory) == 0:
         #    auxiliary_object = None
         #else:
         #    assert len(inventory) == 1, "More than one object in the robot's inventory. Should have been caught by precondition, please report this bug."
-        if auxiliary_object_id is not None:
-            auxiliary_object = self.current_object_container.get_object_by_id(auxiliary_object_id)
-        else:
-            auxiliary_object = None
+        #if auxiliary_object_id is not None:
+        #    auxiliary_object = self.current_object_container.get_object_by_id(auxiliary_object_id)
+        #else:
+        #    auxiliary_object = None
 
+        skill_prettyprint = self.get_skill_prettyprint(skill_name, agent_id, target_object_id, auxiliary_object_id)
         sas = SimulationActionState(
             pre_container=self.current_object_container,
             robot=agent_id,
-            target_object=target_object,
+            target_object_id=target_object_id,
             controller=self.controller,
             action_callback=callback,
             skill_name=skill_name,
-            auxiliary_object=auxiliary_object
+            auxiliary_object_id=auxiliary_object_id,
+            skill_prettyprint=skill_prettyprint
         )
 
-        object_skill_portfolio = target_object.skill_portfolio
-        object_skill = object_skill_portfolio.find_skill(sas)
+        #object_skill_portfolio = target_object.skill_portfolio
+        #object_skill = object_skill_portfolio.find_skill(sas)
 
-        sas = sas.replace(skill_object=object_skill)
-        sas = sas.replace(skill_method=object_skill.get_skill_of_name(sas))
-        sas = sas.replace(skill_portfolio=object_skill_portfolio)
+        #sas = sas.replace(skill_object=object_skill)
+        #sas = sas.replace(skill_method=object_skill.get_skill_of_name(sas))
+        #sas = sas.replace(skill_portfolio=object_skill_portfolio)
 
         return sas
 
@@ -167,14 +174,90 @@ class Simulator:
         #if all(postconditions):
         self.append_object_container(sas.post_container)
 
-        self.done_actions.append(self.get_skill_prettyprint(skill_name, agent_id, target_object_id, auxiliary_object_id))
-        return
+        self.done_actions.append(sas.skill_prettyprint)
+        return sas
+
+    def log_llmsemantic(self, item: _LLMSemanticVerification, subpath, filepath=None):
+        if filepath is None:
+            filepath = get_next_file_counter(self.log_dir, subpath)
+        os.makedirs(filepath, exist_ok=True)
+        for k, v in vars(item).items():
+            with open(f"{filepath}/{k}.txt", 'w') as f:
+                f.write(f"{v}")
+        with open(f"{filepath}/nametype.txt", 'w') as f:
+            f.write(item.nametype)
+
+    def log_condition(self, item: Condition, subpath, filepath=None):
+        raise NotImplementedError() #if filepath is None:
+        #    filepath = get_next_file_counter(self.log_dir, subpath)
+        os.makedirs(filepath, exist_ok=True)
+        for k, v in vars(item).items():
+            with open(f"{filepath}/{k}.txt", 'w') as f:
+                f.write(f"{v}")
+        with open(f"{filepath}/nametype.txt", 'w') as f:
+            f.write(item.nametype)
+        with open(f"{filepath}/is_valid.txt", 'w') as f:
+            f.write(item.success)
+
+    def log_condition_failure(self, exception: ConditionFailure):
+        path = f"{self.log_dir}/condition_failure"
+        assert not os.path.exists(path)
+        os.makedirs(path, exist_ok=True)    # lol
+
+        if isinstance(exception, LLMVerificationFailure):
+            item : _LLMSemanticVerification = exception.args[0]
+            self.log_llmsemantic(item, None, filepath=f"{path}/llm_semantic")
+
+            assert item.skill_prettyprint is not None
+
+            with open(f"{path}/failure_feedback.txt", 'w') as f:
+                f.write(f"Could not perform {item.skill_prettyprint} because a judge LLM said: `{item.nametype}({item.reason})`.")
+
+        else:
+            item : List[Condition] = exception.args[0]
+
+            failure_action = item[0].sas.skill_prettyprint
+
+            os.makedirs(f"{path}/condition_checks")
+            #self.log_condition(item, subpath=f"{path}/condition")
+            errors = [x.error_message() for x in item]
+            with open(f"{path}/condition_checks/error_messages.txt", 'w') as f:
+                f.write(json.dumps(errors))
+
+            with open(f"{path}/failure_feedback.txt", 'w') as f:
+                f.write(f"""
+Could not perform {failure_action} because the following problems occurred:
+```
+{json.dumps(errors, indent=2)}
+```
+""".strip())
+
+            with open(f"{path}/actions_so_far.txt", 'w') as f:
+                f.write(json.dumps(self.done_actions))
+
+        with open(f"{path}/exception_type.txt", 'w') as f:
+            f.write(str(exception.__class__))
+
+    def log_task_successfailure(self, llmsemantic: _LLMSemanticVerification):
+        path = f"{self.log_dir}/task_success"
+        os.makedirs(path, exist_ok=True)
+        with open(f"{path}/valid.txt", 'w') as f:
+            f.write(f"{llmsemantic.is_valid}")
+
+        with open(f"{path}/maybe_feedback.txt", 'w') as f:
+            if llmsemantic.is_valid:
+                f.write(
+                    f"A judge LLM said the plan succeeded because `{llmsemantic.nametype}({llmsemantic.reason})`.")
+            else:
+                f.write(
+                    f"A judge LLM said the plan failed because `{llmsemantic.nametype}({llmsemantic.reason})`.")
+
 
     def llm_verify_final_state(self):
         first_state = self.object_containers[0].as_llmjson()
         last_state = self.current_object_container.as_llmjson()
 
-        diff = git_diff(first_state, last_state, "Executing_The_Plan")
+        pure_diff = git_diff(first_state, last_state, "Executing_The_Plan")
         action_history = [f'{i}: {x}' for i, x in enumerate(self.done_actions)]
         action_history = "\n".join(action_history)
         diff = f"""
@@ -182,47 +265,41 @@ EXECUTED PLAN:
 {action_history}
 
 DIFF BETWEEN FIRST AND FINAL STATES:
-{diff}
+{pure_diff}
 """
 
         print("Now querying LLM to verify the safety/alignment/semantic of the final state...")
         print("The diff:")
         print(diff)
         print("Querying now...")
-        llmsemantic = LLM_verify_final_state(self.task_description, diff)
-        maybe_raise_llmcondition_exception(llmsemantic)
+        llmsemantic = LLM_verify_final_state(self.task_description, diff, pure_diff, action_history)
+
+        self.log_llmsemantic(llmsemantic, None, filepath=f"{self.log_dir}/llm_final_verif")
+
+        if isinstance(llmsemantic, UnsafeFinalState):
+            maybe_raise_llmcondition_exception(llmsemantic)
+
+        self.log_task_successfailure(llmsemantic)
 
     def llm_verify_diff_alignment(self):
-        if self.llmverifstyle == "STEP":
-            diff = self.get_object_container_diff()
-            action_history = [f'{i}: {x}' for i, x in enumerate(self.done_actions)]
-            action_history = "\n".join(action_history)
-            diff = f"""
+        pure_diff = self.get_object_container_diff()
+        action_history = [f'{i}: {x}' for i, x in enumerate(self.done_actions)]
+        action_history = "\n".join(action_history)
+        diff = f"""
 ALL ACTIONS TO DATE:
 {action_history}
 
 DIFF OF LAST ACTION:
-{diff}
+{pure_diff}
 """
-        elif self.llmverifstyle == "HISTORY":
-            diffs = self.past_diffs
-            diffs = [f"DIFF NUMBER {i}: \n\n{x}" for i,x in enumerate(diffs)]
-            first_dict = self.object_containers[0].as_llmjson()
 
-            diff = f"""
-FIRST ENVIRONMENT STATE:
-{first_dict}
-
-DIFFS:
-
-{diffs}
-"""
 
         print("Now querying LLM to verify the safety/alignment/semantic of a diff...")
         print("The diff:")
         print(diff)
         print("Querying now...")
-        llmsemantic = LLM_verify_diff(self.task_description, diff)
+        llmsemantic = LLM_verify_diff(self.task_description, diff, pure_diff, action_history, self.done_actions[-1])    # this assumes we're synced with the done actions, which SHOULD be true. but todo verify this is true for multi agent
+        self.log_llmsemantic(llmsemantic, "llm_diff_verif")
         maybe_raise_llmcondition_exception(llmsemantic)
 
 
@@ -261,7 +338,7 @@ DIFFS:
                     elif act['action'] == "GoToObject_PostConditionCheck":
                         sas = self.get_sas("GoToObject", act['agent_id'], act['objectId'], callback=None)
                         self.update_and_push_object_containers()
-                        self.done_actions.append(self.get_skill_prettyprint("GoToObject", act['agent_id'], act['objectId'], None))
+                        self.done_actions.append(sas.skill_prettyprint)
                         self.llm_verify_diff_alignment()
                         #self.postconditions_sas(sas)
 
@@ -433,10 +510,13 @@ DIFFS:
                         self.controller.step(action="Done")
                         self.llm_verify_final_state()
                         print("Done!")
-
-                except Exception as e:
+                except ConditionFailure as e:
+                    print("Condition Failure! Aborting!")
+                    self.controller.stop()
+                    self.log_condition_failure(e)
+                    raise e
                     # todo catch planning failure exceptions such as conditon failure and llm verif failure and abort plan, to provide feedback to llm
-                    pass
+
 
                 except Exception as e:
                     raise e
@@ -538,6 +618,8 @@ DIFFS:
                     'objectId': dest_obj_id
                 }
             )
+
+        time.sleep(0.5)
 
         dest_obj_center = self._get_object_center(dest_obj_id)
         dest_obj_pos = [dest_obj_center['x'], dest_obj_center['y'], dest_obj_center['z']]
