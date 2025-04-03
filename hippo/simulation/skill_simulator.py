@@ -251,6 +251,8 @@ Could not perform {failure_action} because the following problems occurred:
             else:
                 f.write(
                     f"A judge LLM said the plan failed because `{llmsemantic.nametype}({llmsemantic.reason})`.")
+        if not llmsemantic.is_valid:
+            maybe_raise_llmcondition_exception(llmsemantic)
 
 
     def llm_verify_final_state(self):
