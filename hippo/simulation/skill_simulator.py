@@ -45,6 +45,7 @@ class Simulator:
 
         self.log_dir = log_dir
 
+
     @property
     def last_action(self):
         return self.done_actions[-1]
@@ -241,7 +242,7 @@ Could not perform {failure_action} because the following problems occurred:
     def log_task_successfailure(self, llmsemantic: _LLMSemanticVerification):
         path = f"{self.log_dir}/task_success"
         os.makedirs(path, exist_ok=True)
-        with open(f"{path}/valid.txt", 'w') as f:
+        with open(f"{path}/is_valid.txt", 'w') as f:
             f.write(f"{llmsemantic.is_valid}")
 
         with open(f"{path}/maybe_feedback.txt", 'w') as f:
