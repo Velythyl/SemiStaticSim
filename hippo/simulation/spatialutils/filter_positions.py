@@ -111,7 +111,7 @@ def filter_reachable_positions(reachable_positions, runtime_container):
     todo_positions = jnp.array(todo_positions)
     centers = jnp.array(centers)
     sizes = jnp.array(sizes)
-    mask = _filter_agent_positions(todo_positions, centers, sizes, margin=0.05)
+    mask = _filter_agent_positions(todo_positions, centers, sizes, margin=0.01)
 
     mask = np.array(mask)
     todo_positions = np.array(todo_positions)

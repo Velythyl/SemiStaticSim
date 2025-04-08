@@ -25,24 +25,32 @@ class ToggleObjectOnAndOff(_ToggleObject):
     llm_name: str = "can be turned on/off"
 
     def ToggleObjectOn(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
+        ret = self.replace(state_value=True)
+        sas.action_callback()
+        return ret
 
     def ToggleObjectOff(self, sas: SimulationActionState):
-        return self.replace(state_value=False)
+        ret = self.replace(state_value=False)
+        sas.action_callback()
+        return ret
 
 @dataclass
 class ToggleObjectOn(_ToggleObject):
     llm_name: str = "can only be turned on"
 
     def ToggleObjectOn(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
+        ret = self.replace(state_value=True)
+        sas.action_callback()
+        return ret
 
 @dataclass
 class ToggleObjectOff(_ToggleObject):
     llm_name: str = "can only be turned off"
 
     def ToggleObjectOff_(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
+        ret = self.replace(state_value=True)
+        sas.action_callback()
+        return ret
 
 @dataclass
 class _Ai2ThorSkill(_Skill):
@@ -140,25 +148,32 @@ class OpenAndCloseObject(_OpenableObject):
     llm_name: str = "can be opened and closed"
 
     def OpenObject(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
+        ret = self.replace(state_value=True)
+        sas.action_callback()
+        return ret
 
     def CloseObject(self, sas: SimulationActionState):
-        return self.replace(state_value=False)
-
+        ret = self.replace(state_value=False)
+        sas.action_callback()
+        return ret
 
 @dataclass
 class OpenObject(_OpenableObject):
     llm_name: str = "can only be opened"
 
     def OpenObject(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
+        ret = self.replace(state_value=True)
+        sas.action_callback()
+        return ret
 
 @dataclass
 class CloseObject(_OpenableObject):
     llm_name: str = "can only be closed"
 
     def CloseObject(self, sas: SimulationActionState):
-        return self.replace(state_value=False)
+        ret = self.replace(state_value=False)
+        sas.action_callback()
+        return ret
 
 @dataclass
 class SliceObject(_Skill):
@@ -181,7 +196,9 @@ class SliceObject(_Skill):
         #toolskill = slicing_tool.skill_portfolio.find_skill("SlicingTool")
         #toolskill
 
-        return self.replace(state_value=True)
+        ret = self.replace(state_value=True)
+        sas.action_callback()
+        return ret
 
     @property
     def pre_conditions(self):
@@ -220,7 +237,9 @@ class BreakObject(_Skill):
                 COND_SkillEnabled()]
 
     def BreakObject(self, sas: SimulationActionState):
-        return self.replace(state_value=True)
+        ret = self.replace(state_value=True)
+        sas.action_callback()
+        return ret
 
 @dataclass
 class CleanObject(_Skill):

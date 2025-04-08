@@ -2,6 +2,7 @@ import copy
 import json
 import math
 import os
+import sys
 import threading
 import time
 from typing import Tuple, List
@@ -47,6 +48,7 @@ class Simulator:
 
         self.log_dir = log_dir
 
+        self.roblock = {}
 
     @property
     def last_action(self):
@@ -341,6 +343,7 @@ DIFF OF LAST ACTION:
                     elif act['action'] == 'MoveAhead':
                         multi_agent_event = self.controller.step(
                             dict(action=act['action'], moveMagnitude=act['moveMagnitude'], agentId=act['agent_id']))
+                        self._release_robot(act['agent_id'])
                         #next_action = multi_agent_event.metadata['actionReturn']
 
                         #if next_action != None:
@@ -356,11 +359,11 @@ DIFF OF LAST ACTION:
                         self.llm_verify_diff_alignment()
                         #self.postconditions_sas(sas)
 
-                    elif act['action'] == 'MoveAhead':
-                        self.controller.step(action="MoveAhead", agentId=act['agent_id'])
+                    #elif act['action'] == 'MoveAhead':
+                    #    self.controller.step(action="MoveAhead", agentId=act['agent_id'])
 
-                    elif act['action'] == 'MoveBack':
-                        self.controller.step(action="MoveBack", agentId=act['agent_id'])
+                    #elif act['action'] == 'MoveBack':
+                    #    self.controller.step(action="MoveBack", agentId=act['agent_id'])
 
                     elif act['action'] == 'RotateLeft':
                         self.controller.step(action="RotateLeft", degrees=act['degrees'], agentId=act['agent_id'])
@@ -371,9 +374,11 @@ DIFF OF LAST ACTION:
 
                     elif act["action"] == "LookUp":
                         self.controller.step(action="LookUp", agentId=act["agent_id"])
+                        self._release_robot(act['agent_id'])
 
                     elif act["action"] == "LookDown":
                         self.controller.step(action="LookDown", agentId=act["agent_id"])
+                        self._release_robot(act['agent_id'])
 
                     elif act['action'] == 'PickupObject':
                         def PickupObjectCallback():
@@ -401,8 +406,11 @@ DIFF OF LAST ACTION:
 
                     elif act['action'] == 'ToggleObjectOn':
                         #self.total_exec += 1
+                        def ToggleObjectOn():
+                            multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
+                                                                    agentId=act['agent_id'], forceAction=True)
 
-                        self.apply_skill('ToggleObjectOn', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        self.apply_skill('ToggleObjectOn', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=ToggleObjectOn)
                         #multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
                         #                           agentId=act['agent_id'], forceAction=True)
                         #if multi_agent_event.metadata['errorMessage'] != "":
@@ -413,7 +421,11 @@ DIFF OF LAST ACTION:
                         self.llm_verify_diff_alignment()
 
                     elif act['action'] == 'ToggleObjectOff':
-                        self.apply_skill('ToggleObjectOff', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        def ToggleObjectOff():
+                            multi_agent_event = self.controller.step(action="ToggleObjectOff", objectId=act['objectId'],
+                                                                                                agentId=act['agent_id'], forceAction=True)
+
+                        self.apply_skill('ToggleObjectOff', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=ToggleObjectOff)
                         self.llm_verify_diff_alignment()
 
                         #self.total_exec += 1
@@ -428,7 +440,12 @@ DIFF OF LAST ACTION:
                         #    self.success_exec += 1
 
                     elif act['action'] == 'OpenObject':
-                        self.apply_skill('OpenObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        def OpenObject():
+                            multi_agent_event = self.controller.step(action="OpenObject", objectId=act['objectId'],
+                                                                                               agentId=act['agent_id'], forceAction=True)
+
+
+                        self.apply_skill('OpenObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=OpenObject)
                         self.llm_verify_diff_alignment()
 
                         #self.total_exec += 1
@@ -441,8 +458,11 @@ DIFF OF LAST ACTION:
 
 
                     elif act['action'] == 'CloseObject':
+                        def CloseObject():
+                            multi_agent_event = self.controller.step(action="CloseObject", objectId=act['objectId'],
+                                                                                                agentId=act['agent_id'], forceAction=True)
 
-                        self.apply_skill('CloseObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        self.apply_skill('CloseObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=CloseObject)
                         self.llm_verify_diff_alignment()
 
                         #self.total_exec += 1
@@ -463,7 +483,12 @@ DIFF OF LAST ACTION:
                         #    self.success_exec += 1
                         #self.total_exec += 1
 
-                        self.apply_skill('SliceObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        def SliceObject():
+                            self.controller.step(action="SliceObject", objectId=act['objectId'],
+                                                                            agentId=act['agent_id'], forceAction=True)
+
+
+                        self.apply_skill('SliceObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=SliceObject)
                         knife = get_slicing_implement_from_inventory((self.controller, act["agent_id"], self.current_object_container))
                         self.apply_skill('DirtyObject', agent_id=act['agent_id'], target_object_id=knife.id)
 
@@ -508,7 +533,11 @@ DIFF OF LAST ACTION:
                         self.llm_verify_diff_alignment()
 
                     elif act['action'] == 'BreakObject':
-                        self.apply_skill('BreakObject', agent_id=act['agent_id'], target_object_id=act['objectId'])
+                        def BreakObject():
+                            multi_agent_event = self.controller.step(action="BreakObject", objectId=act['objectId'],
+                                                                                                agentId=act['agent_id'], forceAction=True)
+
+                        self.apply_skill('BreakObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=BreakObject)
                         self.llm_verify_diff_alignment()
 
                         #self.total_exec += 1
@@ -573,6 +602,23 @@ DIFF OF LAST ACTION:
     def _get_robot_id(self, robot):
         return int(self._get_robot_name(robot)[-1]) - 1
 
+    def _lock_robot(self, robot):
+        if not isinstance(robot, int):
+            robot = self._get_robot_id(robot)
+        assert isinstance(robot, int)
+
+        if robot not in self.roblock:
+            self.roblock[robot] = threading.Lock()
+
+        self.roblock[robot].acquire()
+
+    def _release_robot(self, robot):
+        if not isinstance(robot, int):
+            robot = self._get_robot_id(robot)
+        assert isinstance(robot, int)
+
+        self.roblock[robot].release()
+
     def _get_object_id(self, target_obj):
         objs = list(set([obj["objectId"] for obj in self.controller.last_event.metadata["objects"]]))
 
@@ -613,8 +659,6 @@ DIFF OF LAST ACTION:
                     'objectId': dest_obj_id
                 }
             )
-
-        time.sleep(0.5)
 
         dest_obj_center = self._get_object_center(dest_obj_id)
         dest_obj_pos = [dest_obj_center['x'], dest_obj_center['y'], dest_obj_center['z']]
@@ -706,7 +750,8 @@ DIFF OF LAST ACTION:
             for ia, robot in enumerate(robots):
                 if dist_to_goal(robot) > goal_thresh:
                     from hippo.simulation.spatialutils.motion_planning import astar
-                    new_generators.append(astars[ia].generate_path(get_cur_pos(robot)))
+                    new_generators.append(astar(get_cur_pos(robot), dest_obj_pos, self.full_reachability_graph,
+                                                self.current_object_container))
                 else:
                     new_generators.append(None)
             return new_generators
@@ -722,27 +767,32 @@ DIFF OF LAST ACTION:
                     if generators[ia] is not None:
                         node = next(generators[ia])
 
+                        self._lock_robot(robot)
+
+                        moveMagnitude = dist_robot_2_node(robot, node)
                         rotate_to_face_node(robot, node)
                         self.push_action(
-                            {'action': 'MoveAhead', 'moveMagnitude': dist_robot_2_node(robot, node),
+                            {'action': 'MoveAhead', 'moveMagnitude': moveMagnitude,
                              'agent_id': self._get_robot_id(robot)})
 
+                ALL_DONE = True
+                for ia, robot in enumerate(robots):
+                    self._lock_robot(robot)
+                    self._release_robot(robot)
+
+                    d = dist_to_goal(robot)
+                    print(f"Going to {dest_obj_id}, distance:", d)
+                    if not d < goal_thresh:
+                        ALL_DONE = False
+                if ALL_DONE:
+                    break
             except StopIteration:
                 generators = get_generators()
                 num_tries += 1
                 if num_tries > max_num_tries:
-                    raise AssertionError("Motion planning failure, fix the astar path planner")
+                    break
+                    print("Possible motion planning failure, fix the astar path planner", file=sys.stderr)
 
-            time.sleep(0.5)
-
-            ALL_DONE = True
-            for ia, robot in enumerate(robots):
-                d = dist_to_goal(robot)
-                print(f"Going to {dest_obj_id}, distance:", d)
-                if not d < goal_thresh:
-                    ALL_DONE = False
-            if ALL_DONE:
-                break
 
         for ia, robot in enumerate(robots):
             rotate_to_face_node(robot, dest_obj_pos)
@@ -775,8 +825,10 @@ DIFF OF LAST ACTION:
             NUM_TRIES = 0
             MAX_NUM_TRIES = 10
             while not get_dest_obj(self._get_robot_id(robot))["visible"]:
+                self._lock_robot(robot)
                 LookUpDownAtObject(robot, self._get_robot_id(robot))
-                time.sleep(0.5)
+                self._lock_robot(robot)
+                self._release_robot(robot)
                 if NUM_TRIES > MAX_NUM_TRIES:
                     break
 

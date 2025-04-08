@@ -46,8 +46,8 @@ def generate_video(input_path, prefix, char_id=0, image_synthesis=['normal'], fr
 
 robots = [{'name': 'robot1', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}, 
           {'name': 'robot2', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}]
-#"procthor0"  #
-floor_no = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/115knife/in_order_0/scene.json"  # 1
+#  #
+floor_no = "procthor0" #"/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/115knife/in_order_0/scene.json"  # 1
 
 
 simulator = get_sim(floor_no)
@@ -64,9 +64,10 @@ def try_procthor0_kitchen(robot):
     simulator.GoToObject(robot, 'Fridge')
     #SwitchOn(robot, 'interlocking mat')
     simulator.OpenObject(robot, 'Fridge')
-    simulator.PickupObject(robot, 'Apple')
-    simulator.GoToObject(robot, "Countertop")
-    simulator.PutObject(robot, 'Apple', 'Countertop')
+    simulator.GoToObject(robot, 'Potato|surface|2|12')
+    simulator.PickupObject(robot, 'Potato|surface|2|12')
+    simulator.GoToObject(robot, "CounterTop")
+    simulator.PutObject(robot, 'Potato|surface|2|12', 'CounterTop')
     simulator.Done()
 
 def try_sacha_kitchen(robot):
@@ -88,7 +89,7 @@ def try_sacha_kitchen2(robot):
     SwitchOn(robot, 'black kettle')
     Done()
 
-sacha_kitchen_thread = threading.Thread(target=try_sacha_kitchen, args=(robots[0],))
+sacha_kitchen_thread = threading.Thread(target=try_procthor0_kitchen, args=(robots[0],))
 sacha_kitchen_thread.start()
 sacha_kitchen_thread.join()
 
