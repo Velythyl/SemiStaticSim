@@ -4,6 +4,9 @@ from pathlib import Path
 import subprocess
 import argparse
 
+from hippo.utils.subproc import run_subproc
+
+
 def append_trans_ctr(allocated_plan):
     brk_ctr = 0
     code_segs = allocated_plan.split("\n\n")
@@ -35,6 +38,14 @@ def compile_aithor_exec_file(expt_name):
     SETUP_CODE += f"robots = {robot_list} \n"
     SETUP_CODE += f"scene_name = '{Path(log_path + '/scene_name.txt').read_text()}'\n"
     SETUP_CODE += f"abstract_task_prompt = '{Path(log_path + '/abstract_task_prompt.txt').read_text()}'\n"
+    from hippo.utils.file_utils import get_tmp_folder
+    LOG_FOLDER = get_tmp_folder()
+    SETUP_CODE += f"tmp_hippo_log_dir = '{LOG_FOLDER}'\n"
+    SETUP_CODE = f"""
+# >>> SETUP CODE START <<<
+{SETUP_CODE}
+# >>> SETUP CODE END <<<
+""".strip()
 
     
     # append the ai thoe connector and helper fns
@@ -62,6 +73,12 @@ def compile_aithor_exec_file(expt_name):
         skill = skill.split(" ")[0]
         PLAN_CODE = PLAN_CODE.replace(skill, f"simulator.{skill}")
 
+    PLAN_CODE = f"""
+# >>> PLAN CODE START <<<
+{PLAN_CODE}
+# >>> PLAN CODE END <<<
+""".strip()
+
     EXECUTION_TEMPLATE = EXECUTION_TEMPLATE.replace(">>> FILL IN PLAN CODE HERE <<<  # noqa\n", f"\n{PLAN_CODE}\n")
 
     with open(f"{log_path}/executable_plan.py", 'w') as d:
@@ -76,5 +93,7 @@ args = parser.parse_args()
 expt_name = args.command
 print (expt_name)
 ai_exec_file = compile_aithor_exec_file(expt_name)
+
+run_subproc(["python", ai_exec_file])
 
 #subprocess.run(["python", ai_exec_file])

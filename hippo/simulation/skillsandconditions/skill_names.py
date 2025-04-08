@@ -87,6 +87,12 @@ def get_anti_llm_name_2_skill():
 #    temp = get_enabled_2_llm_name()
 #    return list(temp.values())
 
+@lru_cache(maxsize=128)
+def canonical_enabledname_2_llmname():
+    # if ai2thor obj has enabled set to true, it corresponds to this llmname
+    ret = {"receptacle": PutObject, "toggleable": ToggleObjectOnAndOff, "breakable": BreakObject, "dirtyable": CleanObject, "sliceable": SliceObject, "openable": OpenAndCloseObject, "pickupable": PickupObject}
+    return {k: v().llm_name for k, v in ret.items()}
+
 
 @lru_cache(maxsize=128)
 def find_skillname_2_enabledname(skill_name):

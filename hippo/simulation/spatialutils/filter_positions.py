@@ -1,31 +1,132 @@
+import copy
+import functools
 from typing import List
+
+import jax
+import networkx
+import networkx as nx
 import numpy as np
 
 
-def is_inside_aabb(agent_pos, obj_pos, obj_size):
+def is_inside_aabb(obj_pos, obj_size, agent_pos):
     """
     Check if an agent at `agent_pos` is inside the AABB defined by `obj_pos` and `obj_size`.
+    Returns True if inside, False if outside.
     """
-    for i in range(3):  # Check x, y, z
-        if obj_pos[i] - obj_size[i] <= agent_pos[i] <= obj_pos[i] + obj_size[i]:
-            return True  # Agent is outside the AABB in at least one dimension
-    return False  # Agent is inside the AABB in all dimensions
+    # Only check x (0) and z (2) dimensions, skip y (1)
+    x_inside = jnp.logical_and(
+        obj_pos[0] - obj_size[0] <= agent_pos[0],
+        agent_pos[0] <= obj_pos[0] + obj_size[0]
+    )
+    z_inside = jnp.logical_and(
+        obj_pos[2] - obj_size[2] <= agent_pos[2],
+        agent_pos[2] <= obj_pos[2] + obj_size[2]
+    )
+    return jnp.logical_and(x_inside, z_inside)
 
+@jax.jit
 def _filter_agent_positions(agent_positions, object_positions, object_sizes, margin=0.0):
     """
     Remove agent positions that are inside any object's AABB, considering a margin.
     """
-    inflated_sizes = [np.array(size) + margin for size in object_sizes]  # Inflate sizes by margin
-    filtered_agents = []
+    inflated_sizes = object_sizes + margin
 
-    for agent in agent_positions:
-        inside_any_object = False
-        for obj, size in zip(object_positions, inflated_sizes):
-            if is_inside_aabb(agent, obj, size):
-                inside_any_object = True
-                break
-        if not inside_any_object:
-            filtered_agents.append(agent)
+    def is_inside_any_object(single_agent_pos, all_object_poses, all_object_sizes):
+        return jax.vmap(functools.partial(is_inside_aabb, agent_pos=single_agent_pos))( all_object_poses, all_object_sizes).any()
 
-    return filtered_agents
+    mask = jax.vmap(functools.partial(is_inside_any_object, all_object_poses=object_positions, all_object_sizes=inflated_sizes))(agent_positions)
+    return jnp.logical_not(mask)
 
+
+def build_grid_graph(points, GRID_SIZE, diagonal=False):
+    G = nx.Graph()
+    points_set = set(points)
+    dim = len(points[0])  # infer dimensionality
+
+    # Add all points as nodes
+    for p in points:
+        G.add_node(p)
+
+    # Define neighbor directions (axis-aligned)
+    directions = []
+    for d in range(dim):
+        if d == 1:
+            continue
+        for offset in [-GRID_SIZE, GRID_SIZE]:
+            dir_vector = [0] * dim
+            dir_vector[d] = offset
+            directions.append(tuple(dir_vector))
+
+    if diagonal:
+        # Optional: include diagonals
+        from itertools import product
+        directions = list(product([-1, 0, 1], repeat=dim))
+        directions.remove((0,) * dim)  # remove self
+
+    # Add edges between neighbors
+    for p in points:
+        for d in directions:
+            neighbor = tuple(np.add(p, d))
+            if neighbor in points_set:
+                G.add_edge(p, neighbor)
+
+    return G
+
+
+def draw_grid_graph_2d(G, node_size=100, node_color='lightblue', edge_color='gray', show_labels=False):
+    pos = {node: (node[0], node[2]) for node in G.nodes}  # node positions are their coordinates
+
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(6, 6))
+    nx.draw(G, pos,
+            node_size=node_size,
+            node_color=node_color,
+            edge_color=edge_color,
+            with_labels=show_labels,
+            font_size=8)
+    plt.gca().set_aspect('equal')
+    plt.gca().invert_yaxis()  # Optional: invert y for "matrix-style" layout
+    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+    plt.xticks(sorted(set(x for x, y, z in G.nodes())))
+    plt.yticks(sorted(set(z for x, y, z in G.nodes())))
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('2D Grid Graph')
+    plt.show()
+
+from jax import numpy as jnp
+
+def filter_reachable_positions(reachable_positions, runtime_container):
+    if isinstance(reachable_positions, list):
+        todo_positions = reachable_positions
+    elif isinstance(reachable_positions, networkx.Graph):
+        todo_positions = reachable_positions.nodes
+        original_reachable_positions = reachable_positions
+        reachable_positions = copy.deepcopy(reachable_positions)
+
+
+    centers = [obj.position for obj in  runtime_container.objects_map.values()]
+    sizes = [obj.size for obj in  runtime_container.objects_map.values()]
+
+    todo_positions = jnp.array(todo_positions)
+    centers = jnp.array(centers)
+    sizes = jnp.array(sizes)
+    mask = _filter_agent_positions(todo_positions, centers, sizes, margin=0.05)
+
+    mask = np.array(mask)
+    todo_positions = np.array(todo_positions)
+    filtered_reachable_positions = todo_positions[mask]
+
+    if isinstance(reachable_positions, list):
+        return filtered_reachable_positions
+    elif isinstance(reachable_positions, networkx.Graph):
+        filtered_reachable_positions = [tuple(x.tolist()) for x in filtered_reachable_positions]
+        todo_positions = [tuple(x.tolist()) for x in todo_positions]
+
+        to_remove = list(set(todo_positions) - set(filtered_reachable_positions))
+        reachable_positions.remove_nodes_from(to_remove)
+
+        #draw_grid_graph_2d(original_reachable_positions)
+        #draw_grid_graph_2d(reachable_positions)
+
+        return reachable_positions

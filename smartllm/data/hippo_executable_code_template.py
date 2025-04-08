@@ -42,6 +42,7 @@ from hippo.llmqueries.llm import set_api_key
 api_key_path = __file__.split("smartllm")[0] + "api_key"
 set_api_key(api_key_path)
 simulator = get_sim(scene_name)
+simulator.log_dir = tmp_hippo_log_dir
 simulator.set_task_description(abstract_task_prompt)
 
 >>> FILL IN PLAN CODE HERE <<<  # noqa

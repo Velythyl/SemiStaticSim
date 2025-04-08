@@ -283,6 +283,15 @@ class RuntimeObjectContainer(_Hippo):
 
             o["size"] = o["axisAlignedBoundingBox"]["size"]
 
+            skill_metadata = []
+            from hippo.simulation.skillsandconditions.skill_names import canonical_enabledname_2_llmname
+            for k, v in canonical_enabledname_2_llmname().items():
+                if o[k]:
+                    skill_metadata.append(v)
+            o["_skill_metadata"] = skill_metadata
+
+
+
             ret.append(o)
 
         return ret

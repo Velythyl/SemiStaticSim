@@ -26,12 +26,17 @@ def _get_ai2thorbuilds_dir(which="fixed"):
 
 def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASSETS_DIR, get_runtime_container=False, **kwargs):
     scenepath = scene
-    if isinstance(scene, str) and scene.endswith(".json"):
-        with open(scene, "r") as f:
-            scene = json.load(f)
+    if isinstance(scene, str):
+        if scene.endswith(".json"):
+            with open(scene, "r") as f:
+                scene = json.load(f)
+        elif "procthor" in scene.lower():
+            num = int(scene.replace("procthor", "")) #
+            from procthorprocessing.procthor_utils import get_procthor10k
+            scene = get_procthor10k()[num]
 
     if isinstance(scene, dict):
-        if scene["objects"][0]["IS_HIPPO"] is True:
+        if scene["objects"][0].get("IS_HIPPO", False) is True:
             hippo_objects = []
             for object in tqdm(scene["objects"], desc="Loading hippo objects..."):
                 ho = HippoObject.from_holodeckdict(object)
