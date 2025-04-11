@@ -10,7 +10,7 @@ from procthorprocessing.taskgen import gen_tasks_for_scene
 
 
 def get_procthor10k():
-    d = prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+    d = prior.load_dataset("procthor-10k")#, revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
     d = LazyJsonDataset(d.train.data+d.test.data+d.val.data, "traintestval", "train")
 
     #def get_sha_for_index(i):
