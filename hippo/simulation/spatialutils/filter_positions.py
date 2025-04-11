@@ -72,18 +72,36 @@ def build_grid_graph(points, GRID_SIZE, diagonal=False):
 
     return G
 
+import matplotlib.pyplot as plt
 
-def draw_grid_graph_2d(G, node_size=100, node_color='lightblue', edge_color='gray', show_labels=False):
-    pos = {node: (node[0], node[2]) for node in G.nodes}  # node positions are their coordinates
+def draw_grid_graph_2d(G, path=None, node_size=100, node_color='lightblue', edge_color='gray', show_labels=False):
+    pos = {node: (node[2], node[0]) for node in G.nodes}  # node positions are their coordinates
 
-    import matplotlib.pyplot as plt
     plt.figure(figsize=(6, 6))
+
+    # Draw the base graph
     nx.draw(G, pos,
             node_size=node_size,
             node_color=node_color,
             edge_color=edge_color,
             with_labels=show_labels,
             font_size=8)
+
+    # If a path is provided, draw it in red
+    if path:
+        # Draw path edges first (so nodes will be on top)
+        path_edges = list(zip(path[:-1], path[1:]))
+        nx.draw_networkx_edges(G, pos,
+                               edgelist=path_edges,
+                               edge_color='red',
+                               width=2)
+
+        # Draw path nodes
+        nx.draw_networkx_nodes(G, pos,
+                               nodelist=path,
+                               node_size=node_size,
+                               node_color='red')
+
     plt.gca().set_aspect('equal')
     plt.gca().invert_yaxis()  # Optional: invert y for "matrix-style" layout
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
@@ -93,6 +111,7 @@ def draw_grid_graph_2d(G, node_size=100, node_color='lightblue', edge_color='gra
     plt.ylabel('y')
     plt.title('2D Grid Graph')
     plt.show()
+    i=0
 
 from jax import numpy as jnp
 

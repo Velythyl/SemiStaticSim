@@ -6,15 +6,14 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Union, Tuple, List
+from typing import Any, Union
 
 import openai
 
-from SMARTLLM.smartllm.query_lm import LM
-from SMARTLLM.smartllm.utils.get_controller import get_controller, get_sim, get_list_of_objects
+from SMARTLLM.smartllm.utils.get_controller import get_list_of_objects
 from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
-from hippo.llmqueries.llm import LLM
-from hippo.utils.file_utils import get_tmp_folder, get_tmp_file
+from llmqueries import LLM
+from hippo.utils.file_utils import get_tmp_folder
 
 sys.path.append(".")
 

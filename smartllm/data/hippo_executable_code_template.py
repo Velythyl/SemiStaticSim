@@ -4,10 +4,7 @@ import sys
 import threading  # noqa
 import time  # noqa
 from glob import glob
-from typing import Tuple
 
-import numpy as np
-from scipy.spatial import distance
 
 def thread_exception_handler(args):
     print(f"Unhandled exception in thread: {args.exc_value}")
@@ -37,7 +34,7 @@ no_robot = len(robots)
 print(scene_name)
 
 from SMARTLLM.smartllm.utils.get_controller import get_sim
-from hippo.llmqueries.llm import set_api_key
+from llmqueries import set_api_key
 
 api_key_path = __file__.split("smartllm")[0] + "api_key"
 set_api_key(api_key_path)

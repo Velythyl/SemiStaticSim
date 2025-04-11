@@ -1,7 +1,7 @@
 import ast
 import json
 
-from hippo.llmqueries.llm import LLM
+from llmqueries import LLM
 from hippo.reconstruction.scenedata import HippoObject
 from hippo.simulation.skillsandconditions.skill_names import get_enabled_2_llm_name
 

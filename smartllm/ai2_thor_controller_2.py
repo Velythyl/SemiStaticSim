@@ -1,5 +1,3 @@
-import math
-import re
 import subprocess
 import time
 import threading
@@ -9,9 +7,8 @@ from scipy.spatial import distance
 from typing import Tuple
 import os
 
-from SMARTLLM.smartllm.utils.get_controller import get_sim
-from hippo.llmqueries.llm import set_api_key
-from hippo.simulation.skill_simulator import Simulator
+from hippo.ai2thor_hippo_controller import get_sim
+from llmqueries.llm import set_api_key
 
 
 def closest_node(node, nodes, no_robot, clost_node_location):
@@ -47,7 +44,7 @@ def generate_video(input_path, prefix, char_id=0, image_synthesis=['normal'], fr
 robots = [{'name': 'robot1', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}, 
           {'name': 'robot2', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}]
 #  #
-floor_no = "procthor0" #"/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/115knife/in_order_0/scene.json"  # 1
+floor_no = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/115knife/in_order_0/scene.json"  # 1
 
 
 simulator = get_sim(floor_no)

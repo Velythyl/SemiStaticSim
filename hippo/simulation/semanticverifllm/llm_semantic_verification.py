@@ -1,10 +1,9 @@
-import ast
 import dataclasses
-import json
 import re
 
-from hippo.llmqueries.llm import LLM
+
 from hippo.utils.selfdataclass import SelfDataclass
+from llmqueries.llm import LLM
 
 
 def get_prompt_for_diff_verification(task_description, diff):

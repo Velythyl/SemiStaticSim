@@ -14,7 +14,3 @@ def resolve_scene_id(floor_name):
     assert floor_name.endswith(".json")
 
     return floor_name
-
-    with open(floor_name, "r") as f:
-        scene = json.load(f)
-    return scene

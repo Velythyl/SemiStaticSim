@@ -262,6 +262,24 @@ class RuntimeObjectContainer(_Hippo):
 
     obj_distances: jnp.ndarray
 
+    def get_obj2id_that_obj1id_is_inside_of(self, obj1_id):
+        obj1_index = self.object_names.index(obj1_id)
+        listed = self.obj_isInsideOf[obj1_index]
+
+        if listed.any():
+            return self.object_names[int(np.array(listed.nonzero()[0][0]))]
+
+    def get_obj2id_that_obj1id_is_ontop_of(self, obj1_id):
+        obj1_index = self.object_names.index(obj1_id)
+        listed = self.obj_isOnTopOf[obj1_index]
+
+        if listed.any():
+            return self.object_names[int(np.array(listed.nonzero()[0][0]))]
+
+    def is_obj_inside_anything(self, obj1_id):
+        obj1_index = self.object_names.index(obj1_id)
+        return self.obj_isInsideOf[obj1_index].any()
+
     @classmethod
     def coerce_ai2thor_metadata_objects(cls, metadata_objects):
         ret = []
@@ -339,6 +357,20 @@ class RuntimeObjectContainer(_Hippo):
         sizes = jnp.stack(sizes)
 
         kwargs = resolve_spatial_attributes(positions, sizes)
+
+        #p_patate = positions[22]
+        #s_patate = sizes[22]
+
+        #p_fridge = positions[6]
+        #s_fridge = sizes[6]
+        #p_patate = swap_yz(p_patate[None])[0]
+        #p_fridge = swap_yz(p_fridge[None])[0]
+
+        #print(isInside(p_patate, s_patate, p_fridge, s_fridge))
+
+        #p_patate = p_patate.at[-1].set(p_patate[-1] + s_patate[-1]/2)
+        #p_fridge = p_fridge.at[-1].set(p_fridge[-1] + s_fridge[-1]/2)
+        #print(isInside(p_patate, s_patate, p_fridge, s_fridge))
 
         return self.replace(**kwargs)
 
@@ -442,7 +474,7 @@ class RuntimeObjectContainer(_Hippo):
     def as_llmjson(self):
 
         obj_isOnTopOf = np.array(self.obj_isOnTopOf)
-        #obj_isInsideOf = np.array(self.obj_isInsideOf)
+        obj_isInsideOf = np.array(self.obj_isInsideOf)
         obj_isBesideOf = np.array(self.obj_isBesideOf)
         obj_distances = np.array(self.obj_distances)
 
@@ -456,7 +488,7 @@ class RuntimeObjectContainer(_Hippo):
                 name = f"robot{name}"
 
             objdict["isOnTopOf"] = self.bool_spatial_attribute_to_list(i, obj_isOnTopOf[i])
-            #objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
+            objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
             objdict["isBesideOf"] = self.bool_spatial_attribute_to_list(i, obj_isBesideOf[i])
             objdict["object_distances"] = self.float_spatial_attribute_to_dict(i, obj_distances[i])
 
@@ -481,7 +513,16 @@ def resolve_spatial_attributes(positions, sizes):
     positions = swap_yz(positions)
     sizes = swap_yz(sizes)
 
+    positions = positions.at[:,-1].set(positions[:,-1] + sizes[:,-1] / 2)
+
     obj_isOnTopOf, obj_isInsideOf, obj_isBesideOf, obj_distances = jax.vmap(functools.partial(for_each_object, positions, sizes))(positions, sizes)
+
+    def fix_for_each_object(arr, i):
+        return arr.at[i].set(False)
+    indices = jnp.arange(positions.shape[0])
+    obj_isOnTopOf = jax.vmap(fix_for_each_object)(obj_isOnTopOf, indices)
+    obj_isInsideOf = jax.vmap(fix_for_each_object)(obj_isInsideOf, indices)
+    obj_isBesideOf = jax.vmap(fix_for_each_object)(obj_isBesideOf, indices)
 
     obj_distances = jax.vmap(lambda x: jnp.round(x, decimals=2))(obj_distances.squeeze())
 

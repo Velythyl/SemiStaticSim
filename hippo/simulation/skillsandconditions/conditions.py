@@ -112,7 +112,22 @@ class COND_IsInProximity(Condition):
 
     def call(self, sas: SimulationActionState) -> bool:
         object = get_object_from_controller(sas.controller, sas.target_object_id)
-        return object["isInteractable"]
+
+        is_obj_interactable = object["isInteractable"]
+
+        is_obj_inside_interactable_object = False
+        obj_insideness = sas.pre_container.get_obj2id_that_obj1id_is_inside_of(sas.target_object_id)
+        if obj_insideness is not None:
+            inside_of = get_object_from_controller(sas.controller, obj_insideness)
+            is_obj_inside_interactable_object = inside_of["isInteractable"]
+
+        is_obj_ontopof_interactable_object = False
+        obj_ontopness = sas.pre_container.get_obj2id_that_obj1id_is_ontop_of(sas.target_object_id)
+        if obj_ontopness is not None:
+            ontop_of = get_object_from_controller(sas.controller, obj_ontopness)
+            is_obj_ontopof_interactable_object = ontop_of["isInteractable"]
+
+        return is_obj_inside_interactable_object or is_obj_interactable or is_obj_ontopof_interactable_object
 
 @dataclass
 class COND_AuxiliaryObjectIsInInventory(Condition):
