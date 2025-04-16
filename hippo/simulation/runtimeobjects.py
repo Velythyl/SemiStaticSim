@@ -463,8 +463,8 @@ class RuntimeObjectContainer(_Hippo):
             if sas is None:
                 from hippo.simulation.skillsandconditions.sas import SimulationActionState
                 sas = SimulationActionState(self, None, None, object_id, None)
-            from hippo.simulation.skillsandconditions.conditions import COND_ObjectExists, maybe_raise_condition_exception
-            return maybe_raise_condition_exception([COND_ObjectExists().replace(sas=sas.replace(target_object_id=object_id), state=False, success=False)])
+            from hippo.simulation.skillsandconditions.conditions import CONDITION_ObjectExists, maybe_raise_condition_exception
+            return maybe_raise_condition_exception([CONDITION_ObjectExists().replace(sas=sas.replace(target_object_id=object_id), state=False, success=False)])
 
     def update_object(self, object) -> Self:
         dico = copy.deepcopy(self.objects_map)

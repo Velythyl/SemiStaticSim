@@ -56,6 +56,120 @@ task_over = False
 set_api_key("../api_key")
 simulator.set_task_description("slice the apple")
 
+# CODE
+def slice_potato():
+    # 0: SubTask 1: Slice the Potato
+    # 1: Go to the Knife.
+    simulator.GoToObject(robots[0],'Knife')
+    # 2: Pick up the Knife.
+    simulator.PickupObject(robots[0],'Knife')
+    # 3: Go to the Potato.
+    simulator.GoToObject(robots[0],'Potato')
+    # 4: Slice the Potato.
+    simulator.SliceObject(robots[0],'Potato')
+    # 5: Go to the countertop.
+    simulator.GoToObject(robots[0],'CounterTop')
+    # 6: Put the Knife back on the CounterTop.
+    simulator.PutObject(robots[0],'Knife', 'CounterTop')
+
+
+# Execute SubTask 1
+slice_potato()
+
+def slice_tomato():
+    # 0: SubTask 2: Slice the Tomato
+    # 1: Go to the Knife.
+    simulator.GoToObject(robots[0],'Knife')
+    # 2: Pick up the Knife.
+    simulator.PickupObject(robots[0],'Knife')
+    # 3: Go to the Tomato.
+    simulator.GoToObject(robots[0],'Tomato')
+    # 4: Slice the Tomato.
+    simulator.SliceObject(robots[0],'Tomato')
+    # 5: Go to the countertop.
+    simulator.GoToObject(robots[0],'CounterTop')
+    # 6: Put the Knife back on the CounterTop.
+    simulator.PutObject(robots[0],'Knife', 'CounterTop')
+
+def slice_lettuce():
+    # 0: SubTask 3: Slice the Lettuce
+    # 1: Go to the Knife.
+    simulator.GoToObject(robots[0],'Knife')
+    # 2: Pick up the Knife.
+    simulator.PickupObject(robots[0],'Knife')
+    # 3: Go to the Lettuce.
+    simulator.GoToObject(robots[0],'Lettuce')
+    # 4: Slice the Lettuce.
+    simulator.SliceObject(robots[0],'Lettuce')
+    # 5: Go to the countertop.
+    simulator.GoToObject(robots[0],'CounterTop')
+    # 6: Put the Knife back on the CounterTop.
+    simulator.PutObject(robots[0],'Knife', 'CounterTop')
+
+def put_sliced_vegetables_in_bowl():
+    # 0: SubTask 4: Put the sliced Potato, Tomato, and Lettuce in the Bowl
+    # 1: Go to the sliced Potato.
+    simulator.GoToObject(robots[0],'Potato')
+    # 2: Pick up the sliced Potato.
+    simulator.PickupObject(robots[0],'Potato')
+    # 3: Go to the Bowl.
+    simulator.GoToObject(robots[0],'Bowl')
+    # 4: Put the sliced Potato in the Bowl.
+    simulator.PutObject(robots[0],'Potato', 'Bowl')
+    # 5: Go to the sliced Tomato.
+    simulator.GoToObject(robots[0],'Tomato')
+    # 6: Pick up the sliced Tomato.
+    simulator.PickupObject(robots[0],'Tomato')
+    # 7: Put the sliced Tomato in the Bowl.
+    simulator.PutObject(robots[0],'Tomato', 'Bowl')
+    # 8: Go to the sliced Lettuce.
+    simulator.GoToObject(robots[0],'Lettuce')
+    # 9: Pick up the sliced Lettuce.
+    simulator.PickupObject(robots[0],'Lettuce')
+    # 10: Put the sliced Lettuce in the Bowl.
+    simulator.PutObject(robots[0],'Lettuce', 'Bowl')
+
+def season_meal_with_salt():
+    # 0: SubTask 5: Season the meal with Salt
+    # 1: Go to the SaltShaker.
+    simulator.GoToObject(robots[0],'SaltShaker')
+    # 2: Pick up the SaltShaker.
+    simulator.PickupObject(robots[0],'SaltShaker')
+    # 3: Go to the Bowl.
+    simulator.GoToObject(robots[0],'Bowl')
+    # 4: Season the meal with Salt.
+    simulator.PutObject(robots[0],'SaltShaker', 'Bowl')
+    # 5: Go to the countertop.
+    simulator.GoToObject(robots[0],'CounterTop')
+    # 6: Put the SaltShaker back on the CounterTop.
+    simulator.PutObject(robots[0],'SaltShaker', 'CounterTop')
+
+
+# Execute SubTask 2
+slice_tomato()
+
+# Execute SubTask 3
+slice_lettuce()
+
+# Execute SubTask 4
+put_sliced_vegetables_in_bowl()
+
+# Execute SubTask 5
+season_meal_with_salt()
+
+
+
+
+
+
+
+
+
+
+
+exit()
+
+
 
 def try_procthor0_kitchen(robot):
     simulator.GoToObject(robot, 'Fridge')

@@ -1,4 +1,5 @@
-project: voxvae2
-run_name: run_name
+project: pvf
+run_name: dev
 tags: []
 seed: -1
+disable: true

@@ -1,3 +1,3 @@
-scenelist: ["/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/115knife/in_order_0/scene.json"]
+sceneids: ["/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/115knife/in_order_0/scene.json"]
 tasks: [["Slice the apple"]]
-robots: None
+robots: null

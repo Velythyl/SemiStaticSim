@@ -5,9 +5,12 @@ import threading  # noqa
 import time  # noqa
 from glob import glob
 
+from hippo.ai2thor_hippo_controller import get_sim
+from hippo.simulation.singlefilelog import set_filepath
+from llmqueries.llm import set_api_key
+
 
 def thread_exception_handler(args):
-    print(f"Unhandled exception in thread: {args.exc_value}")
     sys.exit(1)
 
 threading.excepthook = thread_exception_handler
@@ -33,13 +36,10 @@ def generate_video():
 no_robot = len(robots)
 print(scene_name)
 
-from SMARTLLM.smartllm.utils.get_controller import get_sim
-from llmqueries import set_api_key
 
-api_key_path = __file__.split("smartllm")[0] + "api_key"
 set_api_key(api_key_path)
+set_filepath(tmp_hippo_log_dir)
 simulator = get_sim(scene_name)
-simulator.log_dir = tmp_hippo_log_dir
 simulator.set_task_description(abstract_task_prompt)
 
 >>> FILL IN PLAN CODE HERE <<<  # noqa

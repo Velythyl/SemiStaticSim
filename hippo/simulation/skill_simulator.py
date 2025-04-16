@@ -5,7 +5,7 @@ import os
 import sys
 import threading
 import time
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 
 from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller, get_robot_inventory, \
     get_object_position_from_controller, get_robot_position_from_controller, get_object_size_from_controller, \
@@ -13,6 +13,7 @@ from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_contro
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
 from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff, UnsafeAction, \
     LLM_verify_final_state, _LLMSemanticVerification, UnsafeFinalState
+from hippo.simulation.singlefilelog import log_scenedict_to_file
 from hippo.simulation.skillsandconditions.conditions import get_slicing_implement_from_inventory, eval_conditions, \
     maybe_raise_llmcondition_exception, ConditionFailure, LLMVerificationFailure, Condition
 import cv2
@@ -27,9 +28,11 @@ from hippo.utils.git_diff import git_diff
 
 
 class Simulator:
-    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP", log_dir="/tmp/hipposimulation"):    # STEP or HISTORY
+    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP"):    # STEP or HISTORY
         self.controller = controller
         self.object_containers = [objects]
+
+        log_scenedict_to_file(0, objects.as_llmjson())
 
         
         self.total_exec = 0
@@ -47,8 +50,6 @@ class Simulator:
 
         self.llmverifstyle = llmverifstyle
         self.full_reachability_graph = full_reachability_graph
-
-        self.log_dir = log_dir
 
         self.roblock = {}
 
@@ -184,86 +185,8 @@ class Simulator:
         self.done_actions.append(sas.skill_prettyprint)
         return sas
 
-    def log_llmsemantic(self, item: _LLMSemanticVerification, subpath, filepath=None):
-        if filepath is None:
-            filepath = get_next_file_counter(self.log_dir, subpath)
-        os.makedirs(filepath, exist_ok=True)
-        for k, v in vars(item).items():
-            with open(f"{filepath}/{k}.txt", 'w') as f:
-                f.write(f"{v}")
-        with open(f"{filepath}/nametype.txt", 'w') as f:
-            f.write(item.nametype)
-
-    def log_condition(self, item: Condition, subpath, filepath=None):
-        raise NotImplementedError() #if filepath is None:
-        #    filepath = get_next_file_counter(self.log_dir, subpath)
-        os.makedirs(filepath, exist_ok=True)
-        for k, v in vars(item).items():
-            with open(f"{filepath}/{k}.txt", 'w') as f:
-                f.write(f"{v}")
-        with open(f"{filepath}/nametype.txt", 'w') as f:
-            f.write(item.nametype)
-        with open(f"{filepath}/is_valid.txt", 'w') as f:
-            f.write(item.success)
-
-    def log_condition_failure(self, exception: ConditionFailure):
-        path = f"{self.log_dir}/condition_failure"
-        assert not os.path.exists(path)
-        os.makedirs(path, exist_ok=True)    # lol
-
-        if isinstance(exception, LLMVerificationFailure):
-            item : _LLMSemanticVerification = exception.args[0]
-            self.log_llmsemantic(item, None, filepath=f"{path}/llm_semantic")
-
-            assert item.skill_prettyprint is not None
-
-            with open(f"{path}/failure_feedback.txt", 'w') as f:
-                f.write(f"Could not perform {item.skill_prettyprint} because a judge LLM said: `{item.nametype}({item.reason})`.")
-
-        else:
-            item : List[Condition] = exception.args[0]
-
-            failure_action = item[0].sas.skill_prettyprint
-
-            os.makedirs(f"{path}/condition_checks")
-            #self.log_condition(item, subpath=f"{path}/condition")
-            errors = [x.error_message() for x in item]
-            with open(f"{path}/condition_checks/error_messages.txt", 'w') as f:
-                f.write(json.dumps(errors))
-
-            with open(f"{path}/failure_feedback.txt", 'w') as f:
-                f.write(f"""
-Could not perform {failure_action} because the following problems occurred:
-```
-{json.dumps(errors, indent=2)}
-```
-""".strip())
-
-            with open(f"{path}/actions_so_far.txt", 'w') as f:
-                f.write(json.dumps(self.done_actions))
-
-        with open(f"{path}/exception_type.txt", 'w') as f:
-            f.write(str(exception.__class__))
-
-    def log_task_successfailure(self, llmsemantic: _LLMSemanticVerification):
-        path = f"{self.log_dir}/task_success"
-        os.makedirs(path, exist_ok=True)
-        with open(f"{path}/is_valid.txt", 'w') as f:
-            f.write(f"{llmsemantic.is_valid}")
-
-        with open(f"{path}/maybe_feedback.txt", 'w') as f:
-            if llmsemantic.is_valid:
-                f.write(
-                    f"A judge LLM said the plan succeeded because `{llmsemantic.nametype}({llmsemantic.reason})`.")
-            else:
-                f.write(
-                    f"A judge LLM said the plan failed because `{llmsemantic.nametype}({llmsemantic.reason})`.")
-        if not llmsemantic.is_valid:
-            maybe_raise_llmcondition_exception(llmsemantic)
-
 
     def llm_verify_final_state(self):
-        return
         first_state = self.object_containers[0].as_llmjson()
         last_state = self.current_object_container.as_llmjson()
 
@@ -284,14 +207,10 @@ DIFF BETWEEN FIRST AND FINAL STATES:
         print("Querying now...")
         llmsemantic = LLM_verify_final_state(self.task_description, diff, pure_diff, action_history)
 
-        self.log_llmsemantic(llmsemantic, None, filepath=f"{self.log_dir}/llm_final_verif")
-
-        if isinstance(llmsemantic, UnsafeFinalState):
-            maybe_raise_llmcondition_exception(llmsemantic)
-
-        self.log_task_successfailure(llmsemantic)
+        maybe_raise_llmcondition_exception(llmsemantic)
 
     def llm_verify_diff_alignment(self):
+        log_scenedict_to_file(len(self.object_containers)-1, self.current_object_container)
         return
         pure_diff = self.get_object_container_diff()
         action_history = [f'{i}: {x}' for i, x in enumerate(self.done_actions)]
@@ -310,10 +229,7 @@ DIFF OF LAST ACTION:
         print(diff)
         print("Querying now...")
         llmsemantic = LLM_verify_diff(self.task_description, diff, pure_diff, action_history, self.done_actions[-1])    # this assumes we're synced with the done actions, which SHOULD be true. but todo verify this is true for multi agent
-        self.log_llmsemantic(llmsemantic, "llm_diff_verif")
         maybe_raise_llmcondition_exception(llmsemantic)
-
-
 
     def _exec_actions(self):
         # create new folders to save the images from the agents
@@ -560,13 +476,12 @@ DIFF OF LAST ACTION:
                         self.controller.step(action="Done")
                         self.llm_verify_final_state()
                         print("Done!")
+                        raise Exception("Done!")
                 except ConditionFailure as e:
                     print("Condition Failure! Aborting!")
                     self.controller.stop()
-                    self.log_condition_failure(e)
-                    raise e
-                    # todo catch planning failure exceptions such as conditon failure and llm verif failure and abort plan, to provide feedback to llm
 
+                    raise e
 
                 except Exception as e:
                     raise e

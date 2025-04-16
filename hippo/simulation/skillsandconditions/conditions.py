@@ -7,18 +7,23 @@ from hippo.simulation.ai2thor_metadata_reader import get_robot_inventory, get_ob
     get_object_from_controller
 from hippo.simulation.semanticverifllm.llm_semantic_verification import _LLMSemanticVerification, UnsafeAction, \
     UnsafeFinalState, IncorrectFinalState
+from hippo.simulation.singlefilelog import log_feedback_to_file, FeedbackMixin
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.utils.selfdataclass import SelfDataclass
 
 
 @dataclass
-class _Condition(Callable, SelfDataclass):
+class _Condition(Callable, SelfDataclass, FeedbackMixin):
     name: str = ""
     state: bool = None
     sas: SimulationActionState = None
 
     prev: Self = None
     success: bool = None
+
+    @property
+    def feedback_necessary(self) -> bool:
+        return isinstance(self.state, bool) and self.state == False
 
     def __bool__(self):
         return self.success
@@ -30,12 +35,9 @@ class _Condition(Callable, SelfDataclass):
         acc = [] + self.prev.error_message()
 
         if self.state is False:
-
             acc = acc + [self._error_message()]
 
         acc = list(filter(lambda x: x is not None, acc))
-
-        #acc = [Exception(a) for a in acc]
 
         return acc
 
@@ -91,7 +93,7 @@ class Condition(_Condition):
         raise NotImplementedError()
 
 @dataclass
-class COND_ObjectExists(Condition):
+class CONDITION_ObjectExists(Condition):
     name: str = "ObjectExists"
 
     def _error_message(self):
@@ -103,12 +105,12 @@ class COND_ObjectExists(Condition):
         return True
 
 @dataclass
-class COND_IsInProximity(Condition):
+class CONDITION_IsInteractable(Condition):
     name: str = "IsInteractable"
-    prev: _Condition = COND_ObjectExists()
+    prev: _Condition = CONDITION_ObjectExists()
 
     def _error_message(self):
-        return f"Object {self.sas.target_object_id} is not in proximity to the robot."
+        return f"Object {self.sas.target_object_id} is not interactable. It might be inside a closed object, or not visible by the robot."
 
     def call(self, sas: SimulationActionState) -> bool:
         object = get_object_from_controller(sas.controller, sas.target_object_id)
@@ -119,7 +121,7 @@ class COND_IsInProximity(Condition):
         obj_insideness = sas.pre_container.get_obj2id_that_obj1id_is_inside_of(sas.target_object_id)
         if obj_insideness is not None:
             inside_of = get_object_from_controller(sas.controller, obj_insideness)
-            is_obj_inside_interactable_object = inside_of["isInteractable"]
+            is_obj_inside_interactable_object = inside_of["isInteractable"] and inside_of["isOpen"]
 
         is_obj_ontopof_interactable_object = False
         obj_ontopness = sas.pre_container.get_obj2id_that_obj1id_is_ontop_of(sas.target_object_id)
@@ -130,7 +132,7 @@ class COND_IsInProximity(Condition):
         return is_obj_inside_interactable_object or is_obj_interactable or is_obj_ontopof_interactable_object
 
 @dataclass
-class COND_AuxiliaryObjectIsInInventory(Condition):
+class CONDITION_AuxiliaryObjectIsInInventory(Condition):
     name: str = "IsInInventory"
 
     def _error_message(self):
@@ -140,7 +142,7 @@ class COND_AuxiliaryObjectIsInInventory(Condition):
         return sas.auxiliary_object.heldBy == f"robot{sas.robot+1}"
 
 @dataclass
-class COND_IsInInventory(Condition):
+class CONDITION_IsInInventory(Condition):
     name: str = "IsInInventory"
 
     def _error_message(self):
@@ -150,7 +152,7 @@ class COND_IsInInventory(Condition):
         return sas.target_object.heldBy == f"robot{sas.robot+1}"
 
 @dataclass
-class _COND_AttributeEnabled(Condition):
+class CONDITION_AttributeEnabled(Condition):
     name: str = "AttributeEnabled"
 
     def _error_message(self):
@@ -171,9 +173,9 @@ class __COND_AttributeEnabledInAi2Thor(Condition):
         return obj[sas.skill_object.enabled_name]
 
 @dataclass
-class COND_SkillEnabled(Condition):
+class CONDITION_SkillEnabled(Condition):
     name: str = "SkillEnabled"
-    prev: _Condition = _COND_AttributeEnabled()
+    prev: _Condition = CONDITION_AttributeEnabled()
 
     def _error_message(self):
         return f"The object {self.sas.target_object_id} does not support the skill {self.sas.skill_name}."
@@ -199,9 +201,9 @@ def get_slicing_implement_from_inventory(sas: SimulationActionState | Tuple[Any,
 
 
 @dataclass
-class COND_SlicingImplementInInventory(Condition):
+class CONDITION_SlicingImplementInInventory(Condition):
     name: str = "SlicingImplementInInventory"
-    prev: _Condition = _COND_AttributeEnabled()
+    prev: _Condition = CONDITION_AttributeEnabled()
 
     def _error_message(self):
         return f"The robot does not have access to a slicing implement."
@@ -212,9 +214,41 @@ class COND_SlicingImplementInInventory(Condition):
             return False
         return True
 
-#def verify_all_conditions(sas: SimulationActionState, condlist: List[_Condition]):
-#    ret = [c(sas) for c in condlist]
-#    return ret
+
+@dataclass
+class Condlist(SelfDataclass, FeedbackMixin):
+    condlist: List[Condition]
+
+    @property
+    def feedback_type(self):
+        if len(self.badconds) == 0:
+            return self.__class__.__name__
+        elif len(self.badconds) == 1:
+            return self.badconds[0].__class__.__name__
+        else:
+            return "MultiplePreconditionFailure"
+
+    @property
+    def badconds(self) -> List[Condition]:
+        badconds = []
+        for cond in self.condlist:
+            if cond.success is False:
+                badconds.append(cond)
+        return badconds
+
+    @property
+    def feedback_necessary(self):
+        return len(self.badconds) >= 1
+
+    def error_message(self):
+        errors = []
+        for cond in self.badconds:
+            msg = " AND ".join(cond.error_message())
+            errors.append(msg)
+        return errors
+
+    def __str__(self):
+        return "\n".join(self.error_message())
 
 class ConditionFailure(Exception):
     pass
@@ -222,48 +256,38 @@ class ConditionFailure(Exception):
 class PreconditionFailure(ConditionFailure):
     pass
 
-class SinglePreconditionFailure(PreconditionFailure):
-    pass
-
-class MultiplePreconditionFailure(PreconditionFailure):
-    pass
 
 class _PostconditionFailure(ConditionFailure):
-    pass
-
-class PostconditionFailure(_PostconditionFailure):
-    pass
-
-class MultiplePostconditionFailure(_PostconditionFailure):
     pass
 
 class LLMVerificationFailure(_PostconditionFailure):
     pass
 
 
-
 def eval_conditions(sas):
     preconditions = [c(sas) for c in sas.skill_object.pre_conditions]
+
     return maybe_raise_condition_exception(preconditions)
 
 
 def maybe_raise_condition_exception(condlist):
-    if all(condlist):
+    condlist = Condlist(condlist)
+    log_feedback_to_file(condlist)
+
+    if all(condlist.condlist):
         return condlist
 
-    errors = []
-    for cond in condlist:
-        if cond.success is False:
-            errors.append(cond)
+    raise PreconditionFailure(condlist.badconds)
 
-    raise PreconditionFailure(errors)
+
 
 
 def maybe_raise_llmcondition_exception(llmreturn: _LLMSemanticVerification):
+    log_feedback_to_file(llmreturn)
     if isinstance(llmreturn, (UnsafeAction, UnsafeFinalState, IncorrectFinalState)):
         raise LLMVerificationFailure(llmreturn)
 
 
 if __name__ == "__main__":
-    c = COND_SkillEnabled()
+    c = CONDITION_SkillEnabled()
     i=0

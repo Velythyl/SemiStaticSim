@@ -1,3 +1,2 @@
 llm: gpt-4
-prompt_decompse_set: train_task_decompose
-prompt_allocation_set: train_task_allocation
+prompt: single_robot_plan_prompt

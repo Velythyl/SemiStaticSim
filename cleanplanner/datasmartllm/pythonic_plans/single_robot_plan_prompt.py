@@ -1,3 +1,6 @@
+# Note: skills that change object states (SliceObject, BreakObject, Open/CloseObject, CleanObject, etc) DO NOT change the object name.
+# So, SliceObject('Potato') simply results in Potato having the slice property. This must be inferred from context, from previous actions in the plan.
+
 # EXAMPLE 1 - Task Description: Put tomato in fridge
 # GENERAL TASK DECOMPOSITION
 # Independent subtasks:
@@ -88,3 +91,5 @@ pick_up_fork()
 throw_fork_in_trash()
 
 # Task throw the fork in the trash is done
+
+# You can reuse the imports, but do not reuse the functions and objects above! They are mere examples

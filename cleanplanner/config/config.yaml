@@ -2,6 +2,6 @@
 defaults:
   - meta: meta
   - planner: smartllm
-  - feedback: default
-  - scene: default
+  - feedback: conditiononly
+  - scene: procthor
   - paths: default

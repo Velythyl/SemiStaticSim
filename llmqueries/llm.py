@@ -2,6 +2,7 @@ import time
 from collections import deque
 from pathlib import Path
 
+import tiktoken
 import barebonesllmchat
 import numpy as np
 import openai
@@ -116,6 +117,11 @@ def LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=
 
 def set_api_key(openai_api_key):
     openai.api_key = Path(openai_api_key + '.txt').read_text()
+
+def approx_num_tokens(llm, text):
+    encoding = tiktoken.encoding_for_model(llm)
+    tokens = encoding.encode(text)
+    return len(tokens)
 
 if __name__ == "__main__":
     print(__file__)

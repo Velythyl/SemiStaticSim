@@ -1,7 +1,8 @@
 import dataclasses
 import re
+from typing import Union, List
 
-
+from hippo.simulation.singlefilelog import FeedbackMixin
 from hippo.utils.selfdataclass import SelfDataclass
 from llmqueries.llm import LLM
 
@@ -64,12 +65,16 @@ The high-level task is {task_description}
     return PROMPT
 
 @dataclasses.dataclass
-class _LLMSemanticVerification(SelfDataclass):
+class _LLMSemanticVerification(SelfDataclass, FeedbackMixin):
     task_description: str
     diff: str
     response: str
     reason: str
     is_valid: bool
+
+    @property
+    def feedback_necessary(self):
+        return not self.is_valid
 
     @property
     def nametype(self):
@@ -80,6 +85,9 @@ class _LLMSemanticVerification(SelfDataclass):
     pure_diff: str = None
     pure_past_actions: str = None
     skill_prettyprint: str = None
+
+    def error_message(self) -> Union[List[str], str]:
+        return self.reason
 
 @dataclasses.dataclass
 class SafeAction(_LLMSemanticVerification):

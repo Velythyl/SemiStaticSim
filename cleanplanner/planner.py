@@ -10,10 +10,10 @@ from typing import Any, Union
 
 import openai
 
-from SMARTLLM.smartllm.utils.get_controller import get_list_of_objects
-from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
-from llmqueries import LLM
+from cleanplanner.parse_scene import SceneTask, PlanLog
+from hippo.ai2thor_hippo_controller import get_list_of_objects
 from hippo.utils.file_utils import get_tmp_folder
+from llmqueries.llm import LLM, approx_num_tokens
 
 sys.path.append(".")
 
@@ -38,16 +38,7 @@ def convert_to_dict_objprop(objs, obj_mass):
 TARGET_TMP_DIR = get_tmp_folder()
 
 
-@dataclasses.dataclass
-class SceneTask:
-    test_tasks: tuple
-    robots_test_tasks: tuple
-    gt_test_tasks: tuple
-    trans_cnt_tasks: tuple
-    max_trans_cnt_tasks: tuple
-    available_robots: tuple
-    scene: Union[str, Any]
-    scene_name: str
+
 
 
 def parse_ai2thor_plan(scene, task_path):
@@ -84,13 +75,8 @@ def parse_ai2thor_plan(scene, task_path):
 
 
 
-def gen_plan(cfg, scenetask):
-    # todo gotta handle the floor plan loading stuff, FloorPlanN is very different compared to HippoPlanN ???? maybe use a gym-registry style thing?
-
-
-    if not os.path.isdir(f"./logs/"):
-        os.makedirs(f"./logs/")
-
+def gen_plan(cfg, scenetask: SceneTask, output_dir):
+    assert os.path.exists(output_dir)
 
     ######## Train Task Decomposition ########
 
@@ -98,26 +84,24 @@ def gen_plan(cfg, scenetask):
     prompt = f"from skills import " + actions.ai2thor_actions
     prompt += f"\nimport time"
     prompt += f"\nimport threading"
-    objects_ai = f"\n\nobjects = {get_list_of_objects(scenetask.scene)}"
-    prompt += objects_ai
 
     # read input train prompts
-    decompose_prompt = Path(cfg.paths.curdir + "/datasmartllm/pythonic_plans/" + cfg.planner.prompt_decompse_set + ".py").read_text()
+    decompose_prompt = Path(cfg.paths.curdir + "/datasmartllm/pythonic_plans/" + cfg.planner.prompt + ".py").read_text()
 
     prompt += "\n\n" + decompose_prompt
 
     print("Generating Decompsed Plans...")
 
-    decomposed_plan = []
-    for task in scenetask.test_tasks:
-        curr_prompt = f"{prompt}\n\n# Task Description: {task}"
+    objects_ai = f"\n\nobjects = {get_list_of_objects(scenetask.scene)}"
+    prompt += f"\n\n### NOW, CONSIDER THIS SITUATION:{objects_ai}"
+    curr_prompt = f"{prompt}\n\n# Task Description: {scenetask.tasks[0]}"
 
-        _, text = LLM(curr_prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0)
+    NUM_INPUT_TOKENS = approx_num_tokens(cfg.planner.llm, curr_prompt)
+    _, decomposed_plan = LLM(curr_prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0)
+    NUM_OUTPUT_TOKENS = approx_num_tokens(cfg.planner.llm, decomposed_plan)
 
-        decomposed_plan.append(text)
-
-    print("Generating Allocation Solution...")
-
+    print("Plan obtained! Saving...")
+    """
     ######## Train Task Allocation - SOLUTION ########
     prompt = f"from skills import " + actions.ai2thor_actions
     prompt += f"\nimport time"
@@ -127,35 +111,26 @@ def gen_plan(cfg, scenetask):
 
     prompt += "\n\n" + allocated_prompt + "\n\n"
 
-    allocated_plan = []
-    for i, plan in enumerate(decomposed_plan):
-        no_robot = len(scenetask.available_robots[i])
-        curr_prompt = prompt + plan
-        curr_prompt += f"\n# TASK ALLOCATION"
-        curr_prompt += f"\n# Scenario: There are {no_robot} robots available, The task should be performed using the minimum number of robots necessary. Robots should be assigned to subtasks that match its skills and mass capacity. Using your reasoning come up with a solution to satisfy all contraints."
-        curr_prompt += f"\n\nrobots = {scenetask.available_robots[i]}"
-        curr_prompt += f"\n{objects_ai}"
-        curr_prompt += f"\n\n# IMPORTANT: The AI should ensure that the robots assigned to the tasks have all the necessary skills to perform the tasks. IMPORTANT: Determine whether the subtasks must be performed sequentially or in parallel, or a combination of both and allocate robots based on availablitiy. "
-        curr_prompt += f"\n# SOLUTION  \n"
 
-        # if "gpt" not in args.gpt_version and "bbllm" not in args.gpt_version:
-        #    # older versions of GPT
-        #    _, text = LM(curr_prompt, args.gpt_version, max_tokens=1000, stop=["def"], frequency_penalty=0.65)
+    no_robot = len(scenetask.robots)
+    curr_prompt = prompt + decomposed_plan
+    curr_prompt += f"\n# TASK ALLOCATION"
+    curr_prompt += f"\n# Scenario: There are {no_robot} robots available, The task should be performed using the minimum number of robots necessary. Robots should be assigned to subtasks that match its skills and mass capacity. Using your reasoning come up with a solution to satisfy all contraints."
+    curr_prompt += f"\n\nrobots = {scenetask.robots}"
+    curr_prompt += f"\n{objects_ai}"
+    curr_prompt += f"\n\n# IMPORTANT: The AI should ensure that the robots assigned to the tasks have all the necessary skills to perform the tasks. IMPORTANT: Determine whether the subtasks must be performed sequentially or in parallel, or a combination of both and allocate robots based on availablitiy. "
+    curr_prompt += f"\n# SOLUTION  \n"
 
-        if "gpt-3.5" in cfg.planner.llm:
-            # gpt 3.5 and its variants
-            # messages = [{"role": "user", "content": curr_prompt}]
-            _, text = LLM(curr_prompt, cfg.planner.llm, max_tokens=1500, frequency_penalty=0.35)
+    if "gpt-3.5" in cfg.planner.llm:
+        _, allocated_plan = LLM(curr_prompt, cfg.planner.llm, max_tokens=1500, frequency_penalty=0.35)
 
-        else:
-            # gpt 4.0
-            messages = [{"role": "system",
-                         "content": "You are a Robot Task Allocation Expert. Determine whether the subtasks must be performed sequentially or in parallel, or a combination of both based on your reasoning. In the case of Task Allocation based on Robot Skills alone - First check if robot teams are required. Then Ensure that robot skills or robot team skills match the required skills for the subtask when allocating. Make sure that condition is met. In the case of Task Allocation based on Mass alone - First check if robot teams are required. Then Ensure that robot mass capacity or robot team combined mass capacity is greater than or equal to the mass for the object when allocating. Make sure that condition is met. In both the Task Task Allocation based on Mass alone and Task Allocation based on Skill alone, if there are multiple options for allocation, pick the best available option by reasoning to the best of your ability."},
-                        {"role": "system", "content": "You are a Robot Task Allocation Expert"},
-                        {"role": "user", "content": curr_prompt}]
-            _, text = LLM(messages, cfg.planner.llm, max_tokens=400, frequency_penalty=0.69)
-
-        allocated_plan.append(text)
+    else:
+        # gpt 4.0
+        messages = [{"role": "system",
+                     "content": "You are a Robot Task Allocation Expert. Determine whether the subtasks must be performed sequentially or in parallel, or a combination of both based on your reasoning. In the case of Task Allocation based on Robot Skills alone - First check if robot teams are required. Then Ensure that robot skills or robot team skills match the required skills for the subtask when allocating. Make sure that condition is met. In the case of Task Allocation based on Mass alone - First check if robot teams are required. Then Ensure that robot mass capacity or robot team combined mass capacity is greater than or equal to the mass for the object when allocating. Make sure that condition is met. In both the Task Task Allocation based on Mass alone and Task Allocation based on Skill alone, if there are multiple options for allocation, pick the best available option by reasoning to the best of your ability."},
+                    #{"role": "system", "content": "You are a Robot Task Allocation Expert"},
+                    {"role": "user", "content": curr_prompt}]
+        _, allocated_plan = LLM(messages, cfg.planner.llm, max_tokens=400, frequency_penalty=0.69)
 
     print("Generating Allocated Code...")
 
@@ -166,72 +141,69 @@ def gen_plan(cfg, scenetask):
     prompt += f"\nimport threading"
     prompt += objects_ai
 
-    code_plan = []
 
     code_prompt = Path(cfg.paths.curdir + "/datasmartllm/pythonic_plans/" + cfg.planner.prompt_allocation_set + "_code.py").read_text()
 
     prompt += "\n\n" + code_prompt + "\n\n"
 
-    for i, (plan, solution) in enumerate(zip(decomposed_plan, allocated_plan)):
-        curr_prompt = prompt + plan
-        curr_prompt += f"\n# TASK ALLOCATION"
-        curr_prompt += f"\n\nrobots = {scenetask.available_robots[i]}"
-        curr_prompt += solution
-        curr_prompt += f"\n# CODE Solution  \n"
+    curr_prompt = prompt + decomposed_plan
+    curr_prompt += f"\n# TASK ALLOCATION"
+    curr_prompt += f"\n\nrobots = {scenetask.robots}"
+    curr_prompt += allocated_plan
+    curr_prompt += f"\n# CODE Solution  \n"
 
-        # if "gpt" not in args.gpt_version and "bbllm" not in args.gpt_version:
-        #    # older versions of GPT
-        #    _, text = LM(curr_prompt, args.gpt_version, max_tokens=1000, stop=["def"], frequency_penalty=0.30)
-        # else:
-        #    # using variants of gpt 4 or 3.5
-        messages = [{"role": "system", "content": "You are a Robot Task Allocation Expert"},
-                    {"role": "user", "content": curr_prompt}]
-        _, text = LLM(messages, cfg.planner.llm, max_tokens=1400, frequency_penalty=0.4)
+    messages = [{"role": "system", "content": "You are a Robot Task Allocation Expert"},
+                {"role": "user", "content": curr_prompt}]
+    _, code_plan = LLM(messages, cfg.planner.llm, max_tokens=1400, frequency_penalty=0.4)
 
-        code_plan.append(text)
+    """
 
     # save generated plan
-    exec_folders = []
-    if cfg.paths.plan:
-        line = {}
-        now = datetime.now()  # current date and time
-        date_time = now.strftime("%m-%d-%Y-%H-%M-%S")
+    date_time = datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
 
-        for idx, task in enumerate(scenetask.test_tasks):
-            task_name = "{fxn}".format(fxn='_'.join(task.split(' ')))
-            task_name = task_name.replace('\n', '')
-            folder_name = f"{task_name}_plans_{date_time}"
-            exec_folders.append(folder_name)
 
-            os.mkdir("./logs/" + folder_name)
+    plan_log = PlanLog(
+        scenetask = scenetask,
+        llm= cfg.planner.llm,
+        num_input_tokens=NUM_INPUT_TOKENS,
+        num_output_tokens=NUM_OUTPUT_TOKENS,
+        llm_outputs={"code_plan": decomposed_plan},
+        code_plan=decomposed_plan,
+    )
 
-            with open(f"./logs/{folder_name}/available_robots.json", "w") as f:
-                f.write(json.dumps(scenetask.available_robots[idx], indent=2))
 
-            with open(f"./logs/{folder_name}/scene_name.txt", "w") as f:
-                f.write(scenetask.floor_plan)
 
-            with open(f"./logs/{folder_name}/abstract_task_prompt.txt", "w") as f:
-                f.write(scenetask.test_tasks[idx])
+    with open(f"{output_dir}/plan_log.json", "w") as f:
+        f.write(json.dumps(plan_log.asdict(), indent=2, sort_keys=True))
+    return plan_log
 
-            with open(f"./logs/{folder_name}/log.txt", 'w') as f:
-                f.write(task)
-                f.write(f"\n\nGPT Version: {args.gpt_version}")
-                f.write(f"\n\nFloor Plan: {args.floor_plan}")
-                f.write(f"\n{objects_ai}")
-                f.write(f"\nrobots = {scenetask.available_robots[idx]}")
-                f.write(
-                    f"\nground_truth = {scenetask.gt_test_tasks[idx] if scenetask.gt_test_tasks is not None else None}")
-                f.write(
-                    f"\ntrans = {scenetask.trans_cnt_tasks[idx] if scenetask.trans_cnt_tasks is not None else None}")
-                f.write(
-                    f"\nmax_trans = {scenetask.max_trans_cnt_tasks[idx] if scenetask.max_trans_cnt_tasks is not None else None}")
+    with open(f"{output_dir}/available_robots.json", "w") as f:
+        f.write(json.dumps(scenetask.robots, indent=2))
 
-            with open(f"./logs/{folder_name}/decomposed_plan.py", 'w') as d:
-                d.write(decomposed_plan[idx])
+    with open(f"{output_dir}/scene_name.txt", "w") as f:
+        f.write(scenetask.scene_id)
 
-            with open(f"./logs/{folder_name}/allocated_plan.py", 'w') as a:
-                a.write(allocated_plan[idx])
+    with open(f"{output_dir}/abstract_task_prompt.txt", "w") as f:
+        f.write(scenetask.tasks)
 
-            with open(f"./logs/{folder_name}/code_plan.py", 'w') as x:
-                x.write(code_plan[idx])
+    with open(f"{output_dir}/log.txt", 'w') as f:
+        f.write(task)
+        f.write(f"\n\nGPT Version: {args.gpt_version}")
+        f.write(f"\n\nFloor Plan: {args.floor_plan}")
+        f.write(f"\n{objects_ai}")
+        f.write(f"\nrobots = {scenetask.available_robots[idx]}")
+        f.write(
+            f"\nground_truth = {scenetask.gt_test_tasks[idx] if scenetask.gt_test_tasks is not None else None}")
+        f.write(
+            f"\ntrans = {scenetask.trans_cnt_tasks[idx] if scenetask.trans_cnt_tasks is not None else None}")
+        f.write(
+            f"\nmax_trans = {scenetask.max_trans_cnt_tasks[idx] if scenetask.max_trans_cnt_tasks is not None else None}")
+
+    #with open(f"./logs/{folder_name}/decomposed_plan.py", 'w') as d:
+    #    d.write(decomposed_plan[idx])
+
+    #with open(f"./logs/{folder_name}/allocated_plan.py", 'w') as a:
+    #    a.write(allocated_plan[idx])
+
+    #with open(f"./logs/{folder_name}/code_plan.py", 'w') as x:
+    #    x.write(code_plan[idx])

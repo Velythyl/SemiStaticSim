@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from hippo.simulation.skillsandconditions.conditions import COND_IsInProximity, \
-    COND_ObjectExists, COND_SkillEnabled, COND_AuxiliaryObjectIsInInventory, COND_SlicingImplementInInventory, \
+from hippo.simulation.skillsandconditions.conditions import CONDITION_IsInteractable, \
+    CONDITION_ObjectExists, CONDITION_SkillEnabled, CONDITION_AuxiliaryObjectIsInInventory, CONDITION_SlicingImplementInInventory, \
     get_slicing_implement_from_inventory
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.simulation.skillsandconditions.skills_abstract import _Skill
@@ -16,7 +16,7 @@ class _ToggleObject(_Skill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(), COND_SkillEnabled()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled()]
 
 
 
@@ -72,7 +72,7 @@ class GoToObject(_Ai2ThorSkill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists()]
+        return [CONDITION_ObjectExists()]
 
 
 
@@ -85,7 +85,7 @@ class PickupObject(_Ai2ThorSkill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(), COND_SkillEnabled()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled()]
 
     def PickupObject(self, sas: SimulationActionState):
         sas.action_callback()
@@ -102,8 +102,8 @@ class ThrowObject(_Ai2ThorSkill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(),
-                COND_SkillEnabled()]
+        return [CONDITION_ObjectExists(),
+                CONDITION_SkillEnabled()]
 
     def ThrowObject(self, sas: SimulationActionState):
         sas.action_callback()
@@ -122,7 +122,7 @@ class PutObject(_Ai2ThorSkill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(),  COND_SkillEnabled(), COND_AuxiliaryObjectIsInInventory()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled(), CONDITION_AuxiliaryObjectIsInInventory()]
     # fixme checks for the post conditions of PickupObject. So, the robot must have an object in its inventory.  Note: the target_object is the target surface, not the object that will be put down!
 
     @property
@@ -140,7 +140,7 @@ class _OpenableObject(_Skill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(),  COND_SkillEnabled()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled()]
 
 
 @dataclass
@@ -202,8 +202,8 @@ class SliceObject(_Skill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(),
-                COND_SkillEnabled(), COND_SlicingImplementInInventory()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(),
+                CONDITION_SkillEnabled(), CONDITION_SlicingImplementInInventory()]
 
 @dataclass
 class SlicingTool(_Skill):
@@ -219,8 +219,8 @@ class SlicingTool(_Skill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(),
-                COND_SkillEnabled()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(),
+                CONDITION_SkillEnabled()]
 
 
 @dataclass
@@ -233,8 +233,8 @@ class BreakObject(_Skill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(),
-                COND_SkillEnabled()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(),
+                CONDITION_SkillEnabled()]
 
     def BreakObject(self, sas: SimulationActionState):
         ret = self.replace(state_value=True)
@@ -250,8 +250,8 @@ class CleanObject(_Skill):
 
     @property
     def pre_conditions(self):
-        return [COND_ObjectExists(), COND_IsInProximity(),
-                COND_SkillEnabled()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(),
+                CONDITION_SkillEnabled()]
 
     def CleanObject(self, sas: SimulationActionState):
         return self.replace(state_value=False)
