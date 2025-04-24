@@ -117,19 +117,23 @@ class CONDITION_IsInteractable(Condition):
 
         is_obj_interactable = object["isInteractable"]
 
-        is_obj_inside_interactable_object = False
+        if is_obj_interactable:
+            return True
+
         obj_insideness = sas.pre_container.get_obj2id_that_obj1id_is_inside_of(sas.target_object_id)
         if obj_insideness is not None:
             inside_of = get_object_from_controller(sas.controller, obj_insideness)
-            is_obj_inside_interactable_object = inside_of["isInteractable"] and inside_of["isOpen"]
+            if inside_of["openable"]:
+                if inside_of["isInteractable"] and inside_of["isOpen"]:
+                    return True
 
-        is_obj_ontopof_interactable_object = False
+
         obj_ontopness = sas.pre_container.get_obj2id_that_obj1id_is_ontop_of(sas.target_object_id)
         if obj_ontopness is not None:
             ontop_of = get_object_from_controller(sas.controller, obj_ontopness)
-            is_obj_ontopof_interactable_object = ontop_of["isInteractable"]
-
-        return is_obj_inside_interactable_object or is_obj_interactable or is_obj_ontopof_interactable_object
+            if ontop_of["isInteractable"]:
+                return True
+        return False
 
 @dataclass
 class CONDITION_AuxiliaryObjectIsInInventory(Condition):

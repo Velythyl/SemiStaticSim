@@ -23,6 +23,7 @@ def pcd_visualize(pcd):
 
 def load_point_cloud(path):
     path = Path(path)
+    assert path.exists()
     pcd = o3d.io.read_point_cloud(str(path / "point_cloud.pcd"))
 
     segments_anno = load_segments_anno(path)

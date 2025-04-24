@@ -207,10 +207,12 @@ DIFF BETWEEN FIRST AND FINAL STATES:
         print("Querying now...")
         llmsemantic = LLM_verify_final_state(self.task_description, diff, pure_diff, action_history)
 
+        print(llmsemantic.response)
+
         maybe_raise_llmcondition_exception(llmsemantic)
 
     def llm_verify_diff_alignment(self):
-        log_scenedict_to_file(len(self.object_containers)-1, self.current_object_container)
+        log_scenedict_to_file(len(self.object_containers)-1, self.current_object_container.as_llmjson())
         return
         pure_diff = self.get_object_container_diff()
         action_history = [f'{i}: {x}' for i, x in enumerate(self.done_actions)]
@@ -558,6 +560,10 @@ DIFF OF LAST ACTION:
             if obj == target_obj:
                 return target_obj
 
+        for obj in objs:
+            if target_obj.lower() in obj.lower():
+                return obj
+
         sw_obj_id = target_obj
 
         for obj in objs:
@@ -645,7 +651,7 @@ DIFF OF LAST ACTION:
 
         def are_we_done():
             d = dist_to_goal(dest_obj_pos, dest_obj_size)
-            obj_insideness = self.current_object_container.get_obj2id_that_obj1id_is_inside_of(dest_obj_id)
+            obj_insideness = None # self.current_object_container.get_obj2id_that_obj1id_is_inside_of(dest_obj_id) todo
             if obj_insideness is not None:
                 d2 = dist_to_goal(get_object_position_from_controller(self.controller, obj_insideness), get_object_size_from_controller(self.controller, obj_insideness))
             else:

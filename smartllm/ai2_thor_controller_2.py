@@ -44,7 +44,7 @@ def generate_video(input_path, prefix, char_id=0, image_synthesis=['normal'], fr
 robots = [{'name': 'robot1', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}, 
           {'name': 'robot2', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}]
 #  #
-floor_no = "procthor0" #"/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/115knife/in_order_0/scene.json"  # 1
+floor_no = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/3/in_order_0/scene.json"  # 1
 
 
 simulator = get_sim(floor_no)
@@ -54,7 +54,29 @@ task_over = False
  
 # LLM Generated Code
 set_api_key("../api_key")
-simulator.set_task_description("slice the apple")
+simulator.set_task_description("put kettle on table")
+
+def try_sacha_kitchen(robot):
+    simulator.GoToObject(robot, 'knife')
+    simulator.PickupObject(robot, 'knife')
+    simulator.GoToObject(robot, 'apple')
+    simulator.SliceObject(robot, "apple")
+    simulator.PutObject(robot, 'knife', 'small table')
+    simulator.Done()
+try_sacha_kitchen(robots[0])
+exit()
+
+
+def try_sacha_kitchen(robot):
+    simulator.GoToObject(robot, 'kettle')
+    #SwitchOn(robot, 'interlocking mat')
+    simulator.PickupObject(robot, 'kettle')
+    simulator.GoToObject(robot, 'small table')
+    simulator.PutObject(robot, 'kettle', 'small table')
+    simulator.Done()
+exit()
+
+
 
 # CODE
 def slice_potato():
