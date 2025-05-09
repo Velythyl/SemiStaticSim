@@ -182,7 +182,8 @@ from diskcache import FanoutCache
 cache = FanoutCache('./diskcache', size_limit=int(1e9), shards=8)
 
 def get_list_of_objects(scene):
-    return list(get_runtime_container(scene).objects_map.keys())
+    runtime_container = get_runtime_container(scene)
+    return runtime_container.get_object_list_with_children_as_string()
 
 @cache.memoize(typed=True)
 def get_runtime_container(scene):

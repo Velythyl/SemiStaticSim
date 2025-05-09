@@ -46,6 +46,7 @@ class AssetLookup:
             clip_tokenizer=self.clip_tokenizer,
             sbert_model=self.sbert_model,
             retrieval_threshold=self.retrieval_threshold,
+            use_thor_objects=False
         )
         self.database = self.object_retriever.database
 

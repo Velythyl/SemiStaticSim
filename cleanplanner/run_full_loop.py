@@ -35,7 +35,7 @@ def wandb_init(cfg, meta_key="meta"):
             cfg, resolve=True, throw_on_missing=True
         ),
         tags=cfg[meta_key]["tags"],
-        #mode="disabled" if cfg[meta_key].disable else "enabled"
+        mode="disabled"# if cfg[meta_key].disable else "enabled"
     )
 
     cfg_yaml = OmegaConf.to_yaml(cfg)
@@ -90,7 +90,7 @@ def resolve_cfg(cfg):
 
     return cfg
 
-def run_scenetask(cfg, scenetask: SceneTask):
+def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str = None):
     cfg.meta.run_name = scenetask.sc_ta_ro_ID
     wandb_init(cfg)
 
@@ -98,7 +98,7 @@ def run_scenetask(cfg, scenetask: SceneTask):
     NUM_INPUT_TOKENS, NUM_OUTPUT_TOKENS = 0, 0
 
     plan_output_dir = get_tmp_folder()
-    plan_log = gen_plan(cfg, scenetask, plan_output_dir)
+    plan_log = gen_plan(cfg, scenetask, plan_output_dir, feedback)
     NUM_INPUT_TOKENS += plan_log.num_input_tokens
     NUM_OUTPUT_TOKENS += plan_log.num_output_tokens
 
@@ -110,6 +110,8 @@ def run_scenetask(cfg, scenetask: SceneTask):
     print(f"reading log file: {log_file}")
 
     from hippo.simulation.singlefilelog import is_plan_success, get_necessary_plan_feedback
+
+
 
     last_feedback = get_last_plan_feedback(log_file)
     necessary_feedback = get_necessary_plan_feedback(log_file)
@@ -135,6 +137,13 @@ def run_scenetask(cfg, scenetask: SceneTask):
         })
 
     wandb.log(WANDB_LOG)
+
+    IS_SUCCESS = is_plan_success(log_file)
+    if IS_SUCCESS:
+        return
+    else:
+        feedback = f'# ------\n\n# Last time you tried to generate a plan for this task and scene, you generated the following:\n"""{plan_log.code_plan}"""\n\n# But the plan failed, and you got this error message:\n#{necessary_feedback["Error message"]}\n# ------'
+        return run_scenetask(cfg, scenetask, num_retries+1, feedback)
 
     exit()
 

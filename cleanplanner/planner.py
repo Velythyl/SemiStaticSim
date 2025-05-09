@@ -10,7 +10,7 @@ from typing import Any, Union
 
 import openai
 
-from cleanplanner.parse_scene import SceneTask, PlanLog
+from cleanplanner.parse_scene import SceneTask, PlanLog, get_objects_list
 from hippo.ai2thor_hippo_controller import get_list_of_objects
 from hippo.utils.file_utils import get_tmp_folder
 from llmqueries.llm import LLM, approx_num_tokens
@@ -73,31 +73,96 @@ def parse_ai2thor_plan(scene, task_path):
                      available_robots=available_robots)
 
 
+PROMPT = f"""
 
+You are PLANR, an excellent LLM planner for open-vocabulary scenes. The PLANR system is able to plan using these skills:
+{actions.ai2thor_actions}
 
-def gen_plan(cfg, scenetask: SceneTask, output_dir):
+INPUT: a list of objects found in the scene, as well as a task description. 
+OUTPUT: PLANR first REASONS about the task. It then OUTPUTs a sequence of skill to complete the task.
+
+Here is an example:
+
+---EX1
+
+# INPUT:
+# Put Tomato in Fridge
+objects = ['Apple-9213#jk', 'Bowl|aekgj|o', 'CounterTop|2|0', 'Tomato-#211a-be',
+           'Fridge|2|1': {{"hasInsideOf": ["Apple-3981#0"]}}', 'GarbageBin-2199-ae98']
+
+# OUTPUT: 
+# REASONING: We must pickup the tomato and place it inside the fridge. We'll need GoToObject, PickupObject, OpenObject, CloseObject, and PutObject skills.
+
+# CODE
+def put_tomato_in_fridge():
+    # 0: Task : Put Tomato in Fridge
+    # 1: Go to the Tomato.
+    GoToObject('Tomato-#211a-be')
+    # 2: Pick up the Tomato.
+    PickupObject('Tomato-#211a-be')
+    # 3: Go to the Fridge.
+    GoToObject('Fridge|2|1')
+    # 4: Open the Fridge.
+    OpenObject('Fridge|2|1')
+    # 5: Put the Tomato in the Fridge.
+    PutObject('Tomato-#211a-be', 'Fridge|2|1')
+    # 6: Close the Fridge.
+    CloseObject('Fridge|2|1')
+slice_potato()
+
+EX1---
+
+PLANR is very smart, and when a task is not feasible, it aborts the plan.
+
+---EX2
+
+# INPUT:
+# Slice the Lettuce
+objects = ['Bowl|aekgj|o', 'CounterTop|2|0', 'Tomato-#211a-be',
+           'Fridge|2|1', 'Lettuce-2199-ae98', "Dolphin-2919|I@1", "Jeremy|219|9"]
+
+# OUTPUT:
+# REASONING: We must slice the lettuce. But! There's no knife! We cannot accomplish this plan
+
+AbortPlan("We must use SliceObject, but there is no knife in the scene.")
+
+EX2---
+
+PLANR can also receive FEEDBACK. This FEEDBACK will contain a previous plan from PLANR as well as the reason why the plan failed.
+The FEEDBACK will be included as part of the INPUT. When there is FEEDBACK, PLANR must talk about it in the REASONING section.
+
+Now, apply PLANR to this input:
+
+"""
+
+def gen_plan(cfg, scenetask: SceneTask, output_dir, feedback=""):
     assert os.path.exists(output_dir)
 
     ######## Train Task Decomposition ########
 
     # prepare train decompostion demonstration for ai2thor samples
-    prompt = f"from skills import " + actions.ai2thor_actions
-    prompt += f"\nimport time"
-    prompt += f"\nimport threading"
+    #prompt = f"from skills import " + actions.ai2thor_actions
+    #prompt += f"\nimport time"
+    #prompt += f"\nimport threading"
 
     # read input train prompts
-    decompose_prompt = Path(cfg.paths.curdir + "/datasmartllm/pythonic_plans/" + cfg.planner.prompt + ".py").read_text()
+    #decompose_prompt = Path(cfg.paths.curdir + "/datasmartllm/pythonic_plans/" + cfg.planner.prompt + ".py").read_text()
 
-    prompt += "\n\n" + decompose_prompt
+    #prompt += "\n\n" + decompose_prompt
 
-    print("Generating Decompsed Plans...")
+    print("Generating Decomposed Plans...")
 
-    objects_ai = f"\n\nobjects = {get_list_of_objects(scenetask.scene)}"
-    prompt += f"\n\n### NOW, CONSIDER THIS SITUATION:{objects_ai}"
-    curr_prompt = f"{prompt}\n\n# Task Description: {scenetask.tasks[0]}"
+    prompt = f"{PROMPT}\n\n# INPUT:\n# TASK: {scenetask.tasks[0]}\nobjects = {get_list_of_objects(scenetask.scene)}"
+    if feedback is not None and len(feedback) > 0:
+        prompt = f"{prompt}\n# START FEEDBACK\n{feedback}\n# END FEEDBACK"
+    prompt = f"{prompt}\n# OUTPUT:"
 
-    NUM_INPUT_TOKENS = approx_num_tokens(cfg.planner.llm, curr_prompt)
-    _, decomposed_plan = LLM(curr_prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0)
+    #curr_prompt = f"{prompt}\n\n# TASK: {scenetask.tasks[0]}"
+    #curr_prompt = f"{curr_prompt}\n# OBJECTS IN SCENE:\nobjects = {get_list_of_objects(scenetask.scene)}"
+    #curr_prompt = f"{curr_prompt}\n# generate here..."
+
+    NUM_INPUT_TOKENS = approx_num_tokens(cfg.planner.llm, prompt)
+    _, decomposed_plan = LLM(prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0)
     NUM_OUTPUT_TOKENS = approx_num_tokens(cfg.planner.llm, decomposed_plan)
 
     print("Plan obtained! Saving...")

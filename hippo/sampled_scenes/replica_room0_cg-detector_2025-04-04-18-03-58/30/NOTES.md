@@ -1,0 +1,1 @@
+This used full scaling + both objathor and thor objects

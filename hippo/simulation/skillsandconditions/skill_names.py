@@ -49,7 +49,14 @@ def get_enabled_2_llm_name():
     # edge case: throwable
     del ret["throwable"]
 
-    return ret
+    def sortedDeep(d):
+        if isinstance(d, list):
+            return sorted(sortedDeep(v) for v in d)
+        if isinstance(d, dict):
+            return {k: sortedDeep(d[k]) for k in sorted(d)}
+        return d
+
+    return sortedDeep(ret)
 
 
 def get_llm_name_2_skill():

@@ -55,6 +55,7 @@ class HippoObject(_Hippo):
     _position: Tuple[float, float, float] = (0, 0, 0)
     _rotation: Tuple[float, float, float] = (0, 0, 0)
 
+    _is_objaverse_asset: Tuple[bool] = tuple()
     _found_assetIds: Tuple[str] = tuple()
     _found_sizes: Tuple[Tuple[float,float,float]] = tuple()
     _found_scores: Tuple[float] = tuple()
@@ -68,7 +69,19 @@ class HippoObject(_Hippo):
     _skill_metadata: Tuple[str] = ("can be turned on/off", "can be picked up", "objects can be put down on this", "can be opened and closed", "can be sliced", "can be broken")
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores):
+        _is_objaverse_asset = []
+        for fa in found_assets:
+            try:
+                from ai2thor.util.runtime_assets import load_existing_thor_asset_file
+                obj = load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, f"{fa}/{fa}")
+                IS_OBJAVERSE_OBJECT = True
+            except:
+                IS_OBJAVERSE_OBJECT = False
+            _is_objaverse_asset.append(IS_OBJAVERSE_OBJECT)
+
+
         return self.replace(
+            _is_objaverse_asset=tuple(_is_objaverse_asset),
             _found_assetIds=found_assets,
             _found_sizes=found_sizes,
             _found_scores=found_scores,
@@ -82,6 +95,18 @@ class HippoObject(_Hippo):
 
     @property
     def _concrete_assetIds(self):
+        ret = []
+        for is_objaverse_asset, og_id, concrete_id in zip(self._is_objaverse_asset, self._found_assetIds, self._concrete_Ids):
+            if is_objaverse_asset:
+                ret.append(concrete_id)
+            else:
+                ret.append(og_id)
+        return ret
+
+        #return [f"{self.object_name_id}-{id[:4]}" for id in self._found_assetIds]
+
+    @property
+    def _concrete_Ids(self):
         return [f"{self.object_name_id}-{id[:4]}" for id in self._found_assetIds]
 
     @property
@@ -108,7 +133,7 @@ class HippoObject(_Hippo):
         )
 
         asdict["assetId"] = self._concrete_assetIds[0]
-        asdict["id"] = self._concrete_assetIds[0]
+        asdict["id"] = self._concrete_Ids[0]
         size = (self._found_sizes[0][0], self._desired_size[1], self._found_sizes[0][2])
         asdict["size"] = size
         asdict["position"] = xyztuple2dict(asdict["_position"])
@@ -162,41 +187,47 @@ class HippoObject(_Hippo):
             assert len(self) == 1
 
             assetId = self._found_assetIds[0]
-            scaling = self._found_size_scaling[0]
-            concrete_assetId = self._concrete_assetIds[0]
 
-            target_directory_for_this_self = os.path.join(target_directory, concrete_assetId)
-            if os.path.exists(target_directory_for_this_self):
-                return
-            os.makedirs(target_directory_for_this_self, exist_ok=False)
+            try:
+                from ai2thor.util.runtime_assets import load_existing_thor_asset_file
+                obj = load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, f"{assetId}/{assetId}")
+                IS_OBJAVERSE_OBJECT = True
+            except:
+                IS_OBJAVERSE_OBJECT = False
 
-            from ai2thor.util.runtime_assets import load_existing_thor_asset_file
-            obj = load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, f"{assetId}/{assetId}")
+            if IS_OBJAVERSE_OBJECT:
+                scaling = self._found_size_scaling[0]
+                concrete_assetId = self._concrete_assetIds[0]
 
-            scaling = [1,scaling[1],1]
-            obj = scale_ai2thor_object(obj, scaling)
+                target_directory_for_this_self = os.path.join(target_directory, concrete_assetId)
+                if os.path.exists(target_directory_for_this_self):
+                    return
+                os.makedirs(target_directory_for_this_self, exist_ok=False)
 
-            new_obj = {}
-            for toplevel_k, toplevel_v in obj.items():
-                if isinstance(toplevel_v, str) and assetId in toplevel_v:
-                    toplevel_v = toplevel_v.replace(assetId, concrete_assetId)
-                new_obj[toplevel_k] = toplevel_v
+                #scaling = [1,scaling[1],1]
+                obj = scale_ai2thor_object(obj, scaling)
 
-            save_path = f"{target_directory_for_this_self}/{self._concrete_assetIds[0]}.pkl.gz"
-            save_thor_asset_file(new_obj, save_path)
+                new_obj = {}
+                for toplevel_k, toplevel_v in obj.items():
+                    if isinstance(toplevel_v, str) and assetId in toplevel_v:
+                        toplevel_v = toplevel_v.replace(assetId, concrete_assetId)
+                    new_obj[toplevel_k] = toplevel_v
 
-            original_asset_dir = os.path.join(objathor_asset_directory, assetId)
-            for other_file in os.listdir(original_asset_dir):
-                shutil.copy(os.path.join(original_asset_dir, other_file), os.path.join(target_directory_for_this_self, other_file))
+                save_path = f"{target_directory_for_this_self}/{self._concrete_assetIds[0]}.pkl.gz"
+                save_thor_asset_file(new_obj, save_path)
+
+                original_asset_dir = os.path.join(objathor_asset_directory, assetId)
+                for other_file in os.listdir(original_asset_dir):
+                    shutil.copy(os.path.join(original_asset_dir, other_file), os.path.join(target_directory_for_this_self, other_file))
 
 
-            with open(os.path.join(target_directory_for_this_self, "thor_metadata.json"), "w") as f:
-                json.dump({"assetMetadata": {
-                "primaryProperty": "CanPickup" if "can be picked up" in self._skill_metadata else "Static",
-                "secondaryProperties": [
-                    "Receptacle"
-                ] if "objects can be put down on this" in self._skill_metadata else []
-            }}, f, indent=4)
+                with open(os.path.join(target_directory_for_this_self, "thor_metadata.json"), "w") as f:
+                    json.dump({"assetMetadata": {
+                    "primaryProperty": "CanPickup" if "can be picked up" in self._skill_metadata else "Static",
+                    "secondaryProperties": [
+                        "Receptacle"
+                    ] if "objects can be put down on this" in self._skill_metadata else []
+                }}, f, indent=4)
 
             return
             # todo ask chatgpt for these properties, as well as the ones related to ai2thor skills such as isToggleavle isBreakable isFillable etc

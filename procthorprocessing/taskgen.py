@@ -67,6 +67,6 @@ def gen_tasks_for_scene(scene, llm_id):
     from llmqueries.llm import LLM
 
     prompt = get_prompt(scene)
-    a, response = LLM(prompt, llm_id, max_tokens=250, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, llm_id, max_tokens=250, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
-    return a, parse_response(response)
+    return parse_response(response)

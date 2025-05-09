@@ -40,6 +40,22 @@ def parse_floorplan(scene_id, tasks, scene_robots):
 
     return SceneTask(scene_id, scene, list(tasks), list(scene_robots), available_robots)
 
+def get_objects_list(scene):
+    objs = []
+    for obj in scene["objects"]:
+        o = {
+            "item": obj["id"],
+        }
+
+        if "children" in obj:
+            children = obj["children"]
+            children = [x["id"] for x in children]
+
+            o["children items"] = children
+
+        objs.append(o)
+    return objs
+
 @dataclasses.dataclass
 class PlanLog(SelfDataclass):
     llm: str

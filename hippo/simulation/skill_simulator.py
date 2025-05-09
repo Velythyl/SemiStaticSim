@@ -473,6 +473,15 @@ DIFF OF LAST ACTION:
                         #else:
                         #    self.success_exec += 1
 
+                    elif act['action'] == "AbortPlan":
+                        temp = IncorrectTaskDescription(
+                            task_description = self.task_description,
+                            diff = "",
+                            response ="",
+                            reason=act['reason']
+                        )
+                        maybe_raise_llmcondition_exception(temp)
+
 
                     elif act['action'] == 'Done':
                         self.controller.step(action="Done")
@@ -482,10 +491,11 @@ DIFF OF LAST ACTION:
                 except ConditionFailure as e:
                     print("Condition Failure! Aborting!")
                     self.controller.stop()
-
+                    os._exit(0)
                     raise e
 
                 except Exception as e:
+                    os._exit(0)
                     raise e
                     print(e)
 
@@ -592,6 +602,12 @@ DIFF OF LAST ACTION:
          self.controller.last_event.metadata["objects"]}.get(object_id, {})
 
     # ========= SKILLS =========
+
+    def AbortPlan(self, robot, reason):
+        self.push_action({
+            "action": "AbortPlan",
+            "reason": reason,
+        })
 
     def GoToObject(self, robot, dest_obj):
         # todo https://chat.deepseek.com/a/chat/s/411a780c-246e-4909-ac93-48ad5f66e14f

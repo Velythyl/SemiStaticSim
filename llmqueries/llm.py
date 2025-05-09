@@ -1,3 +1,6 @@
+import functools
+import hashlib
+import json
 import time
 from collections import deque
 from pathlib import Path
@@ -6,7 +9,7 @@ import tiktoken
 import barebonesllmchat
 import numpy as np
 import openai
-from diskcache import FanoutCache
+from diskcache import FanoutCache, Cache
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Define rate limit parameters (adjust based on API tier)
@@ -98,12 +101,14 @@ def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, lo
 
     return ret
 
-cache = FanoutCache('./diskcache', size_limit=int(1e9), shards=8)
+CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
+cache = Cache(CACHEPATH)
 
-@cache.memoize(typed=True)
+@cache.memoize()
 def _LLM_cache(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
     print("LLM QUERY: Could not find prompt in cache, querying OpenAI API.")
-    return _LLM_retry(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)
+    ret = _LLM_retry(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)
+    return ret
 
 #from termcolor import colored
 
@@ -111,8 +116,7 @@ def LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=
     #print(colored(">> USER:", "orange"))
     #print(colored(prompt, "orange"))
     a, response = _LLM_cache(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)
-    #print(colored(f">> {gpt_version}:", "green"))
-    #print(colored(response, "green"))
+
     return a, response
 
 def set_api_key(openai_api_key):

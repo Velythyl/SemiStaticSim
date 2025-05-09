@@ -23,9 +23,12 @@ class ObjathorRetriever:
         clip_tokenizer,
         sbert_model,
         retrieval_threshold,
+        use_thor_objects=True
     ):
         objathor_annotations = compress_json.load(OBJATHOR_ANNOTATIONS_PATH)
         thor_annotations = compress_json.load(HOLODECK_THOR_ANNOTATIONS_PATH)
+        if not use_thor_objects:
+            thor_annotations = {}
         self.database = {**objathor_annotations, **thor_annotations}
 
         objathor_clip_features_dict = compress_pickle.load(
@@ -60,13 +63,20 @@ class ObjathorRetriever:
             np.float32
         )
 
+        if not use_thor_objects:
+            thor_clip_features = []
+            thor_sbert_features = []
+            thor_uids = []
+
         self.clip_features = torch.from_numpy(
             np.concatenate([objathor_clip_features, thor_clip_features], axis=0)
+            if len(thor_clip_features) > 0 else objathor_clip_features
         )
         self.clip_features = F.normalize(self.clip_features, p=2, dim=-1)
 
         self.sbert_features = torch.from_numpy(
             np.concatenate([objathor_sbert_features, thor_sbert_features], axis=0)
+            if len(thor_sbert_features) > 0 else objathor_sbert_features
         )
 
         self.asset_ids = objathor_uids + thor_uids

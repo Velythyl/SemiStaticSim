@@ -2,5 +2,5 @@ ai2thor_actions_list = ["GoToObject <robot><object>", "OpenObject <robot><object
                    "BreakObject <robot><object>", "SliceObject <robot><object>", "SwitchOn <robot><object>", 
                    "SwitchOff <robot><object>", "CleanObject <robot><object>", "PickupObject <robot><object>", 
                    "PutObject <robot><object><receptacleObject>",
-                   "ThrowObject <robot><object>"] #, "DropHandObject <robot><object>",  "PushObject <robot><object>", "PullObject <robot><object>"]
+                   "ThrowObject <robot><object>", "AbortPlan <robot><reason>"] #, "DropHandObject <robot><object>",  "PushObject <robot><object>", "PullObject <robot><object>"]
 ai2thor_actions = ', '.join(ai2thor_actions_list)

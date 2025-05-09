@@ -300,6 +300,7 @@ class RuntimeObjectContainer(_Hippo):
                 o["id"] = o["name"]
 
             o["size"] = o["axisAlignedBoundingBox"]["size"]
+            o["position"] = o["axisAlignedBoundingBox"]["center"]
 
             skill_metadata = []
             from hippo.simulation.skillsandconditions.skill_names import canonical_enabledname_2_llmname
@@ -489,18 +490,67 @@ class RuntimeObjectContainer(_Hippo):
 
             objdict["isOnTopOf"] = self.bool_spatial_attribute_to_list(i, obj_isOnTopOf[i])
             objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
-            objdict["isBesideOf"] = self.bool_spatial_attribute_to_list(i, obj_isBesideOf[i])
+            #objdict["isBesideOf"] = self.bool_spatial_attribute_to_list(i, obj_isBesideOf[i])
             objdict["object_distances"] = self.float_spatial_attribute_to_dict(i, obj_distances[i])
 
             final_dict[name] = objdict
 
         return final_dict
 
+    def get_object_list_with_children(self):
+        def is_robot_key(k):
+            if "robot" not in k:
+                return False
+            try:
+                if str(int(k.replace("robot", ""))) == k.replace("robot", ""):
+                    return True
+            except:
+                pass
+            return False
+
+        asllmjson = self.as_llmjson()
+        ret = {k: {"hasInside": [], "hasOnTopOf": []} for k in asllmjson.keys() if not is_robot_key(k)}
+        for k, v in asllmjson.items():
+            if is_robot_key(k):
+                continue
+
+            if len(v["isInsideOf"]) > 0:
+                for e in v["isInsideOf"]:
+                    if is_robot_key(e):
+                        continue
+                    ret[e]["hasInside"].append(k)
+            if len(v["isOnTopOf"]) > 0:
+                for e in v["isOnTopOf"]:
+                    if is_robot_key(e):
+                        continue
+                    ret[e]["hasOnTopOf"].append(k)
+
+        for k, v in copy.deepcopy(ret).items():
+            for e in (v["hasInside"] + v["hasOnTopOf"]):
+                if e in ret:
+                    del ret[e]
+
+        for k, v in ret.items():
+            if len(v["hasInside"]) == 0:
+                del v["hasInside"]
+            if len(v["hasOnTopOf"]) == 0:
+                del v["hasOnTopOf"]
+
+        return ret
+
+    def get_object_list_with_children_as_string(self):
+        ret = self.get_object_list_with_children()
+        ret = str(ret).replace(": {}", "")
+        return ret
 
 @jax.jit
 def swap_yz(mat):
     Z = mat[:,-1]
     return mat.at[:,-1].set(mat[:,-2]).at[:,-2].set(Z)
+
+@jax.jit
+def center_position(pos, siz):
+    return pos + siz/2 #pos.at[-1].set(pos[-1] + siz[-1] /2)
 
 @jax.jit
 def resolve_spatial_attributes(positions, sizes):
@@ -513,7 +563,8 @@ def resolve_spatial_attributes(positions, sizes):
     positions = swap_yz(positions)
     sizes = swap_yz(sizes)
 
-    positions = positions.at[:,-1].set(positions[:,-1] + sizes[:,-1] / 2)
+    #positions = positions.at[:,-1].set(positions[:,-1] + sizes[:,-1] / 2)
+    #positions = jax.vmap(center_position)(positions, sizes)
 
     obj_isOnTopOf, obj_isInsideOf, obj_isBesideOf, obj_distances = jax.vmap(functools.partial(for_each_object, positions, sizes))(positions, sizes)
 

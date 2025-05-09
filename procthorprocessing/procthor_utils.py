@@ -93,7 +93,7 @@ def gen_tasks(llm_id, start_index=-1, num_todo=10, num_tasks=10):
     for scene_id in tqdm(todos, desc="Using LLM to generate tasks..."):
         scene = get_scene(scene_id)
 
-        _, tasks = gen_tasks_for_scene(scene, llm_id)
+        tasks = gen_tasks_for_scene(scene, llm_id)
         scene["tasks"] = tasks
         scene["llm_id"] = llm_id
 

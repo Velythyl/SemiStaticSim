@@ -7,7 +7,6 @@ from typing import Sequence
 from tqdm import tqdm
 import numpy as np
 
-from moviepy.editor import ImageSequenceClip
 
 actionList = {
     "MoveAhead": "w",
@@ -30,8 +29,37 @@ actionList = {
     "SliceObject": "m",
 }
 
+
 def get_interact_object(env, action, pickup=None):
-    raise NotImplementedError()
+    candidates = []
+    objectId = ''
+
+
+    for obj in env.last_event.metadata["objects"]:
+        if obj["visible"]:
+            candidates.append(obj["objectId"])
+    if len(candidates) == 0:
+        print('no valid interact object candidates')
+        return None
+    else:
+        print('===========choose index from the candidates==========')
+        for index, obj in enumerate(candidates):
+            print(index, ':', obj)
+        while True:
+            # input the index of candidates in the console
+            keystroke = input()
+            print(keystroke)
+            if keystroke == actionList["FINISH"]:
+                print("stop interact")
+                break
+            try:
+                objectId = candidates[int(keystroke)]
+            except:
+                print("INVALID KEY", keystroke)
+                continue
+            print(objectId)
+            break
+        return objectId
 
 def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per_frame):
     first_view_frame = env.last_event.frame
@@ -233,14 +261,14 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
 
     from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
 
-    floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/9/scene.json"
+    #floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/9/scene.json"
     #scene = resolve_scene_id(floor_no)
     #from SMARTLLM.smartllm.utils.get_controller import get_controller
     #controller = get_controller(scene, get_runtime_container=False, width=1000, height=1000, snapToGrid=False,
     #                                      visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
 
-    from SMARTLLM.smartllm.utils.get_controller import get_sim
-    controller,_ ,_, _ = get_sim(floor_no)
+    from hippo.ai2thor_hippo_controller import get_sim
+    controller = get_sim(scene_name, just_controller=True)
     """
     _ = Controller(
         agentMode="default",
@@ -309,7 +337,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
 
 
 if __name__ == "__main__":
-    main(scene_name="FloorPlan19_physics",  ## room
+    main(scene_name="/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/replica_room0_cg-detector_2025-04-04-18-03-58/40/in_order_0/scene.json",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree

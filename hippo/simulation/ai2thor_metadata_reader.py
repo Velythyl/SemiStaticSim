@@ -44,13 +44,19 @@ def get_object_list_from_controller(controller):
 
         inventory = robot_metadata["inventoryObjects"]
 
+        robotpos = robot_metadata["agent"]['position']
+        SIZE = {'x': 0.4, 'y': 1.0, 'z': 0.4}
+        robotpos["x"] = robotpos["x"] + SIZE["x"] / 2
+        robotpos["y"] = robotpos["y"] - SIZE["y"] / 2
+        robotpos["z"] = robotpos["z"] + SIZE["z"] / 2
+
         robot_dict = {
             "assetId": f"", # makes robot not considered as runtime object
             "objectId": f"robot{i+1}",
             "id": i,
-            "position": robot_metadata["agent"]['position'],
+            "position": robotpos,
             "rotation": robot_metadata["agent"]['rotation'],
-            "size": {'x': 0.4, 'y': 1.0, 'z': 0.4},
+            "size": SIZE,
             "inventory": inventory,
             "ISROBOT": True
         }

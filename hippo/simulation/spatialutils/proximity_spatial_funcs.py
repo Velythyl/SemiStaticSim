@@ -28,7 +28,7 @@ def bool_ifelse(cond, iftrue, iffalse):
 
     return jax.vmap(_bool_ifelse_elementwise)(cond, iftrue, iffalse)
 
-def isOnTop(pos1, size1, pos2, size2, tol_overlap=0.5, tol_dist=0.1):
+def isOnTop_OLD(pos1, size1, pos2, size2, tol_overlap=0.5, tol_dist=0.1):
     """Returns True if obj1 is on top of obj2 within given tolerances."""
     # Compute XY overlap as the intersection over the area of obj1
     overlap_x = jnp.maximum(0, jnp.minimum(pos1[0] + size1[0] / 2, pos2[0] + size2[0] / 2) -
@@ -46,6 +46,66 @@ def isOnTop(pos1, size1, pos2, size2, tol_overlap=0.5, tol_dist=0.1):
     z_close = jnp.abs(bottom_z_obj1 - top_z_obj2) <= tol_dist
 
     return (xy_overlap_ratio >= tol_overlap) & z_close
+
+
+def isOnTop(pos1, size1, pos2, size2, tol_overlap=0.5, tol_dist=0.5):
+    """Returns True if obj1 is on top of obj2 within given tolerances.
+
+    Args:
+        pos1: (x,y,z) position of obj1 (center coordinates)
+        size1: (dx,dy,dz) size of obj1 (full widths/extents)
+        pos2: (x,y,z) position of obj2 (center coordinates)
+        size2: (dx,dy,dz) size of obj2 (full widths/extents)
+        tol_overlap: minimum required XY overlap ratio (of obj1's area)
+        tol_dist: maximum allowed vertical gap between objects
+
+    Returns:
+        True if obj1 is on top of obj2 according to tolerances
+    """
+    # Compute XY overlap as the intersection over the area of obj1
+    overlap_x = jnp.maximum(0, jnp.minimum(pos1[0] + size1[0] / 2, pos2[0] + size2[0] / 2) -
+                            jnp.maximum(pos1[0] - size1[0] / 2, pos2[0] - size2[0] / 2))
+    overlap_y = jnp.maximum(0, jnp.minimum(pos1[1] + size1[1] / 2, pos2[1] + size2[1] / 2) -
+                            jnp.maximum(pos1[1] - size1[1] / 2, pos2[1] - size2[1] / 2))
+    overlap_area = overlap_x * overlap_y
+    obj1_area = size1[0] * size1[1]
+    #obj2_area = size2[0] * size2[1]
+
+    # Use minimum of both areas for more robust overlap checking
+    xy_overlap_ratio = overlap_area / obj1_area # jnp.maximum(1e-6, jnp.minimum(obj1_area, obj2_area))
+
+    # Check vertical relationship
+    top_z_obj2 = pos2[2] + size2[2] / 2
+    bottom_z_obj1 = pos1[2] - size1[2] / 2
+    z_close = (bottom_z_obj1 >= top_z_obj2 - tol_dist) & (bottom_z_obj1 <= top_z_obj2 + tol_dist)
+
+    # Check if obj1 is above obj2 (using centers is not ideal, but better than nothing)
+    is_above = bottom_z_obj1 > pos2[2] - size2[2] / 2  # obj1's bottom is above obj2's middle
+
+    return (xy_overlap_ratio >= tol_overlap) & z_close & is_above
+
+def isInside(pos1, size1, pos2, size2, tol=1e-6):
+    """
+    Strict containment check if obj1 is completely inside obj2.
+
+    Args:
+        pos1: (x,y,z) position of obj1 (center coordinates)
+        size1: (dx,dy,dz) size of obj1 (full widths/extents)
+        pos2: (x,y,z) position of obj2 (center coordinates)
+        size2: (dx,dy,dz) size of obj2 (full widths/extents)
+        tol: tolerance for boundary comparisons
+
+    Returns:
+        True if obj1 is completely inside obj2 (with tolerance), False otherwise
+    """
+    # Calculate the min and max bounds for each object
+    obj1_min = pos1 - size1 / 2
+    obj1_max = pos1 + size1 / 2
+    obj2_min = pos2 - size2 / 2
+    obj2_max = pos2 + size2 / 2
+
+    # Check if all of obj1's bounds are within obj2's bounds with tolerance
+    return (jnp.all(obj1_min >= obj2_min - tol) & jnp.all(obj1_max <= obj2_max + tol))
 
 def isInside2(pos1, size1, pos2, size2, tol_overlap=0.99,  tol_dist=None):
     """Returns True if obj1 is inside obj2 within the overlap tolerance."""
@@ -94,7 +154,7 @@ def isInside3(pos1, size1, pos2, size2, tol_overlap=0.99, tol_dist=None):
     return (obj1_volume > 0) & (overlap_volume / obj1_volume >= tol_overlap)
 
 
-def isInside(pos1, size1, pos2, size2):
+def isInside_OLD(pos1, size1, pos2, size2):
     """
     Check if obj1 is completely inside obj2.
 
@@ -115,31 +175,6 @@ def isInside(pos1, size1, pos2, size2):
 
     # Check if all of obj1's bounds are within obj2's bounds
     return jnp.all(obj1_min >= obj2_min) & jnp.all(obj1_max <= obj2_max)
-
-
-def isBeside_OLD(pos1, size1, pos2, size2, tol_dist=0.1):
-    """Returns True if obj1 is beside obj2 within the distance tolerance."""
-    # Check if the bases of both objects are at the same height (Z level)
-    base_z_obj1 = pos1[2] - size1[2] / 2  # Bottom of obj1
-    base_z_obj2 = pos2[2] - size2[2] / 2  # Bottom of obj2
-    same_surface = jnp.abs(base_z_obj1 - base_z_obj2) <= (tol_dist / 4) # less tolerant for vertical alignment
-
-    # Check if they are adjacent in the XY plane
-    adjacent_x = jnp.abs(pos1[0] - pos2[0]) <= (size1[0] + size2[0]) / 2 + tol_dist
-    adjacent_y = jnp.abs(pos1[1] - pos2[1]) <= (size1[1] + size2[1]) / 2 + tol_dist
-
-    return same_surface & (adjacent_x | adjacent_y)
-
-
-def isBeside_EDGE(pos1, size1, pos2, size2, tol_dist=0.5):
-    """Check if edge-to-edge distance is within tolerance."""
-    same_surface = jnp.abs((pos1[2] - size1[2] / 2) - (pos2[2] - size2[2] / 2)) <= (tol_dist / 4)
-
-    # Calculate min edge-to-edge distance in XY
-    dx = jnp.abs(pos1[0] - pos2[0]) - (size1[0] + size2[0]) / 2
-    dy = jnp.abs(pos1[1] - pos2[1]) - (size1[1] + size2[1]) / 2
-    edge_dist = jnp.maximum(dx, dy)  # Or use jnp.sqrt(dx**2 + dy**2) for diagonal
-    return same_surface & (edge_dist <= tol_dist)
 
 
 def isBeside(pos1, size1, pos2, size2, tol_dist=0.5):

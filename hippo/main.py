@@ -13,7 +13,8 @@ from hippo.utils.file_utils import get_tmp_folder
 from llmqueries.llm import set_api_key
 
 
-def get_target_dir(target_dir="./sampled_scenes"):
+def get_target_dir(dataset_name, target_dir="./sampled_scenes"):
+    target_dir = os.path.join(target_dir, dataset_name)
     os.makedirs(target_dir, exist_ok=True)
     runid = len(os.listdir(target_dir))
 
@@ -29,10 +30,11 @@ if __name__ == '__main__':
     with open("../ai2holodeck/generation/empty_house.json", "r") as f:
         scene = json.load(f)
 
-    hipporoom, objects = get_hippos("sacha_kitchen_knife", pad=2)
+    DATASET_NAME = f"replica_room0_cg-detector_2025-04-04-18-03-58"
+    hipporoom, objects = get_hippos(f"datasets/{DATASET_NAME}", pad=2)
     set_api_key("../api_key")
 
-    composer = SceneComposer.create(asset_lookup=hippo, target_dir=get_target_dir(), objectplans=objects, roomplan=hipporoom)
+    composer = SceneComposer.create(asset_lookup=hippo, target_dir=get_target_dir(DATASET_NAME), objectplans=objects, roomplan=hipporoom)
     composer.write_compositions_in_order(1)
 
     composer.take_topdown()

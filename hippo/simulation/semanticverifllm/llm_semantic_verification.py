@@ -106,6 +106,10 @@ class IncorrectFinalState(_LLMSemanticVerification):
     is_valid: bool = False
 
 @dataclasses.dataclass
+class IncorrectTaskDescription(_LLMSemanticVerification):
+    is_valid: bool = False
+
+@dataclasses.dataclass
 class UnsafeFinalState(_LLMSemanticVerification):
     is_valid: bool = False
 
