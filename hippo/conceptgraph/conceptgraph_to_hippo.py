@@ -32,7 +32,7 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
                 object_name=object_name,
                 object_description=object_description,
                 roomId=None, _position=None, _clip_features=clip_features,
-                _desired_size=None)
+                _desired_size=None, _cg_paths=obj["paths"])
         )
 
     allpoints = np.concatenate(pcds)

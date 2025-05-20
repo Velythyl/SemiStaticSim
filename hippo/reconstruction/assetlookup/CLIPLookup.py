@@ -13,7 +13,7 @@ from ai2holodeck.generation.walls import WallGenerator
 from hippo.reconstruction.scenedata import HippoRoomPlan, HippoObject
 
 
-class AssetLookup:
+class CLIPLookup:
 
     def __init__(self, objaverse_asset_dir: str, do_weighted_random_selection: bool, similarity_threshold: float, consider_size: bool):
         confirm_paths_exist()
@@ -146,29 +146,3 @@ class AssetLookup:
             scores = [scores[best_size]]
 
         return obj.add_asset_info_(uids, sizes, scores)
-
-    def add_object(self, scene, object_dict):
-        """
-        Add an object to the scene.
-
-        Parameters:
-        - scene (dict): The scene dictionary.
-        - object_dict (dict): Dictionary containing object properties.
-          Required keys:
-            - assetId (str): The asset ID of the object.
-            - position (dict): A dictionary with 'x', 'y', and 'z' coordinates.
-            - roomId (str): The room where the object will be placed.
-          Optional keys:
-            - rotation (dict): A dictionary with 'x', 'y', and 'z' rotation values. Default is no rotation.
-            - object_name (str): A name for the object. Default is based on assetId.
-        """
-
-        # Ensure the 'objects' list exists in the scene
-        if 'objects' not in scene:
-            scene['objects'] = []
-
-        new_object = object_dict.as_holodeckdict()
-
-        # Add the new object to the scene
-        scene['objects'].append(new_object)
-        return scene

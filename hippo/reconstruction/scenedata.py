@@ -68,6 +68,8 @@ class HippoObject(_Hippo):
 
     _skill_metadata: Tuple[str] = ("can be turned on/off", "can be picked up", "objects can be put down on this", "can be opened and closed", "can be sliced", "can be broken")
 
+    _cg_paths: Dict[str, str] = field(default_factory=dict)
+
     def add_asset_info_(self, found_assets, found_sizes, found_scores):
         _is_objaverse_asset = []
         for fa in found_assets:

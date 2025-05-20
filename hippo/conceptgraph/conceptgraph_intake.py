@@ -23,7 +23,7 @@ def pcd_visualize(pcd):
 
 def load_point_cloud(path):
     path = Path(path)
-    assert path.exists()
+    assert path.exists(), path
     pcd = o3d.io.read_point_cloud(str(path / "point_cloud.pcd"))
 
     segments_anno = load_segments_anno(path)
@@ -57,6 +57,12 @@ def load_conceptgraph(path):
         grp["pcd"] = pcd
         return grp
     segments_anno["segGroups"] = [setclip(grp,clip,pcd) for grp, clip, pcd in zip(segments_anno["segGroups"], clip_features, pcd_dict)]
+
+    for grp in segments_anno["segGroups"]:
+        grp["paths"] = {
+            "mask": f"{path}/{grp['id']}/mask",
+            "rgb": f"{path}/{grp['id']}/rgb"
+        }
 
     return segments_anno
 

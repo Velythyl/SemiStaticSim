@@ -60,10 +60,10 @@ def parse_response(response):
     return None
 
 
-def LLM_query(ho: HippoObject):
+def LLM_query(cfg, ho: HippoObject):
     prompt = get_prompt(ho)
 
-    _, response = LLM(prompt, "gpt-4", max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, cfg.skillprediction.method, max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     parsed = parse_response(response)
     if parsed is not None:
@@ -81,7 +81,7 @@ But we could not parse your response correctly. Please try again.
 ---
 """.strip()
 
-    _, response = LLM(prompt, "gpt-4", max_tokens=500, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, cfg.skillprediction.method, max_tokens=500, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     parsed = parse_response(response)
     if parsed is not None:
@@ -89,7 +89,7 @@ But we could not parse your response correctly. Please try again.
 
     raise AssertionError("Could not parse LLM response")
 
-def LLM_annotate(ho: HippoObject) -> HippoObject:
+def LLM_annotate(cfg, ho: HippoObject) -> HippoObject:
     parsed = LLM_query(ho)
 
     from hippo.simulation.skillsandconditions.skill_names import assert_names_are_valid

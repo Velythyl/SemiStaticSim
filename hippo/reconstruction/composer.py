@@ -11,18 +11,19 @@ from tqdm import tqdm
 
 from ai2holodeck.generation.utils import get_top_down_frame
 from hippo.ai2thor_hippo_controller import get_hippo_controller
-from hippo.reconstruction.assetlookup import AssetLookup
+from hippo.reconstruction.assetlookup._AssetLookup import AssetLookup
 from hippo.reconstruction.llm_annotation import LLM_annotate
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
 from hippo.utils.selfdataclass import SelfDataclass
 import multiprocessing as mp
-
+from omegaconf import DictConfig, OmegaConf
 
 with open("../ai2holodeck/generation/empty_house.json", "r") as f:
     DEFAULT_SCENE = json.load(f)
 
 @dataclasses.dataclass
 class SceneComposer(SelfDataclass):
+    cfg: DictConfig
     asset_lookup: AssetLookup
     target_dir: str
     objectplans: Tuple[HippoObject]
@@ -30,12 +31,15 @@ class SceneComposer(SelfDataclass):
     scene: Dict
 
     @classmethod
-    def create(cls, asset_lookup: AssetLookup, target_dir: str, objectplans: Tuple[HippoObject], roomplan: HippoRoomPlan, KEEP_TOP_K: int = 3):
+    def create(cls, cfg, asset_lookup: AssetLookup, target_dir: str, objectplans: Tuple[HippoObject], roomplan: HippoRoomPlan, KEEP_TOP_K: int = 3):
         looked_up_objectplans = []
         for obj in objectplans:
             looked_up_obj = asset_lookup.lookup_assets(obj)[:KEEP_TOP_K]
 
-            looked_up_obj2 = LLM_annotate(looked_up_obj)
+            if cfg.skillprediction.method == None:
+                looked_up_obj2 = looked_up_obj
+            else:
+                looked_up_obj2 = LLM_annotate(cfg, looked_up_obj)
 
             looked_up_objectplans.append(looked_up_obj2)
 
@@ -45,6 +49,7 @@ class SceneComposer(SelfDataclass):
         scene = asset_lookup.generate_rooms(DEFAULT_SCENE, hipporoom=roomplan)
 
         return cls(
+            cfg=cfg,
             asset_lookup=asset_lookup,
             target_dir=target_dir,
             objectplans=looked_up_objectplans,
@@ -100,6 +105,10 @@ class SceneComposer(SelfDataclass):
             scene = selves.get_scene(CONCRETIZATION_DIR)
             with open(f"{self.target_dir}/{generationname}{COUNTER}/scene.json", "w") as f:
                 json.dump(scene, f, indent=4)
+
+            with open(f"{self.target_dir}/{generationname}{COUNTER}/cfg.yaml", "w") as f:
+                OmegaConf.save(config=self.cfg, f=f)
+
             COUNTER += 1
 
     def write_compositions_in_order(self, MAX_NUM=10):
