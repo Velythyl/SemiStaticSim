@@ -70,7 +70,9 @@ class HippoObject(_Hippo):
 
     _cg_paths: Dict[str, str] = field(default_factory=dict)
 
-    def add_asset_info_(self, found_assets, found_sizes, found_scores):
+    _assets_dir: Tuple[str] = tuple()
+
+    def add_asset_info_(self, found_assets, found_sizes, found_scores, assets_dir):
         _is_objaverse_asset = []
         for fa in found_assets:
             try:
@@ -87,6 +89,7 @@ class HippoObject(_Hippo):
             _found_assetIds=found_assets,
             _found_sizes=found_sizes,
             _found_scores=found_scores,
+            _assets_dir=assets_dir,
         )
 
     def set_skill_metadata(self, skill_metadata):
@@ -189,10 +192,11 @@ class HippoObject(_Hippo):
             assert len(self) == 1
 
             assetId = self._found_assetIds[0]
+            asset_dir = self._assets_dir[0]
 
             try:
                 from ai2thor.util.runtime_assets import load_existing_thor_asset_file
-                obj = load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, f"{assetId}/{assetId}")
+                obj = load_existing_thor_asset_file(asset_dir, f"{assetId}/{assetId}") # load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, f"{assetId}/{assetId}")
                 IS_OBJAVERSE_OBJECT = True
             except:
                 IS_OBJAVERSE_OBJECT = False

@@ -5,6 +5,7 @@ import numpy as np
 import open_clip
 from sentence_transformers import SentenceTransformer
 
+from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from ai2holodeck.generation.holodeck import confirm_paths_exist
 from ai2holodeck.generation.objaverse_retriever import ObjathorRetriever
 from ai2holodeck.generation.rooms import FloorPlanGenerator
@@ -145,4 +146,4 @@ class CLIPLookup:
             sizes = [sizes[best_size]]
             scores = [scores[best_size]]
 
-        return obj.add_asset_info_(uids, sizes, scores)
+        return obj.add_asset_info_(uids, sizes, scores, [OBJATHOR_ASSETS_DIR] * len(uids))

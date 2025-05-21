@@ -1,16 +1,12 @@
-import itertools
-from typing import Any, Callable
+import json
+import os
+import shutil
+import uuid
 
 import numpy as np
-import open_clip
-from sentence_transformers import SentenceTransformer
 
-from ai2holodeck.generation.holodeck import confirm_paths_exist
-from ai2holodeck.generation.objaverse_retriever import ObjathorRetriever
-from ai2holodeck.generation.rooms import FloorPlanGenerator
-from ai2holodeck.generation.utils import get_bbox_dims, get_annotations
-from ai2holodeck.generation.walls import WallGenerator
 from hippo.reconstruction.assetlookup.CLIPLookup import CLIPLookup
+from hippo.reconstruction.assetlookup.TRELLISUtils import convert_to_ai2thor, cache
 from hippo.reconstruction.assetlookup.TRELLISUtils.flaskclient import Trellis3DClient
 from hippo.reconstruction.scenedata import HippoRoomPlan, HippoObject
 
@@ -34,62 +30,60 @@ class TRELLISLookup:
         return self.clip_lookup.generate_rooms(scene, plan, hipporoom)
 
     def lookup_assets(self, obj: HippoObject, size_comparison_tresh=0.1):
-        image_dir = obj["paths"]["rgb"]
-
-        from hippo.utils.file_utils import get_tmp_folder
-        target_folder = get_tmp_folder()
-        self.TRELLIS_client.generate_and_download_from_multiple_images(
-            image_dir,
-            target_dir=target_folder,
-            params={
-                'multiimage_algo': 'stochastic',
-                'seed': 123
-            }
-        )
+        image_dir = obj._cg_paths["rgb"]
 
 
+        # cache lookup
+        IS_FOUND_IN_CACHE = cache.is_in_cache(image_dir)
+        def obtain_and_put_in_cache():
+            cache.clear_cache(image_dir)
 
-        candidates = self.object_retriever.retrieve(
-            [f"a 3D model of {obj.object_name}, {obj.object_description}"],
-            self.similarity_threshold,
-        )
+            raw_folder = cache.path_in_cache_for_raw(image_dir)
+            os.makedirs(raw_folder, exist_ok=True)
 
-        candidates = [
-            candidate
-            for candidate, annotation in zip(
-                candidates,
-                [
-                    get_annotations(self.database[candidate[0]])
-                    for candidate in candidates
-                ],
+            self.TRELLIS_client.generate_and_download_from_multiple_images(
+                image_dir,
+                target_dir=raw_folder,
+                params={
+                    'multiimage_algo': 'stochastic',
+                    'seed': 123
+                }
             )
-            if all(  # ignore doors and windows and frames
-                k not in annotation["category"].lower()
-                for k in ["door", "window", "frame"]
-            )
-        ]
 
-        def get_asset_size(uid):
-            size = get_bbox_dims(self.database[uid])
-            return size["x"], size["y"], size["z"]
+            convert_folder = cache.path_in_cache_for_convert(image_dir)
+            os.makedirs(convert_folder, exist_ok=True)
 
-        uids, scores = list(zip(*candidates))
-        sizes = [get_asset_size(uid) for uid in uids]
+            assetid = str(uuid.uuid4().hex)[:8]
+            convert_to_ai2thor.convert(raw_folder, assetid, convert_folder)
 
-        sizes = np.array(sizes)
-        size_comparizon = np.linalg.norm(sizes - np.array(obj._desired_size), axis=1)
-        size_ok = size_comparizon < size_comparison_tresh
+            from ai2thor.util.runtime_assets import load_existing_thor_asset_file
+            obj = load_existing_thor_asset_file(convert_folder, f"{assetid}/{assetid}")
+            from hippo.utils.spatial_utils import get_ai2thor_object_bbox
+            bbox = get_ai2thor_object_bbox(obj)
 
-        if size_ok.sum() >= 1:
+            metadata_folder = cache.path_in_cache_for_metadata(image_dir)
+            os.makedirs(metadata_folder, exist_ok=True)
 
-            uids = list(itertools.compress(uids, size_ok))
-            sizes = sizes[size_ok]
-            scores = list(itertools.compress(scores, size_ok))
+            with open(f"{metadata_folder}/bbox.json", "w") as f:
+                bbox = {k: float(v) for k, v in bbox.items()}
+                json.dump(bbox, f, indent=2)
+
+            with open(f"{metadata_folder}/uuid.txt", "w") as f:
+                f.write(assetid)
+
+        if IS_FOUND_IN_CACHE:
+            print("Cache hit! Not querying TRELLIS.")
         else:
-            print(f"could not find appropriate size for {obj.object_name}")
-            best_size = size_comparizon.argmin()
-            uids = [uids[best_size]]
-            sizes = [sizes[best_size]]
-            scores = [scores[best_size]]
+            print("Cache miss! Querying TRELLIS, this will take a while...")
+            obtain_and_put_in_cache()
 
-        return obj.add_asset_info_(uids, sizes, scores)
+        with open(f"{cache.path_in_cache_for_metadata(image_dir)}/bbox.json", "r") as f:
+            bbox = json.load(f)
+            size = bbox["x"], bbox["y"], bbox["z"]
+
+        with open(f"{cache.path_in_cache_for_metadata(image_dir)}/uuid.txt", "r") as f:
+            assetid = f.read().strip()
+
+        sizes = np.array(size)[None]
+
+        return obj.add_asset_info_([assetid], sizes, [1], cache.path_in_cache_for_convert(image_dir))

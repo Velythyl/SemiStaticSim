@@ -2,6 +2,7 @@ from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 
 from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
 from hippo.reconstruction.assetlookup.CLIPLookup import CLIPLookup
+from hippo.reconstruction.assetlookup.TRELLISLookup import TRELLISLookup
 from hippo.reconstruction.composer import SceneComposer
 from llmqueries.llm import set_api_key
 
@@ -27,7 +28,10 @@ HIPPO = None
 def main(cfg):
     global HIPPO
     if HIPPO is None:
-        HIPPO = CLIPLookup(OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
+        if cfg.assetlookup.method == "CLIP":
+            HIPPO = CLIPLookup(OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
+        elif cfg.assetlookup.method == "TRELLIS":
+            HIPPO = TRELLISLookup(OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 
     DATASET_NAME = cfg.scene.id
     print(os.getcwd())

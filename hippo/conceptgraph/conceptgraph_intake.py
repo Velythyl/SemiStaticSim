@@ -60,8 +60,8 @@ def load_conceptgraph(path):
 
     for grp in segments_anno["segGroups"]:
         grp["paths"] = {
-            "mask": f"{path}/{grp['id']}/mask",
-            "rgb": f"{path}/{grp['id']}/rgb"
+            "mask": f"{path}/segments/{grp['id']}/mask",
+            "rgb": f"{path}/segments/{grp['id']}/rgb"
         }
 
     return segments_anno

@@ -6,9 +6,12 @@ import time
 from contextlib import contextmanager
 from io import StringIO
 import queue
+from typing import List, Union
+
 
 @dataclasses.dataclass
 class SubprocessResult:
+    cmd: Union[str, List[str]]
     returncode: int
     stdout: str
     stderr: str
@@ -117,6 +120,7 @@ def run_subproc(cmd, callback=None, shell=False):
         callback_thread.join()
 
     result = SubprocessResult(
+        cmd=cmd,
         returncode=process.returncode,
         stdout=stdout_buf.getvalue(),
         stderr=stderr_buf.getvalue(),

@@ -1,6 +1,10 @@
+import threading
+import time
+
 import requests
 import os
 import uuid
+from tqdm import tqdm
 
 
 class Trellis3DClient:
@@ -140,6 +144,7 @@ class Trellis3DClient:
         os.makedirs(target_dir, exist_ok=True)
 
         # Generate the 3D model
+        et = start_spinner_thread("Generating 3D model...")
         gen_result = self.generate_from_single_image(image_path, params)
 
         # Download preview
@@ -148,14 +153,17 @@ class Trellis3DClient:
             f"{self.base_url}{gen_result['preview_url']}",
             preview_path
         )
+        stop_spinner_thread(*et)
 
         # Extract and download GLB
+        et = start_spinner_thread("Extracting 3D model...")
         glb_result = self.extract_glb(gen_result['session_id'], params)
         glb_path = os.path.join(target_dir, 'model.glb')
         self.download_file(
             f"{self.base_url}{glb_result['glb_url']}",
             glb_path
         )
+        stop_spinner_thread(*et)
 
         return {
             'preview_path': preview_path,
@@ -181,6 +189,7 @@ class Trellis3DClient:
         os.makedirs(target_dir, exist_ok=True)
 
         # Generate the 3D model
+        et = start_spinner_thread("Generating 3D model...")
         gen_result = self.generate_from_multiple_images(image_paths, params)
 
         # Download preview
@@ -189,14 +198,17 @@ class Trellis3DClient:
             f"{self.base_url}{gen_result['preview_url']}",
             preview_path
         )
+        stop_spinner_thread(*et)
 
         # Extract and download GLB
+        et = start_spinner_thread("Extracting 3D model...")
         glb_result = self.extract_glb(gen_result['session_id'], params)
         glb_path = os.path.join(target_dir, 'model.glb')
         self.download_file(
             f"{self.base_url}{glb_result['glb_url']}",
             glb_path
         )
+        stop_spinner_thread(*et)
 
         return {
             'preview_path': preview_path,
@@ -206,9 +218,46 @@ class Trellis3DClient:
         }
 
 
+def spinner(desc, stop_event):
+    from itertools import cycle
+
+    spinner = cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
+    with tqdm(total=None, desc=desc, bar_format='{desc}') as pbar:
+        while not stop_event.is_set():
+            pbar.set_description(f"{desc} - {next(spinner)}")
+            time.sleep(0.1)
+            # pbar.update()
+
+
+def start_spinner_thread(desc) -> (threading.Event, threading.Thread):
+    stop_event = threading.Event()
+    spinner_thread = threading.Thread(
+        target=spinner,
+        args=(desc, stop_event)
+    )
+    spinner_thread.start()
+
+    return stop_event, spinner_thread
+
+
+def stop_spinner_thread(stop_event, spinner_thread):
+    stop_event.set()
+    spinner_thread.join(timeout=5)
+
+
 # Example usage
 if __name__ == '__main__':
     client = Trellis3DClient()
+
+    multi_result = client.generate_and_download_from_multiple_images(
+        '/home/charlie/Desktop/Holodeck/hippo/datasets/sacha_kitchen/segments/6/rgb',
+        target_dir="./blo",
+        params={
+            'multiimage_algo': 'stochastic',
+            'seed': 123
+        }
+    )
+    exit()
 
     multi_result = client.generate_and_download_from_multiple_images(
         '/home/charlie/Desktop/Holodeck/hippo/datasets/sacha_kitchen/segments/6/rgb',
