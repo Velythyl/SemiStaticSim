@@ -146,7 +146,7 @@ class SceneComposer(SelfDataclass):
             if len(obj) > 1:
                 obj = obj[0]
 
-            obj.concretize(concrete_asset_dir, self.asset_dir)
+            obj.concretize(concrete_asset_dir)
 
             # Ensure the 'objects' list exists in the scene
             if 'objects' not in scene:

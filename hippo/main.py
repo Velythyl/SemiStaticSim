@@ -29,9 +29,9 @@ def main(cfg):
     global HIPPO
     if HIPPO is None:
         if cfg.assetlookup.method == "CLIP":
-            HIPPO = CLIPLookup(OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
+            HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
-            HIPPO = TRELLISLookup(OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
+            HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 
     DATASET_NAME = cfg.scene.id
     print(os.getcwd())

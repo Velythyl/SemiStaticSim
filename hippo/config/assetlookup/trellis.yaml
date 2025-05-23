@@ -1,1 +1,3 @@
 method: TRELLIS
+client_port: 7077
+use_masks: True

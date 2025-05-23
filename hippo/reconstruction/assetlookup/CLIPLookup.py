@@ -16,7 +16,7 @@ from hippo.reconstruction.scenedata import HippoRoomPlan, HippoObject
 
 class CLIPLookup:
 
-    def __init__(self, objaverse_asset_dir: str, do_weighted_random_selection: bool, similarity_threshold: float, consider_size: bool):
+    def __init__(self, cfg, objaverse_asset_dir: str, do_weighted_random_selection: bool, similarity_threshold: float, consider_size: bool):
         confirm_paths_exist()
 
         self.do_weighted_random_selection = do_weighted_random_selection

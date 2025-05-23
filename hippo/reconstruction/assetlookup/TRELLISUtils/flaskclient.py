@@ -8,7 +8,8 @@ from tqdm import tqdm
 
 
 class Trellis3DClient:
-    def __init__(self, base_url='http://localhost:5000'):
+    def __init__(self, base_url='http://localhost', port=7070):
+        base_url = f"{base_url}:{port}"
         self.base_url = base_url
 
     def generate_from_single_image(self, image_path, params=None):
@@ -139,31 +140,40 @@ class Trellis3DClient:
         Returns:
             dict: Paths to downloaded files
         """
-        if target_dir is None:
-            target_dir = f"/tmp/{uuid.uuid4()}"
-        os.makedirs(target_dir, exist_ok=True)
+        et = None
+        try:
+            if target_dir is None:
+                target_dir = f"/tmp/{uuid.uuid4()}"
+            os.makedirs(target_dir, exist_ok=True)
 
-        # Generate the 3D model
-        et = start_spinner_thread("Generating 3D model...")
-        gen_result = self.generate_from_single_image(image_path, params)
+            # Generate the 3D model
+            et = start_spinner_thread("Generating 3D model...")
+            gen_result = self.generate_from_single_image(image_path, params)
 
-        # Download preview
-        preview_path = os.path.join(target_dir, 'preview.mp4')
-        self.download_file(
-            f"{self.base_url}{gen_result['preview_url']}",
-            preview_path
-        )
-        stop_spinner_thread(*et)
+            # Download preview
+            preview_path = os.path.join(target_dir, 'preview.mp4')
+            self.download_file(
+                f"{self.base_url}{gen_result['preview_url']}",
+                preview_path
+            )
+            stop_spinner_thread(*et)
+            et = None
 
-        # Extract and download GLB
-        et = start_spinner_thread("Extracting 3D model...")
-        glb_result = self.extract_glb(gen_result['session_id'], params)
-        glb_path = os.path.join(target_dir, 'model.glb')
-        self.download_file(
-            f"{self.base_url}{glb_result['glb_url']}",
-            glb_path
-        )
-        stop_spinner_thread(*et)
+            # Extract and download GLB
+            et = start_spinner_thread("Extracting 3D model...")
+            glb_result = self.extract_glb(gen_result['session_id'], params)
+            glb_path = os.path.join(target_dir, 'model.glb')
+            self.download_file(
+                f"{self.base_url}{glb_result['glb_url']}",
+                glb_path
+            )
+            stop_spinner_thread(*et)
+            et = None
+
+        except Exception as e:
+            if et is not None:
+                stop_spinner_thread(*et)
+            raise e
 
         return {
             'preview_path': preview_path,
@@ -184,31 +194,41 @@ class Trellis3DClient:
         Returns:
             dict: Paths to downloaded files
         """
-        if target_dir is None:
-            target_dir = f"/tmp/{uuid.uuid4()}"
-        os.makedirs(target_dir, exist_ok=True)
+        et = None
+        try:
 
-        # Generate the 3D model
-        et = start_spinner_thread("Generating 3D model...")
-        gen_result = self.generate_from_multiple_images(image_paths, params)
+            if target_dir is None:
+                target_dir = f"/tmp/{uuid.uuid4()}"
+            os.makedirs(target_dir, exist_ok=True)
 
-        # Download preview
-        preview_path = os.path.join(target_dir, 'preview.mp4')
-        self.download_file(
-            f"{self.base_url}{gen_result['preview_url']}",
-            preview_path
-        )
-        stop_spinner_thread(*et)
+            # Generate the 3D model
+            et = start_spinner_thread("Generating 3D model...")
+            gen_result = self.generate_from_multiple_images(image_paths, params)
 
-        # Extract and download GLB
-        et = start_spinner_thread("Extracting 3D model...")
-        glb_result = self.extract_glb(gen_result['session_id'], params)
-        glb_path = os.path.join(target_dir, 'model.glb')
-        self.download_file(
-            f"{self.base_url}{glb_result['glb_url']}",
-            glb_path
-        )
-        stop_spinner_thread(*et)
+            # Download preview
+            preview_path = os.path.join(target_dir, 'preview.mp4')
+            self.download_file(
+                f"{self.base_url}{gen_result['preview_url']}",
+                preview_path
+            )
+            stop_spinner_thread(*et)
+            et = None
+
+            # Extract and download GLB
+            et = start_spinner_thread("Extracting 3D model...")
+            glb_result = self.extract_glb(gen_result['session_id'], params)
+            glb_path = os.path.join(target_dir, 'model.glb')
+            self.download_file(
+                f"{self.base_url}{glb_result['glb_url']}",
+                glb_path
+            )
+            stop_spinner_thread(*et)
+            et = None
+
+        except Exception as e:
+            if et is not None:
+                stop_spinner_thread(*et)
+            raise e
 
         return {
             'preview_path': preview_path,

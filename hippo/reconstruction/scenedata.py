@@ -25,7 +25,7 @@ class _Hippo(SelfDataclass):
 @dataclass
 class HippoRoomPlan(_Hippo):
     id: str
-    floor_type: str = "white hex tile, glossy"
+    floor_type: str = "white"
     wall_type: str = "light grey drywall, smooth"
     coords: List[Tuple[float,float]] =  ((0, 0), (0, 6), (7, 6), (7, 0))
 
@@ -185,7 +185,7 @@ class HippoObject(_Hippo):
             _found_scores=(self._found_scores[index],),
         )
 
-    def concretize(self, target_directory, objathor_asset_directory=OBJATHOR_ASSETS_DIR):
+    def concretize(self, target_directory):
         all_selves = self
 
         for self in all_selves:
@@ -213,6 +213,16 @@ class HippoObject(_Hippo):
                 #scaling = [1,scaling[1],1]
                 obj = scale_ai2thor_object(obj, scaling)
 
+                from hippo.utils.spatial_utils import get_ai2thor_object_bbox
+                bbox = get_ai2thor_object_bbox(obj)
+
+                """
+                from ai2thor.util.runtime_assets import load_existing_thor_asset_file
+                obj = load_existing_thor_asset_file(convert_folder, f"{assetid}/{assetid}")
+                from hippo.utils.spatial_utils import get_ai2thor_object_bbox
+                bbox = get_ai2thor_object_bbox(obj)
+                """
+
                 new_obj = {}
                 for toplevel_k, toplevel_v in obj.items():
                     if isinstance(toplevel_v, str) and assetId in toplevel_v:
@@ -222,9 +232,10 @@ class HippoObject(_Hippo):
                 save_path = f"{target_directory_for_this_self}/{self._concrete_assetIds[0]}.pkl.gz"
                 save_thor_asset_file(new_obj, save_path)
 
-                original_asset_dir = os.path.join(objathor_asset_directory, assetId)
+                original_asset_dir = os.path.join(asset_dir, assetId)
                 for other_file in os.listdir(original_asset_dir):
-                    shutil.copy(os.path.join(original_asset_dir, other_file), os.path.join(target_directory_for_this_self, other_file))
+                    if not other_file.endswith(f"{self._concrete_assetIds[0]}.pkl.gz"):
+                        shutil.copy(os.path.join(original_asset_dir, other_file), os.path.join(target_directory_for_this_self, other_file))
 
 
                 with open(os.path.join(target_directory_for_this_self, "thor_metadata.json"), "w") as f:

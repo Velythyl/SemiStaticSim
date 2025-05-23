@@ -1,4 +1,5 @@
 import dataclasses
+import select
 import subprocess
 import sys
 import threading
@@ -26,7 +27,7 @@ class SubprocessResult:
         return not self.success
 
 
-def run_subproc(cmd, callback=None, shell=False):
+def run_subproc(cmd, callback=None, shell=False, timeout=None, timeout_cleanup_func=None, raise_timeout_exception=False):
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -34,7 +35,7 @@ def run_subproc(cmd, callback=None, shell=False):
         shell=shell,
         text=True,
         universal_newlines=True,
-        bufsize=1  # line-buffered
+        bufsize=1,  # line-buffered
     )
 
     stdout_buf = StringIO()
@@ -55,14 +56,20 @@ def run_subproc(cmd, callback=None, shell=False):
     else:
         callback_lock = threading.Lock()
 
-    def reader(stream, buf, label):
-        for line in iter(stream.readline, ''):
-            #with callback_lock:
-            buf.write(line)
-            with lock:
-                combined_buf.write(line)
-            print_queue.put((label, line))
-            callback_queue.put((label, line))
+    def reader(stream, buf, label, stop_event):
+        while not stop_event.is_set():
+            r, _, _ = select.select([stream], [], [], 0.1)
+            if r:
+                line = stream.readline()
+                if not line:  # EOF
+                    break
+                with lock:
+                    buf.write(line)
+                    combined_buf.write(line)
+                print_queue.put((label, line))
+                callback_queue.put((label, line))
+            if stop_event.is_set():
+                break
         stream.close()
 
     class STOPPRINT:
@@ -97,8 +104,10 @@ def run_subproc(cmd, callback=None, shell=False):
                 )
                 callback(partial_result)
 
-    stdout_thread = threading.Thread(target=reader, args=(process.stdout, stdout_buf, 'stdout'))
-    stderr_thread = threading.Thread(target=reader, args=(process.stderr, stderr_buf, 'stderr'))
+    stdout_event = threading.Event()
+    stdout_thread = threading.Thread(target=reader, args=(process.stdout, stdout_buf, 'stdout', stdout_event))
+    stderr_event = threading.Event()
+    stderr_thread = threading.Thread(target=reader, args=(process.stderr, stderr_buf, 'stderr', stderr_event))
     printer_thread = threading.Thread(target=printer)
 
     stdout_thread.start()
@@ -108,7 +117,27 @@ def run_subproc(cmd, callback=None, shell=False):
         callback_thread = threading.Thread(target=callbacker)
         callback_thread.start()
 
-    process.wait()
+    TIMED_OUT = False
+    TIMEOUT_EXCEPTION = None
+    try:
+        process.wait(timeout)
+    except subprocess.TimeoutExpired as timeout_exception:
+        TIMEOUT_EXCEPTION = timeout_exception
+        process.terminate()
+
+        try:
+            process.wait(5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            time.sleep(5)
+
+        if timeout_cleanup_func is not None:
+            timeout_cleanup_func()
+
+        TIMED_OUT = True
+        stdout_event.set()
+        stderr_event.set()
+
     stdout_thread.join()
     stderr_thread.join()
 
@@ -116,7 +145,7 @@ def run_subproc(cmd, callback=None, shell=False):
     print_queue.put(STOPPRINT())
     printer_thread.join()
     if callback is not None:
-        callback_thread.put(STOPPRINT())
+        callback_queue.put(STOPPRINT())
         callback_thread.join()
 
     result = SubprocessResult(
@@ -129,6 +158,9 @@ def run_subproc(cmd, callback=None, shell=False):
 
     if callback:
         callback(result)
+
+    if raise_timeout_exception and TIMED_OUT:
+        raise TIMEOUT_EXCEPTION
 
     return result
 
