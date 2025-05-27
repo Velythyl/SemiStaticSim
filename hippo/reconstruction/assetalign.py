@@ -159,7 +159,7 @@ def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=2500):
         return pcd_or_mesh_to_np(pcd_or_mesh.sample_points_uniformly(number_of_points=NUM_POINTS_TO_KEEP))
 
 def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array):
-    trials = jnp.linspace(0,  2*np.pi, 200)
+    trials = jnp.linspace(0,  2*np.pi, 500)
 
     BATCH_SIZE = 5
 
@@ -245,7 +245,7 @@ def transform_point_cloud(points, transformation_matrix):
     return transformed_points[:, :3] / transformed_points[:, 3:4]
 
 
-def align(pcd_to_align, spoof_rad=None, target_pcd=None):
+def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False):
     if target_pcd is None:
         target_pcd = pcd_to_align
         assert spoof_rad is not None
@@ -259,13 +259,18 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None):
     found_rot = global_align(pcd_to_align, target_pcd)
     vis(rotate_point_cloud_z_axis(pcd_to_align, found_rot))
 
-    print(make_z_trans_init_matrix(found_rot))
+    if do_fine_tune:
+        print(make_z_trans_init_matrix(found_rot))
 
-    tuned_transform = fine_tune(pcd_to_align, target_pcd, found_rot)
+        tuned_transform = fine_tune(pcd_to_align, target_pcd, found_rot)
 
-    print(tuned_transform)
+        print(tuned_transform)
 
-    vis(transform_point_cloud(pcd_to_align, tuned_transform))
+        vis(transform_point_cloud(pcd_to_align, tuned_transform))
+        return tuned_transform
+    else:
+        return make_z_trans_init_matrix(found_rot)
+
 
 
 
