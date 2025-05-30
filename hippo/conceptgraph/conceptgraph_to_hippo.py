@@ -16,16 +16,18 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
     hippo_objects = []
 
     pcds = []
+    pcd_colors = []
     for obj in cg_objects:
         object_name = obj["label"].lower().replace(":","").replace(",", " ").strip()
 
         pcd = np.asarray(obj["pcd"].points)[:,[0,2,1]]
-
+        pcd_color = np.asarray(obj["pcd"].colors)
 
         object_description = obj["caption"]
         clip_features = obj["clip_features"]
 
         pcds.append(pcd)
+        pcd_colors.append(pcd_color)
 
         hippo_objects.append(
             HippoObject(
@@ -65,10 +67,10 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
 
     id2objs = {}
     name2objs = {}
-    for hippo_object, pcd in (zip(hippo_objects,pcds)):
+    for hippo_object, pcd, pcd_color in (zip(hippo_objects,pcds, pcd_colors)):
         original_pcd = pcd
 
-        pcd = filter_points_by_y_quartile(pcd, 1, 90)
+        pcd, pcd_color = filter_points_by_y_quartile(pcd, 1, 99, points_colors=pcd_color)
 
         position = np.median(pcd, axis=0)
         position[1] = np.min(pcd[:,1])
@@ -80,6 +82,7 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
 #        assert (position <= (maxbound-pad)).all()
         size = get_size(pcd, as_dict=False)
         hippo_object = hippo_object.replace(_position=position, _desired_size=size)
+        hippo_object = hippo_object.set_pcd_(pcd, pcd_color)
 
         if hippo_object.object_name not in name2objs:
             name2objs[hippo_object.object_name] = []

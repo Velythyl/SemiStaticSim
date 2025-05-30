@@ -6,6 +6,7 @@ from dataclasses import field, dataclass
 from typing import Tuple, List, Union, Dict, Any
 
 import numpy as np
+import open3d as o3d
 from ai2thor.util.runtime_assets import save_thor_asset_file
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
@@ -69,8 +70,27 @@ class HippoObject(_Hippo):
     _skill_metadata: Tuple[str] = ("can be turned on/off", "can be picked up", "objects can be put down on this", "can be opened and closed", "can be sliced", "can be broken")
 
     _cg_paths: Dict[str, str] = field(default_factory=dict)
+    _cg_pcd_points: Tuple[float] = tuple()
+    _cg_pcd_colours: Tuple = tuple()
 
     _assets_dir: Tuple[str] = tuple()
+
+    def set_pcd_(self, pcd: Union[o3d.geometry.PointCloud, np.array], pcd_colours: np.array=None):
+        if isinstance(pcd, o3d.geometry.PointCloud):
+            points = np.asarray(pcd.points)
+            colors = np.asarray(pcd.colors)
+
+        points = tuple(points.tolist())
+        colours = tuple(colors)
+
+        return self.replace(_cg_pcd_points=points, _cg_pcd_colours=colours)
+
+    def get_pcd(self):
+        assert len(self._cg_pcd_points) > 0
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(np.array(self._cg_pcd_points))
+        pcd.colors = o3d.utility.Vector3dVector(np.array(self._cg_pcd_colours))
+        return pcd
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores, assets_dir):
         _is_objaverse_asset = []
@@ -213,8 +233,10 @@ class HippoObject(_Hippo):
                 #scaling = [1,scaling[1],1]
                 obj = scale_ai2thor_object(obj, scaling)
 
-                from hippo.utils.spatial_utils import get_ai2thor_object_bbox
-                bbox = get_ai2thor_object_bbox(obj)
+                rots = align(obj, self.pcd)
+
+                #from hippo.utils.spatial_utils import get_ai2thor_object_bbox
+                #bbox = get_ai2thor_object_bbox(obj)
 
                 """
                 from ai2thor.util.runtime_assets import load_existing_thor_asset_file

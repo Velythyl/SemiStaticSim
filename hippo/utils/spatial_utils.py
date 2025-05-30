@@ -187,7 +187,7 @@ def vis_ai2thor_object(obj):
     return
 
 
-def filter_points_by_y_quartile(points, lower_percentile=5, upper_percentile=95):
+def filter_points_by_y_quartile(points, lower_percentile=5, upper_percentile=95, points_colors=None):
     """
     Filters points based on their y-axis values, removing points outside the specified percentile range.
 
@@ -209,11 +209,15 @@ def filter_points_by_y_quartile(points, lower_percentile=5, upper_percentile=95)
     y_upper = np.percentile(y_values, upper_percentile)
 
     # Filter out points based on y-axis bounds
-    filtered_points = points[(y_values >= y_lower) & (y_values <= y_upper)]
+    mask = (y_values >= y_lower) & (y_values <= y_upper)
+    filtered_points = points[mask]
 
     # Compute bounding box
     #bbox_min = np.min(filtered_points, axis=0)
     #bbox_max = np.max(filtered_points, axis=0)
+
+    if points_colors is not None:
+        return filtered_points, points_colors[mask]
 
     return filtered_points #, bbox_min, bbox_max
 
