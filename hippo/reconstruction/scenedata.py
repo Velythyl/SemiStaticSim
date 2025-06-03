@@ -320,3 +320,25 @@ class HippoObject(_Hippo):
                     ]
                 }}, f, indent=4) #json.dump(self._assetMetadata, f, indent=4)
 
+def figure_out_scaling(self_pcd, asset, euler_rot_to_align_asset_to_self):
+    from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, swap_yz, transform_point_cloud, \
+        rotate_point_cloud_y_axis
+
+    unrotated_obj_pcd = pcd_or_mesh_to_np(asset)
+    # should this be 2*np.pi - ?
+    # or 1- ?
+    # or nothing?
+    # right now, 2*np.p1 -  with 90 deg round works. Nothing else works though.. Some problem with how scaling interacts with rotations
+    rotated_self_pcd = rotate_point_cloud_y_axis(pcd_or_mesh_to_np(self_pcd), - math.radians(euler_rot_to_align_asset_to_self[1]))
+    # rotated_obj_pcd = transform_point_cloud(pcd_or_mesh_to_np(obj), transformation_mat_rots)
+
+    from hippo.utils.spatial_utils import get_ai2thor_object_bbox, pcd_bbox_size
+    # obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_obj_pcd)))
+    self_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_self_pcd)))
+    obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(unrotated_obj_pcd)))
+
+    # if "sideboard" in self.object_name:
+    #    scaling = np.array([5, 1, 1])
+    # else:
+    scaling = np.array(self_pcd_size) / obj_pcd_size
+    return scaling
