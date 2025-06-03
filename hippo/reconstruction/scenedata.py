@@ -245,7 +245,11 @@ class HippoObject(_Hippo):
                 euler_rots, transformation_mat_rots = align(pcd_to_align=(pcd_or_mesh_to_np(obj)), target_pcd=self._cg_pcd_points)
 
                 unrotated_obj_pcd = pcd_or_mesh_to_np(obj)
-                rotated_self_pcd = rotate_point_cloud_y_axis(pcd_or_mesh_to_np(self._cg_pcd_points), 2*np.pi - math.radians(euler_rots[1]))
+                # should this be 2*np.pi - ?
+                # or 1- ?
+                # or nothing?
+                # right now, 2*np.p1 -  with 90 deg round works. Nothing else works though.. Some problem with how scaling interacts with rotations
+                rotated_self_pcd = rotate_point_cloud_y_axis(pcd_or_mesh_to_np(self._cg_pcd_points),  - math.radians(euler_rots[1]))
                 #rotated_obj_pcd = transform_point_cloud(pcd_or_mesh_to_np(obj), transformation_mat_rots)
 
                 from hippo.utils.spatial_utils import get_ai2thor_object_bbox, pcd_bbox_size
