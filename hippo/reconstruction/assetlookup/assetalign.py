@@ -93,8 +93,8 @@ def get_dists_for_p1(p1, target_pcd):
     return jax.vmap(functools.partial(point2point_dist, p1))(target_pcd)
 
 def get_mindist_for_p1(target_pcd, p1):
-    return get_dists_for_p1(p1, target_pcd).min()
-
+    ret = get_dists_for_p1(p1, target_pcd)#.min()
+    return -jax.lax.top_k(-ret, 3)[0]
 
 def get_score(pcd_to_rotate, pcd_to_match, rad):
     pcd_to_rotate = rotate_point_cloud_y_axis(pcd_to_rotate, rad)
@@ -135,7 +135,7 @@ def center_point_cloud(points):
 
     return centered_points
 
-def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=2500):
+def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=1000):
     if isinstance(pcd_or_mesh, jnp.ndarray) or isinstance(pcd_or_mesh, tuple) or isinstance(pcd_or_mesh, list):
         return pcd_or_mesh_to_np(np.array(pcd_or_mesh))
 
@@ -160,7 +160,7 @@ def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=2500):
         return pcd_or_mesh_to_np(pcd_or_mesh.sample_points_uniformly(number_of_points=NUM_POINTS_TO_KEEP))
 
 def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array):
-    trials = jnp.linspace(0,  2*np.pi, 200)
+    trials = jnp.linspace(0,  2*np.pi, 100)
 
     BATCH_SIZE = 10
     BATCH_SIZE = min(BATCH_SIZE, len(trials))
@@ -323,11 +323,16 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False):
         transmat = euler_to_matrix_4x4(0,found_rot,0,degrees=False)
 
         print("Pre round angle", math.degrees(found_rot))
-        found_rot = round(math.degrees(found_rot) / 90) * 90
+        PRECISION = 90 / 2 / 2 / 2
+        found_rot = round(math.degrees(found_rot) / PRECISION) * PRECISION
         print("Rounded angle", found_rot)
 
         if found_rot == 360:
             found_rot = 0
+
+        from hippo.reconstruction.assetlookup.assetIsPlane import is_single_plane
+        #if is_single_plane(pcd_to_align)[0] and found_rot == 180:
+        #    found_rot = 0
 
         return (0, found_rot, 0), transmat
 

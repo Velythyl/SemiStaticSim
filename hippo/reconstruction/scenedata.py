@@ -8,6 +8,7 @@ from typing import Tuple, List, Union, Dict, Any
 import numpy as np
 import open3d as o3d
 from tqdm import tqdm
+import math
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from hippo.utils.dict_utils import recursive_map
@@ -239,14 +240,23 @@ class HippoObject(_Hippo):
                 # 4. save obj without actually doing the rotation
                 # 5. write rotation into the scene definition
 
-                from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, swap_yz, transform_point_cloud
+                from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, swap_yz, transform_point_cloud, rotate_point_cloud_y_axis
 
                 euler_rots, transformation_mat_rots = align(pcd_to_align=(pcd_or_mesh_to_np(obj)), target_pcd=self._cg_pcd_points)
-                rotated_obj_pcd = transform_point_cloud(pcd_or_mesh_to_np(obj), transformation_mat_rots)
+
+                unrotated_obj_pcd = pcd_or_mesh_to_np(obj)
+                rotated_self_pcd = rotate_point_cloud_y_axis(pcd_or_mesh_to_np(self._cg_pcd_points), 2*np.pi - math.radians(euler_rots[1]))
+                #rotated_obj_pcd = transform_point_cloud(pcd_or_mesh_to_np(obj), transformation_mat_rots)
 
                 from hippo.utils.spatial_utils import get_ai2thor_object_bbox, pcd_bbox_size
-                obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_obj_pcd)))
-                scaling = np.array(self._desired_size) / obj_pcd_size
+                #obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_obj_pcd)))
+                self_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_self_pcd)))
+                obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(unrotated_obj_pcd)))
+
+                #if "sideboard" in self.object_name:
+                #    scaling = np.array([5, 1, 1])
+                #else:
+                scaling = np.array(self_pcd_size) / obj_pcd_size
 
                 for _ in tqdm([0], desc="Scaling asset..."):
                     obj = scale_ai2thor_object(obj, scaling)
