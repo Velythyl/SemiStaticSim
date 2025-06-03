@@ -7,7 +7,7 @@ from typing import Tuple, List, Union, Dict, Any
 
 import numpy as np
 import open3d as o3d
-from ai2thor.util.runtime_assets import save_thor_asset_file
+from tqdm import tqdm
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from hippo.utils.dict_utils import recursive_map
@@ -79,9 +79,12 @@ class HippoObject(_Hippo):
         if isinstance(pcd, o3d.geometry.PointCloud):
             points = np.asarray(pcd.points)
             colors = np.asarray(pcd.colors)
+        else:
+            points = pcd
+            colors = pcd_colours
 
         points = tuple(points.tolist())
-        colours = tuple(colors)
+        colours = tuple(colors.tolist())
 
         return self.replace(_cg_pcd_points=points, _cg_pcd_colours=colours)
 
@@ -230,10 +233,31 @@ class HippoObject(_Hippo):
                     return
                 os.makedirs(target_directory_for_this_self, exist_ok=False)
 
-                #scaling = [1,scaling[1],1]
-                obj = scale_ai2thor_object(obj, scaling)
+                # 1. rotate first
+                # 2. calculate scaling from the rotated obj pcd
+                # 3. rescale obj
+                # 4. save obj without actually doing the rotation
+                # 5. write rotation into the scene definition
 
-                rots = align(obj, self.pcd)
+                from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, swap_yz, transform_point_cloud
+
+                euler_rots, transformation_mat_rots = align(pcd_to_align=(pcd_or_mesh_to_np(obj)), target_pcd=self._cg_pcd_points)
+                rotated_obj_pcd = transform_point_cloud(pcd_or_mesh_to_np(obj), transformation_mat_rots)
+
+                from hippo.utils.spatial_utils import get_ai2thor_object_bbox, pcd_bbox_size
+                obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_obj_pcd)))
+                scaling = np.array(self._desired_size) / obj_pcd_size
+
+                for _ in tqdm([0], desc="Scaling asset..."):
+                    obj = scale_ai2thor_object(obj, scaling)
+
+                #scaling = [1,scaling[1],1]
+                #from hippo.utils.spatial_utils import get_ai2thor_object_bbox
+                #bbox = np.array(dict2xyztuple(get_ai2thor_object_bbox(obj)))
+                #new_scaling = np.array(self._desired_size) / np.array(bbox)
+                #obj = scale_ai2thor_object(obj, scaling)
+
+
 
                 #from hippo.utils.spatial_utils import get_ai2thor_object_bbox
                 #bbox = get_ai2thor_object_bbox(obj)
@@ -250,8 +274,12 @@ class HippoObject(_Hippo):
                     if isinstance(toplevel_v, str) and assetId in toplevel_v:
                         toplevel_v = toplevel_v.replace(assetId, concrete_assetId)
                     new_obj[toplevel_k] = toplevel_v
+                print("Obj name", self.object_name)
+                #print(euler_rots[1])
+                new_obj["yRotOffset"] = euler_rots[1]
 
                 save_path = f"{target_directory_for_this_self}/{self._concrete_assetIds[0]}.pkl.gz"
+                from ai2thor.util.runtime_assets import save_thor_asset_file
                 save_thor_asset_file(new_obj, save_path)
 
                 original_asset_dir = os.path.join(asset_dir, assetId)

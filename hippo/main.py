@@ -26,6 +26,10 @@ HIPPO = None
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
+    #os.environ["JAX_PLATFORM_NAME"] = "cpu"
+    #import jax
+    #jax.config.update('jax_platform_name', "cpu")
+
     global HIPPO
     if HIPPO is None:
         if cfg.assetlookup.method == "CLIP":

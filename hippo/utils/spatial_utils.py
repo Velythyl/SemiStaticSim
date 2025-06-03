@@ -164,6 +164,13 @@ def get_ai2thor_object_bbox(obj):
 
     return {k: maxs[i] - mins[i] for i, k in enumerate(['x', 'y', 'z'])}
 
+def pcd_bbox_size(obj):
+    mins = np.min(obj, axis=0)
+    maxs = np.max(obj, axis=0)
+
+    return {k: maxs[i] - mins[i] for i, k in enumerate(['x', 'y', 'z'])}
+
+
 
 def vis_ai2thor_object(obj):
     combined_mesh = o3d.geometry.TriangleMesh()

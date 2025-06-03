@@ -1,4 +1,5 @@
 import functools
+import math
 from typing import Dict
 
 import jax.numpy as jnp
@@ -7,7 +8,7 @@ import open3d as o3d
 import jax
 
 
-def rotate_point_cloud_y_axis_OLD(points, theta):
+def rotate_point_cloud_y_axis(points, theta):
     """
     Rotate a point cloud around the y-axis by a given angle in degrees.
 
@@ -94,15 +95,9 @@ def get_dists_for_p1(p1, target_pcd):
 def get_mindist_for_p1(target_pcd, p1):
     return get_dists_for_p1(p1, target_pcd).min()
 
-def get_score_OLD(pcd_to_rotate, pcd_to_match, rad):
-    pcd_to_rotate = rotate_point_cloud_z_axis(pcd_to_rotate, rad)
-    mindists = jax.vmap(functools.partial(get_mindist_for_p1, pcd_to_match))(pcd_to_rotate)
-
-    return mindists.mean()
-
 
 def get_score(pcd_to_rotate, pcd_to_match, rad):
-    pcd_to_rotate = rotate_point_cloud_z_axis(pcd_to_rotate, rad)
+    pcd_to_rotate = rotate_point_cloud_y_axis(pcd_to_rotate, rad)
 
     # Distance from rotated to target
     mindists_rot_to_target = jax.vmap(functools.partial(get_mindist_for_p1, pcd_to_match))(pcd_to_rotate)
@@ -111,6 +106,12 @@ def get_score(pcd_to_rotate, pcd_to_match, rad):
     mindists_target_to_rot = jax.vmap(functools.partial(get_mindist_for_p1, pcd_to_rotate))(pcd_to_match)
 
     return (mindists_rot_to_target.mean() + mindists_target_to_rot.mean()) / 2
+
+def get_score_OLD(pcd_to_rotate, pcd_to_match, rad):
+    pcd_to_rotate = rotate_point_cloud_z_axis(pcd_to_rotate, rad)
+    mindists = jax.vmap(functools.partial(get_mindist_for_p1, pcd_to_match))(pcd_to_rotate)
+
+    return mindists.mean()
 from tqdm import tqdm
 
 
@@ -135,7 +136,7 @@ def center_point_cloud(points):
     return centered_points
 
 def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=2500):
-    if isinstance(pcd_or_mesh, jnp.ndarray):
+    if isinstance(pcd_or_mesh, jnp.ndarray) or isinstance(pcd_or_mesh, tuple) or isinstance(pcd_or_mesh, list):
         return pcd_or_mesh_to_np(np.array(pcd_or_mesh))
 
     if isinstance(pcd_or_mesh, np.ndarray):
@@ -159,9 +160,10 @@ def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=2500):
         return pcd_or_mesh_to_np(pcd_or_mesh.sample_points_uniformly(number_of_points=NUM_POINTS_TO_KEEP))
 
 def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array):
-    trials = jnp.linspace(0,  2*np.pi, 500)
+    trials = jnp.linspace(0,  2*np.pi, 200)
 
-    BATCH_SIZE = 5
+    BATCH_SIZE = 10
+    BATCH_SIZE = min(BATCH_SIZE, len(trials))
 
     scores = []
     for b_trials in tqdm(trials.reshape(-1 ,BATCH_SIZE)):
@@ -176,7 +178,11 @@ def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array):
 def swap_yz(pcd: np.array):
     return pcd[:,[0,2,1]]
 
-def vis(xyz):
+DISABLE_VIS = False
+def vis(xyz, disable=DISABLE_VIS):
+    if disable:
+        return
+
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(xyz)
     o3d.visualization.draw_geometries([pcd])
@@ -202,9 +208,48 @@ def make_z_trans_init_matrix(theta):
         [0, 0, 0, 1]
     ])
 
+def make_y_trans_init_matrix(theta):
+    """
+    Create a 4x4 homogeneous transformation matrix for y-axis rotation.
+    """
+    cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
+
+    return np.array([
+        [cos_theta, 0, sin_theta, 0],
+        [0, 1, 0, 0],
+        [-sin_theta, 0, cos_theta, 0],
+        [0, 0, 0, 1]
+    ])
+
+from scipy.spatial.transform import Rotation as R
+def euler_to_matrix_4x4(x_rot, y_rot, z_rot, degrees: bool, order='xyz'):
+    """
+    Create a 4x4 transformation matrix from Euler angles.
+
+    Parameters:
+    - x_rot, y_rot, z_rot: Rotations around the X, Y, and Z axes
+    - degrees: If True, interprets angles in degrees; otherwise in radians
+    - order: Rotation order, default is 'xyz'
+
+    Returns:
+    - 4x4 numpy ndarray
+    """
+    # Create a rotation object from Euler angles
+    rotation = R.from_euler(order, [x_rot, y_rot, z_rot], degrees=degrees)
+
+    # Convert to 3x3 rotation matrix
+    rot_matrix = rotation.as_matrix()
+
+    # Create 4x4 homogeneous transformation matrix
+    transform = np.eye(4)
+    transform[:3, :3] = rot_matrix
+    return transform
+
+
 def fine_tune(pcd_to_align, target_pcd, initial_zrot):
     #initted_pcd = rotate_point_cloud_z_axis(pcd_to_align, initial_zrot)
-    trans_init = make_z_trans_init_matrix(initial_zrot)
+    trans_init = euler_to_matrix_4x4(0, initial_zrot, 0, degrees=False)
 
     pcd_to_align = transform_point_cloud(pcd_to_align, trans_init)
     _pcd_to_align = o3d.geometry.PointCloud()
@@ -232,6 +277,8 @@ def transform_point_cloud(points, transformation_matrix):
     Returns:
         Transformed points of shape (N, 3)
     """
+    vis(points, disable=True)
+
     # Convert points to homogeneous coordinates (N, 4)
     homogeneous_points = jnp.concatenate([
         points,
@@ -242,7 +289,9 @@ def transform_point_cloud(points, transformation_matrix):
     transformed_points = homogeneous_points @ transformation_matrix.T
 
     # Convert back to Cartesian coordinates by dividing by w (N, 3)
-    return transformed_points[:, :3] / transformed_points[:, 3:4]
+    ret = transformed_points[:, :3] / transformed_points[:, 3:4]
+    vis(ret, disable=True)
+    return ret
 
 
 def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False):
@@ -250,29 +299,66 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False):
         target_pcd = pcd_to_align
         assert spoof_rad is not None
     if spoof_rad is not None:
-        pcd_to_align = rotate_point_cloud_z_axis(pcd_or_mesh_to_np(pcd), spoof_rad)
+        pcd_to_align = rotate_point_cloud_y_axis(pcd_or_mesh_to_np(pcd), spoof_rad)
 
     pcd_to_align = pcd_or_mesh_to_np(pcd_to_align)
     target_pcd = pcd_or_mesh_to_np(target_pcd)
-    vis(target_pcd)
-    vis(pcd_to_align)
+    DISABLE_VIS = True
+    vis(target_pcd, disable=DISABLE_VIS)
+    vis(pcd_to_align, disable=DISABLE_VIS)
+
     found_rot = global_align(pcd_to_align, target_pcd)
-    vis(rotate_point_cloud_z_axis(pcd_to_align, found_rot))
+    vis(rotate_point_cloud_y_axis(pcd_to_align, found_rot), disable=DISABLE_VIS)
 
     if do_fine_tune:
-        print(make_z_trans_init_matrix(found_rot))
+        #print(make_y_trans_init_matrix(found_rot))
 
         tuned_transform = fine_tune(pcd_to_align, target_pcd, found_rot)
 
-        print(tuned_transform)
+        #print(tuned_transform)
 
-        vis(transform_point_cloud(pcd_to_align, tuned_transform))
-        return tuned_transform
+        vis(transform_point_cloud(pcd_to_align, tuned_transform), disable=DISABLE_VIS)
+        return transmat_to_euler(tuned_transform, degrees=True), tuned_transform
     else:
-        return make_z_trans_init_matrix(found_rot)
+        transmat = euler_to_matrix_4x4(0,found_rot,0,degrees=False)
+
+        print("Pre round angle", math.degrees(found_rot))
+        found_rot = round(math.degrees(found_rot) / 90) * 90
+        print("Rounded angle", found_rot)
+
+        if found_rot == 360:
+            found_rot = 0
+
+        return (0, found_rot, 0), transmat
 
 
+from scipy.spatial.transform import Rotation as Rscipy
+def transmat_to_euler(trans_mat, degrees: bool):
+    if trans_mat.shape == (4,4):
+        trans_mat = trans_mat[:3,:3]
 
+    r = Rscipy.from_matrix(trans_mat)
+    euler_xyz = r.as_euler('xyz', degrees=degrees)  # or use 'zyx' if you prefer that order
+    return euler_xyz
+
+def euler_to_transmat(euler_angles, degrees=True):
+    """
+    Converts Euler angles to a 4x4 transformation matrix (rotation only).
+
+    Parameters:
+        euler_angles (array-like): The Euler angles in 'xyz' order.
+        degrees (bool): True if the input angles are in degrees, False for radians.
+
+    Returns:
+        np.ndarray: A 4x4 transformation matrix with rotation applied.
+    """
+    r = Rscipy.from_euler('xyz', euler_angles, degrees=degrees)
+    rot_mat = r.as_matrix()
+
+    # Create 4x4 transformation matrix
+    trans_mat = np.eye(4)
+    trans_mat[:3, :3] = rot_mat
+    return trans_mat
 
 if __name__ == "__main__":
     from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph
