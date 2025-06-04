@@ -14,7 +14,7 @@ from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from hippo.utils.dict_utils import recursive_map
 from hippo.utils.selfdataclass import SelfDataclass
 
-from hippo.utils.spatial_utils import scale_ai2thor_object
+from hippo.utils.spatial_utils import scale_ai2thor_object, transform_ai2thor_object, make_trans_mat_from_axisscale
 
 
 @dataclass
@@ -240,30 +240,42 @@ class HippoObject(_Hippo):
                 # 4. save obj without actually doing the rotation
                 # 5. write rotation into the scene definition
 
-                from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, swap_yz, transform_point_cloud, rotate_point_cloud_y_axis
+                from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, swap_yz, transform_point_cloud, rotate_point_cloud_y_axis, draw_registration_result, add_scaling_to_transmat
 
                 euler_rots, transformation_mat_rots = align(pcd_to_align=(pcd_or_mesh_to_np(obj)), target_pcd=self._cg_pcd_points)
 
-                unrotated_obj_pcd = pcd_or_mesh_to_np(obj)
+                #unrotated_obj_pcd = pcd_or_mesh_to_np(obj)
                 # should this be 2*np.pi - ?
                 # or 1- ?
                 # or nothing?
                 # right now, 2*np.p1 -  with 90 deg round works. Nothing else works though.. Some problem with how scaling interacts with rotations
-                rotated_self_pcd = rotate_point_cloud_y_axis(pcd_or_mesh_to_np(self._cg_pcd_points),  - math.radians(euler_rots[1]))
-                #rotated_obj_pcd = transform_point_cloud(pcd_or_mesh_to_np(obj), transformation_mat_rots)
+                #rotated_self_pcd = rotate_point_cloud_y_axis(pcd_or_mesh_to_np(self._cg_pcd_points),  - math.radians(euler_rots[1]))
 
-                from hippo.utils.spatial_utils import get_ai2thor_object_bbox, pcd_bbox_size
+                obj = transform_ai2thor_object(obj, transformation_mat_rots)
+                obj = scale_rescale_cycle(obj, self._cg_pcd_points)
+                #draw_registration_result(pcd_or_mesh_to_np(obj), pcd_or_mesh_to_np(self._cg_pcd_points))
+
+                #draw_registration_result(pcd_or_mesh_to_np(rotated_obj_pcd), pcd_or_mesh_to_np(self._cg_pcd_points))
+
+                #from hippo.utils.spatial_utils import get_ai2thor_object_bbox, pcd_bbox_size
                 #obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_obj_pcd)))
-                self_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_self_pcd)))
-                obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(unrotated_obj_pcd)))
+#                self_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(rotated_self_pcd)))
+                #obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(pcd_or_mesh_to_np(obj))))
 
                 #if "sideboard" in self.object_name:
-                #    scaling = np.array([5, 1, 1])
+                #scaling = make_trans_mat_from_axisscale(np.array([5, 1, 1]))
                 #else:
-                scaling = np.array(self_pcd_size) / obj_pcd_size
+                #scaling = np.array(self._desired_size) / obj_pcd_size
 
-                for _ in tqdm([0], desc="Scaling asset..."):
-                    obj = scale_ai2thor_object(obj, scaling)
+                #for _ in tqdm([0], desc="Scaling asset..."):
+                #    #scaling = add_scaling_to_transmat(transformation_mat_rots, scaling)
+                #    #obj = transform_ai2thor_object(obj, transformation_mat_rots)
+                #    draw_registration_result(pcd_or_mesh_to_np(obj), pcd_or_mesh_to_np(self._cg_pcd_points))
+                #    obj = transform_ai2thor_object(obj, add_scaling_to_transmat(np.eye(4),scaling))
+                #    draw_registration_result(pcd_or_mesh_to_np(obj), pcd_or_mesh_to_np(self._cg_pcd_points))
+
+
+                #draw_registration_result(pcd_or_mesh_to_np(obj), pcd_or_mesh_to_np(self._cg_pcd_points))
 
                 #scaling = [1,scaling[1],1]
                 #from hippo.utils.spatial_utils import get_ai2thor_object_bbox
@@ -290,7 +302,7 @@ class HippoObject(_Hippo):
                     new_obj[toplevel_k] = toplevel_v
                 print("Obj name", self.object_name)
                 #print(euler_rots[1])
-                new_obj["yRotOffset"] = euler_rots[1]
+                new_obj["yRotOffset"] = 0 #euler_rots[1]
 
                 save_path = f"{target_directory_for_this_self}/{self._concrete_assetIds[0]}.pkl.gz"
                 from ai2thor.util.runtime_assets import save_thor_asset_file
@@ -342,3 +354,19 @@ def figure_out_scaling(self_pcd, asset, euler_rot_to_align_asset_to_self):
     # else:
     scaling = np.array(self_pcd_size) / obj_pcd_size
     return scaling
+
+
+def scale_rescale_cycle(ai2thor_obj, target_pcd, iters=3):
+    from hippo.utils.spatial_utils import get_ai2thor_object_bbox, pcd_bbox_size
+    from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, swap_yz, transform_point_cloud, rotate_point_cloud_y_axis, draw_registration_result, add_scaling_to_transmat
+
+    FIXED_TARGET_SIZE = np.array(dict2xyztuple(pcd_bbox_size(target_pcd)))
+
+
+    for _ in tqdm(list(range(iters))):
+        obj_pcd_size = np.array(dict2xyztuple(pcd_bbox_size(pcd_or_mesh_to_np(ai2thor_obj))))
+
+        scaling = FIXED_TARGET_SIZE / obj_pcd_size
+        print(np.linalg.norm(scaling))
+        ai2thor_obj = transform_ai2thor_object(ai2thor_obj, add_scaling_to_transmat(np.eye(4), scaling))
+    return ai2thor_obj

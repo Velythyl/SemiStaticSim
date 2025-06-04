@@ -1,3 +1,4 @@
+import copy
 import functools
 import math
 from typing import Dict
@@ -6,6 +7,45 @@ import jax.numpy as jnp
 import numpy as np
 import open3d as o3d
 import jax
+from open3d.cuda.pybind.pipelines.registration import RegistrationResult
+
+
+
+
+def add_yrot_to_trans_mat(transmat, theta):
+    def y_trans_mat_from_theta(theta):
+        c = np.cos(theta)
+        s = np.sin(theta)
+        return np.array([
+            [c, 0, s, 0],
+            [0, 1, 0, 0],
+            [-s, 0, c, 0],
+            [0, 0, 0, 1]
+        ])
+    return transmat @ y_trans_mat_from_theta(theta)
+
+def add_scaling_to_transmat(transmat, sx, sy=None, sz=None):
+    def mk_scaling(sx, sy, sz):
+        return np.array([
+            [sx, 0, 0, 0],
+            [0, sy, 0, 0],
+            [0, 0, sz, 0],
+            [0, 0, 0, 1]
+        ])
+    if isinstance(sx, (int, float)):
+        assert sy is not None and sz is not None
+        scaling = mk_scaling(sx, sy, sz)
+
+    elif len(sx.shape) == 1:
+        assert sz is None and sy is None
+        sx, sy, sz = sx
+        scaling = mk_scaling(sx, sy, sz)
+    else:
+        scaling = sx
+
+    return transmat @ scaling
+
+
 
 
 def rotate_point_cloud_y_axis(points, theta):
@@ -162,7 +202,7 @@ def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=1000):
 def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array):
     trials = jnp.linspace(0,  2*np.pi, 100)
 
-    BATCH_SIZE = 10
+    BATCH_SIZE = 100
     BATCH_SIZE = min(BATCH_SIZE, len(trials))
 
     scores = []
@@ -266,6 +306,8 @@ def fine_tune(pcd_to_align, target_pcd, initial_zrot):
     return fine_tuned.transformation
 
 
+
+
 def transform_point_cloud(points, transformation_matrix):
     """
     Apply a 4x4 transformation matrix to a 3D point cloud.
@@ -294,7 +336,371 @@ def transform_point_cloud(points, transformation_matrix):
     return ret
 
 
-def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False):
+import numpy as np
+import math
+
+
+def keep_only_y_rotation(matrix_4x4):
+    """
+    Takes a 4x4 transformation matrix and returns a new matrix with only the Y-axis rotation component.
+    All other rotations (X and Z) are removed, while translation and scale are preserved.
+
+    Args:
+        matrix_4x4: 4x4 numpy array representing a transformation matrix
+
+    Returns:
+        4x4 numpy array with only Y-axis rotation
+    """
+    # Make sure we're working with a numpy array
+    m = np.array(matrix_4x4, dtype=np.float64, copy=True)
+
+    # Extract the 3x3 rotation part of the matrix
+    rotation = m[:3, :3]
+
+    # Calculate the Y rotation angle from the rotation matrix
+    # Using arcsin of the -m[2][0] (sin(theta)) but with safety checks
+    y_angle = math.atan2(rotation[2, 0], rotation[0, 0])
+
+    # Rebuild a rotation matrix with only the Y rotation
+    cy = math.cos(y_angle)
+    sy = math.sin(y_angle)
+
+    new_rotation = np.array([
+        [cy, 0, sy],
+        [0, 1, 0],
+        [-sy, 0, cy]
+    ])
+
+    # Create the new 4x4 matrix
+    result = np.identity(4)
+    result[:3, :3] = new_rotation
+
+    # Preserve the translation components
+    result[:3, 3] = m[:3, 3]
+
+    # Preserve the bottom row (typically [0, 0, 0, 1] for affine transforms)
+    result[3, :] = m[3, :]
+
+    return result
+
+def np_to_pcd(nppcd, source_OR_target=None):
+    if isinstance(nppcd, o3d.geometry.PointCloud):
+        return nppcd
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(nppcd)
+
+    if source_OR_target is not None:
+        if source_OR_target is True:
+            pcd.paint_uniform_color([1, 0.706, 0])
+        elif source_OR_target is False:
+            pcd.paint_uniform_color([0, 0.651, 0.929])
+
+    return pcd
+
+def draw_registration_result(source, target, transformation=np.identity(4)):
+    if not isinstance(transformation, np.ndarray):
+        try:
+            transformation = transformation.transformation
+        except:
+            pass
+
+    source = copy.deepcopy(source)
+    target = copy.deepcopy(target)
+    if not isinstance(source, o3d.geometry.PointCloud):
+        source = np_to_pcd(np.array(source), source_OR_target=True)
+    if not isinstance(target, o3d.geometry.PointCloud):
+        target = np_to_pcd(np.array(target), source_OR_target=False)
+
+    source = source.paint_uniform_color([1, 0, 0])
+    target = target.paint_uniform_color([0, 0, 1])
+
+    source.transform(transformation)
+    o3d.visualization.draw_geometries([source, target])#,
+                                      #zoom=0.4559,
+                                      #front=[0.6452, -0.3036, -0.7011],
+                                      #lookat=[1.9892, 2.0208, 1.8945],
+                                      #up=[-0.2779, -0.9482, 0.1556])
+
+def execute_global_registration(pcd_to_align, pcd_to_match, voxel_size=0.05, init_yrot=False):
+    def preprocess_point_cloud(pcd, voxel_size):
+        print(":: Downsample with a voxel size %.3f." % voxel_size)
+        pcd_down = pcd.voxel_down_sample(voxel_size)
+
+        radius_normal = voxel_size * 2
+        print(":: Estimate normal with search radius %.3f." % radius_normal)
+        pcd_down.estimate_normals(
+            o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
+
+        radius_feature = voxel_size * 5
+        print(":: Compute FPFH feature with search radius %.3f." % radius_feature)
+        pcd_fpfh = o3d.pipelines.registration.compute_fpfh_feature(
+            pcd_down,
+            o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+        return pcd_down, pcd_fpfh
+
+
+
+    def prepare_dataset(pcd_to_align, pcd_to_match, voxel_size):
+        print(":: Load two point clouds and disturb initial pose.")
+        #draw_registration_result(pcd_to_align, pcd_to_match)
+
+        source_down, source_fpfh = preprocess_point_cloud(pcd_to_align, voxel_size)
+        target_down, target_fpfh = preprocess_point_cloud(pcd_to_match, voxel_size)
+        return pcd_to_align, pcd_to_match, source_down, target_down, source_fpfh, target_fpfh
+
+
+
+    def slow_global_registration(source_down, target_down, source_fpfh,
+                                target_fpfh, voxel_size):
+        distance_threshold = voxel_size * 1.5
+        print(":: RANSAC registration on downsampled point clouds.")
+        print("   Since the downsampling voxel size is %.3f," % voxel_size)
+        print("   we use a liberal distance threshold %.3f." % distance_threshold)
+        result = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
+            source_down, target_down, source_fpfh, target_fpfh, True,
+            distance_threshold,
+            o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
+            3, [
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(
+                    0.9),
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(
+                    distance_threshold)
+            ], o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 0.999))
+        return result
+
+    def fast_global_registration(source_down, target_down, source_fpfh,
+                                     target_fpfh, voxel_size):
+        distance_threshold = voxel_size * 0.5
+        print(":: Apply fast global registration with distance threshold %.3f" \
+                % distance_threshold)
+        result = o3d.pipelines.registration.registration_fgr_based_on_feature_matching(
+            source_down, target_down, source_fpfh, target_fpfh,
+            o3d.pipelines.registration.FastGlobalRegistrationOption(
+                maximum_correspondence_distance=distance_threshold))
+        return result
+
+
+    pcd_to_align = np_to_pcd(pcd_to_align)
+    pcd_to_match = np_to_pcd(pcd_to_match)
+
+    distance_threshold = voxel_size * 0.5
+    print(":: Apply fast global registration with distance threshold %.3f" \
+            % distance_threshold)
+
+    if init_yrot:
+        pcd_to_align = np_to_pcd(rotate_point_cloud_y_axis(pcd_or_mesh_to_np(pcd_to_align), init_yrot))
+
+    _, _, source_down, target_down, source_fpfh, target_fpfh = prepare_dataset(pcd_to_align, pcd_to_match, voxel_size)
+
+    result = slow_global_registration(source_down, target_down, source_fpfh, target_fpfh, voxel_size)
+
+    draw_registration_result(pcd_to_align, pcd_to_match, result)
+    return np.array(result.transformation)
+
+from sklearn.neighbors import KDTree
+
+def extract_salient_features(pcd, k_neighbors=30, angle_threshold=np.pi / 4,
+                             center_radius_ratio=0.1, include_extrema=True):
+    """
+    Extract salient features (edges/boundaries + extrema + center points) from a point cloud.
+
+    Args:
+        pcd: Open3D point cloud
+        k_neighbors: Number of neighbors to consider for normal estimation
+        angle_threshold: Angle threshold (in radians) to consider a point as edge
+        center_radius_ratio: Ratio of bounding box diagonal to use as center region radius
+        include_extrema: Whether to include min/max points in each dimension
+
+    Returns:
+        Open3D point cloud containing only salient features
+    """
+    # Convert to numpy array
+    points = np.asarray(pcd.points)
+
+    # Estimate normals if not already present
+    if not pcd.has_normals():
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(k_neighbors))
+    normals = np.asarray(pcd.normals)
+
+    # Use KDTree for efficient neighbor searches
+    tree = KDTree(points)
+
+    # For each point, find its neighbors and compute normal variation
+    edge_indices = set()
+    for i in range(len(points)):
+        # Get k nearest neighbors (including the point itself)
+        _, indices = tree.query(points[i].reshape(1, -1), k=k_neighbors)
+        indices = indices[0]  # Remove extra dimension
+
+        # Compute angles between current normal and neighbor normals
+        angles = np.arccos(np.clip(np.dot(normals[indices], normals[i]), -1.0, 1.0))
+
+        # If maximum angle exceeds threshold, consider this point salient
+        if np.max(angles) > angle_threshold:
+            edge_indices.add(i)
+
+    # Add extrema points (min and max in each dimension)
+    extrema_indices = set()
+    if include_extrema:
+        for dim in range(3):
+            min_idx = np.argmin(points[:, dim])
+            max_idx = np.argmax(points[:, dim])
+            extrema_indices.add(min_idx)
+            extrema_indices.add(max_idx)
+
+    # Add points near the center
+    center_indices = set()
+    if center_radius_ratio > 0:
+        # Compute bounding box and its diagonal
+        min_pt = np.min(points, axis=0)
+        max_pt = np.max(points, axis=0)
+        center = (min_pt + max_pt) / 2
+        radius = center_radius_ratio * np.linalg.norm(max_pt - min_pt)
+
+        # Find points within radius of center
+        center_indices = set(tree.query_radius(center.reshape(1, -1), radius)[0])
+
+    # Combine all indices
+    all_salient_indices = list(edge_indices.union(extrema_indices).union(center_indices))
+
+    # Extract salient points
+    salient_pcd = pcd.select_by_index(all_salient_indices)
+
+    return salient_pcd
+
+
+import numpy as np
+
+def rescale_point_cloud(source_pts, target_pts):
+
+    # Method 2: Bounding box diagonal
+    source_extent = np.linalg.norm(np.ptp(source_pts, axis=0))
+    target_extent = np.linalg.norm(np.ptp(target_pts, axis=0))
+
+    scale_factor = target_extent / source_extent
+    rescaled_source = source_pts * scale_factor
+    return rescaled_source
+
+
+import open3d as o3d
+import numpy as np
+
+import open3d as o3d
+import numpy as np
+
+
+def curvature_based_downsample(pcd, k_neighbors=30, curvature_threshold=0.1):
+    # Estimate normals
+    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(k_neighbors))
+
+    # Build KDTree for nearest neighbor search
+    kdtree = o3d.geometry.KDTreeFlann(pcd)
+
+    curvatures = []
+    points = np.asarray(pcd.points)
+    normals = np.asarray(pcd.normals)
+
+    for i in range(len(points)):
+        # Find k-nearest neighbors
+        [k, idx, _] = kdtree.search_knn_vector_3d(pcd.points[i], k_neighbors)
+
+        # Compute variance of normals as curvature proxy
+        neighbor_normals = normals[idx]
+        normal_variance = np.var(neighbor_normals, axis=0)
+        curvature = np.linalg.norm(normal_variance)
+        curvatures.append(curvature)
+
+    curvatures = np.array(curvatures)
+
+    # Select points with high curvature
+    high_curvature_idx = np.where(curvatures > curvature_threshold)[0]
+    return pcd.select_by_index(high_curvature_idx)
+
+
+def edge_preserving_downsample(pcd, k_neighbors=30, angle_threshold=0.5):
+    # Estimate normals
+    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(k_neighbors))
+
+    # Build KDTree
+    kdtree = o3d.geometry.KDTreeFlann(pcd)
+
+    edge_points = []
+    points = np.asarray(pcd.points)
+    normals = np.asarray(pcd.normals)
+
+    for i in range(len(points)):
+        # Find k-nearest neighbors
+        [k, idx, _] = kdtree.search_knn_vector_3d(points[i], k_neighbors)
+
+        # Check angle between normals
+        for j in idx:
+            if i == j:
+                continue
+            angle = np.dot(normals[i], normals[j]) / (np.linalg.norm(normals[i]) * np.linalg.norm(normals[j]))
+            if np.arccos(np.clip(angle, -1, 1)) > angle_threshold:
+                edge_points.append(i)
+                break
+
+    return pcd.select_by_index(list(set(edge_points)))
+
+
+def feature_preserving_poisson_disk(pcd, min_density=0.5, k_neighbors=10):
+    # Estimate normals and curvature
+    pcd.estimate_normals()
+    kdtree = o3d.geometry.KDTreeFlann(pcd)
+
+    curvatures = []
+    points = np.asarray(pcd.points)
+    normals = np.asarray(pcd.normals)
+
+    for i in range(len(points)):
+        [k, idx, _] = kdtree.search_knn_vector_3d(points[i], k_neighbors)
+        neighbor_normals = normals[idx]
+        normal_variance = np.var(neighbor_normals, axis=0)
+        curvature = np.linalg.norm(normal_variance)
+        curvatures.append(curvature)
+
+    curvatures = np.array(curvatures)
+    curvatures = (curvatures - curvatures.min()) / (curvatures.max() - curvatures.min())
+
+    # Perform importance sampling
+    probabilities = min_density + (1 - min_density) * curvatures
+    random_values = np.random.random(len(points))
+    selected_indices = np.where(random_values < probabilities)[0]
+
+    return pcd.select_by_index(selected_indices)
+
+def voxel_downsample(pcd, divisions=20):
+    pcd = pcd_or_mesh_to_np(pcd)
+    extent = np.linalg.norm(np.ptp(pcd, axis=0))
+
+    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(np_to_pcd(pcd),
+                                                                voxel_size=extent / divisions)
+    point_cloud_np = np.asarray(
+        [voxel_grid.origin + pt.grid_index * voxel_grid.voxel_size for pt in voxel_grid.get_voxels()])
+    return point_cloud_np
+
+
+def remove_translation_from_transmat(matrix):
+    """
+    Remove translation components from a 4x4 transformation matrix.
+
+    Args:
+        matrix (np.ndarray): 4x4 transformation matrix
+
+    Returns:
+        np.ndarray: Matrix with translation removed
+    """
+    # Make a copy to avoid modifying the original
+    result = matrix.copy()
+
+    # Set translation components to zero (last column, top 3 elements)
+    result[:3, 3] = 0
+
+    return result
+
+def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=10, do_global_tune=False):
     if target_pcd is None:
         target_pcd = pcd_to_align
         assert spoof_rad is not None
@@ -303,38 +709,72 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False):
 
     pcd_to_align = pcd_or_mesh_to_np(pcd_to_align)
     target_pcd = pcd_or_mesh_to_np(target_pcd)
+
+
+
+
     DISABLE_VIS = True
-    vis(target_pcd, disable=DISABLE_VIS)
-    vis(pcd_to_align, disable=DISABLE_VIS)
+    if not DISABLE_VIS:
+        print("Original PCDs")
+        draw_registration_result(pcd_to_align, target_pcd)
+
+    if rough_scaling:
+        pcd_to_align = rescale_point_cloud(pcd_to_align, target_pcd)
+        #pcd_to_align = copy.deepcopy(pcd_to_align) * rough_scaling
+
+        if not DISABLE_VIS:
+            print("Rescaled source PCD")
+            draw_registration_result(pcd_to_align, target_pcd)
+
+    if downscale_using_voxel_divisions:
+        pcd_to_align = voxel_downsample(pcd_to_align, divisions=downscale_using_voxel_divisions) #np.array(pcd_to_align.points)
+        target_pcd = voxel_downsample(target_pcd, divisions=downscale_using_voxel_divisions) #np.array(target_pcd.points)
+
+        pcd_to_align = pcd_or_mesh_to_np(np_to_pcd(pcd_to_align))   # quick recenter
+        target_pcd = pcd_or_mesh_to_np(np_to_pcd(target_pcd))
+
+        if not DISABLE_VIS:
+            print("Downscaled to edges")
+            draw_registration_result(pcd_to_align, target_pcd)
 
     found_rot = global_align(pcd_to_align, target_pcd)
-    vis(rotate_point_cloud_y_axis(pcd_to_align, found_rot), disable=DISABLE_VIS)
+    if not DISABLE_VIS:
+        print("Gross rotation")
+        draw_registration_result(rotate_point_cloud_y_axis(pcd_to_align, found_rot), target_pcd)
+
+    if not do_global_tune and not do_fine_tune:
+        return np.array([0, math.degrees(found_rot), 0]), euler_to_matrix_4x4(0, found_rot, 0, degrees=False)
+
+    if do_global_tune:
+        transmat = execute_global_registration(pcd_to_align, target_pcd, voxel_size=0.05, init_yrot=found_rot)
+        transmat = add_yrot_to_trans_mat(transmat, found_rot)
+        transmat = remove_translation_from_transmat(transmat)
+
+        if not DISABLE_VIS:
+            print("Global registration")
+            #transform_point_cloud(pcd_to_align, transmat)
+            draw_registration_result(transform_point_cloud(pcd_to_align, transmat), target_pcd)
+
+        return transmat_to_euler(transmat, degrees=True), transmat
 
     if do_fine_tune:
         #print(make_y_trans_init_matrix(found_rot))
 
         tuned_transform = fine_tune(pcd_to_align, target_pcd, found_rot)
 
+        #tuned_transform = keep_only_y_rotation(tuned_transform)
         #print(tuned_transform)
 
         vis(transform_point_cloud(pcd_to_align, tuned_transform), disable=DISABLE_VIS)
+
+        if not DISABLE_VIS:
+            print("Local registration")
+            #transform_point_cloud(pcd_to_align, transmat)
+            draw_registration_result(transform_point_cloud(pcd_to_align, tuned_transform), target_pcd)
+
         return transmat_to_euler(tuned_transform, degrees=True), tuned_transform
-    else:
-        transmat = euler_to_matrix_4x4(0,found_rot,0,degrees=False)
 
-        print("Pre round angle", math.degrees(found_rot))
-        PRECISION = 90 / 2 / 2 / 2
-        found_rot = round(math.degrees(found_rot) / PRECISION) * PRECISION
-        print("Rounded angle", found_rot)
-
-        if found_rot == 360:
-            found_rot = 0
-
-        from hippo.reconstruction.assetlookup.assetIsPlane import is_single_plane
-        #if is_single_plane(pcd_to_align)[0] and found_rot == 180:
-        #    found_rot = 0
-
-        return (0, found_rot, 0), transmat
+    raise AssertionError("Why did the function not return? lol")
 
 
 from scipy.spatial.transform import Rotation as Rscipy

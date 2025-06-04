@@ -214,6 +214,11 @@ def resolve_scene_id(floor_name):
     return scene
 
 def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False):
+    os.environ["JAX_PLATFORM_NAME"] = "cpu"
+    import jax
+    jax.config.update('jax_platform_name', "cpu")
+
+
     scene = resolve_scene_id(floor_no)
 
     assert sum(list(map(int, (just_controller, just_runtime_container, just_controller_no_setup)))) <= 1

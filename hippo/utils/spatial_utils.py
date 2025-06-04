@@ -155,6 +155,71 @@ def scale_ai2thor_object(obj, scale_factors):
     obj["colliders"] = new_colliders
     return obj
 
+
+import numpy as np
+
+def make_trans_mat_from_axisscale(scaling):
+    sx, sy, sz = scaling
+    # Create a scaling matrix
+    scale_matrix = np.array([
+        [sx, 0, 0, 0],
+        [0, sy, 0, 0],
+        [0, 0, sz, 0],
+        [0, 0, 0, 1]
+    ])
+    return scale_matrix
+
+
+def transform_ai2thor_object(obj, transformation_matrix):
+    """
+    Apply a 4x4 transformation matrix to an AI2-THOR object.
+
+    Args:
+        obj: The AI2-THOR object to transform
+        transformation_matrix: 4x4 numpy array representing the transformation
+                              (should include homogeneous coordinates)
+    Returns:
+        The transformed object
+    """
+    # Extract the 3x3 linear transformation part for normals
+    linear_transform = transformation_matrix[:3, :3]
+    normal_transform = np.linalg.inv(linear_transform).T  # Correct transform for normals
+
+    # Helper function to apply transformation to points
+    def transform_points(points):
+        # Convert to homogeneous coordinates
+        homogeneous = np.column_stack([points, np.ones(len(points))])
+        # Apply transformation
+        transformed = homogeneous @ transformation_matrix.T
+        # Convert back to 3D coordinates
+        return transformed[:, :3]
+
+    # Transform vertices
+    vertices = read_list_dictpoints(obj, "vertices")
+    obj = write_list_dictpoints(obj, "vertices", transform_points(vertices))
+
+    # Transform visibility points if they exist
+    if 'visibilityPoints' in obj:
+        vis_points = read_list_dictpoints(obj, "visibilityPoints")
+        obj = write_list_dictpoints(obj, "visibilityPoints", transform_points(vis_points))
+
+    # Transform normals (special handling)
+    if 'normals' in obj:
+        normals = read_list_dictpoints(obj, "normals")
+        normals = normals @ normal_transform.T
+        normals /= np.linalg.norm(normals, axis=1, keepdims=True)  # Normalize
+        obj = write_list_dictpoints(obj, "normals", normals)
+
+    # Transform colliders
+    new_colliders = []
+    for collider in obj["colliders"]:
+        vertices = read_list_dictpoints(collider, "vertices")
+        collider = write_list_dictpoints(collider, "vertices", transform_points(vertices))
+        new_colliders.append(collider)
+
+    obj["colliders"] = new_colliders
+    return obj
+
 def get_ai2thor_object_bbox(obj):
 
     vertices = read_list_dictpoints(obj, "vertices")
