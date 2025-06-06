@@ -2,5 +2,5 @@
 defaults:
   - meta: meta
   - scene: replica_room0
-  - assetlookup: trellis
+  - assetlookup: clip
   - skillprediction: none
