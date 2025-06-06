@@ -1,13 +1,10 @@
 import copy
 import functools
-import math
 from typing import Dict
 
 import jax.numpy as jnp
 import numpy as np
-import open3d as o3d
 import jax
-from open3d.cuda.pybind.pipelines.registration import RegistrationResult
 
 
 
