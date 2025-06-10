@@ -39,7 +39,7 @@ def main(cfg):
 
     DATASET_NAME = cfg.scene.id
     print(os.getcwd())
-    hipporoom, objects = get_hippos(f"./datasets/{DATASET_NAME}", pad=2)
+    hipporoom, objects = get_hippos(f"./datasets/{DATASET_NAME}", pad=0)
     set_api_key("../api_key")
 
     composer = SceneComposer.create(
