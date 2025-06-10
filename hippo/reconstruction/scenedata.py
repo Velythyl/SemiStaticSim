@@ -27,7 +27,7 @@ class _Hippo(SelfDataclass):
 @dataclass
 class HippoRoomPlan(_Hippo):
     id: str
-    floor_type: str = "grey tile"
+    floor_type: str = "white"
     wall_type: str = "light grey drywall, smooth"
     coords: List[Tuple[float,float]] =  ((0, 0), (0, 6), (7, 6), (7, 0))
 
