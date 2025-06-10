@@ -173,7 +173,7 @@ class SceneComposer(SelfDataclass):
                 todo_paths.append(path + "/scene.json")
 
         for path in todo_paths:
-            controller = get_hippo_controller(path, width=1024, height=1024)
+            controller = get_hippo_controller(path, width=2048, height=2048)
             top_image = get_top_down_frame(controller)
 
             savepath = "/".join(path.split("/")[:-1]) + "/topdown.png"
