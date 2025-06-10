@@ -35,27 +35,7 @@ def all_edges_white(img):
     return True
 
 
-def get_top_down_frame(scene, objaverse_asset_dir, width=1024, height=1024):
-    if isinstance(scene, dict):
-
-        controller = Controller(
-            commit_id=THOR_COMMIT_ID,
-            agentMode="default",
-            makeAgentsVisible=False,
-            visibilityDistance=1.5,
-            scene=scene,
-            width=width,
-            height=height,
-            fieldOfView=90,
-            action_hook_runner=ProceduralAssetHookRunner(
-                asset_directory=objaverse_asset_dir,
-                asset_symlink=True,
-                verbose=True,
-            ),
-        )
-    else:
-        controller = scene
-
+def get_top_down_frame(controller):
     # Setup the top-down camera
     event = controller.step(action="GetMapViewCameraProperties", raise_for_failure=True)
     pose = copy.deepcopy(event.metadata["actionReturn"])

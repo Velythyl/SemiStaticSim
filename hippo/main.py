@@ -56,3 +56,10 @@ def main(cfg):
 
 if __name__ == '__main__':
     main()
+
+
+"""
+
+PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
+
+"""
