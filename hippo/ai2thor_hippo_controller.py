@@ -65,7 +65,7 @@ def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASS
 
     controller = Controller(
         #commid_id=THOR_COMMIT_ID, #'1dfe13e4926bb2e0be475e28405e98514c4035dc', #commit_id=THOR_COMMIT_ID, #'1dfe13e4926bb2e0be475e28405e98514c4035dc', # THOR_COMMIT_ID,
-        #local_executable_path="../ai2thorbuilds/original/thor-Linux64-local/thor-Linux64-local",
+        local_executable_path=f"{_get_ai2thor_install_build_dir()}/thor-Linux64-local/thor-Linux64-local",
         local_build=True,
         agentMode="default",
         makeAgentsVisible=False,
