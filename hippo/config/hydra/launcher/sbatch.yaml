@@ -26,7 +26,8 @@ setup:
   - "export TMPFILE=$(mktemp)"
   - 'Xvfb -screen 0 180x180x24 -displayfd 3 3> "$TMPFILE" &'
   - "sleep 30"
-  - 'export DISPLAY=$(cat "$TMPFILE")'
+  - 'export DISPLAY=:$(cat "$TMPFILE")'
+  - "cat $DISPLAY"
   #- "sleep $((RANDOM % 100))"
 
 # module load cuda/12.1.1/cudnn
