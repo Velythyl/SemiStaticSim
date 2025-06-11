@@ -1,6 +1,7 @@
 import functools
 import hashlib
 import json
+import os.path
 import time
 from collections import deque
 from pathlib import Path
@@ -120,7 +121,10 @@ def LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=
     return a, response
 
 def set_api_key(openai_api_key):
-    openai.api_key = Path(openai_api_key + '.txt').read_text()
+    if os.path.exists(openai_api_key):
+        openai.api_key = Path(openai_api_key + '.txt').read_text()
+    else:
+        openai.api_key = openai_api_key
 
 def approx_num_tokens(llm, text):
     encoding = tiktoken.encoding_for_model(llm)

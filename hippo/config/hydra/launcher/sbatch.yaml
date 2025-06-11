@@ -15,7 +15,7 @@ setup:
   - "export WANDB_DIR=${hydra.sweep.dir}"
   - "export HYDRA_SWEEP_DIR=${hydra.sweep.dir}"
   - "export BREAK=False"
-  - 'export WANDB_API_KEY="afe8f40c99e87c32058996ac31bf96e400ea7cc6"'
+  # WANDB ?
   - 'export TQDM_DISABLE=1'
   - "module load python/3.10"
   # - "module load cuda/12.4.1/cudnn/9.3"

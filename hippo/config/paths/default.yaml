@@ -1,0 +1,7 @@
+scene_id: "sacha_kitchen"
+
+conceptgraphs_dir: "./datasets"
+scene_dir: "${paths.conceptgraphs_dir}/${paths.scene_id}"
+
+out_dir: "./sampled_scenes"
+out_scene_dir: "${paths.out_dir}/${paths.scene_id}/generated_on_${now:%Y-%m-%d-%H-%M-%S}"

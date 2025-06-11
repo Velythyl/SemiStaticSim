@@ -1,6 +1,7 @@
 
 defaults:
   - meta: meta
-  - scene: sacha_kitchen
   - assetlookup: clip
   - skillprediction: none
+  - paths: default
+  - secrets: secrets

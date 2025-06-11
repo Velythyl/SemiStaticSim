@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 
 from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
@@ -23,12 +25,13 @@ import hydra
 
 HIPPO = None
 
+from omegaconf import OmegaConf
+OmegaConf.register_new_resolver(
+    "load_file", lambda filename: Path(filename).read_text()
+)
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
-    #os.environ["JAX_PLATFORM_NAME"] = "cpu"
-    #import jax
-    #jax.config.update('jax_platform_name', "cpu")
 
     global HIPPO
     if HIPPO is None:
@@ -37,15 +40,13 @@ def main(cfg):
         elif cfg.assetlookup.method == "TRELLIS":
             HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 
-    DATASET_NAME = cfg.scene.id
-    print(os.getcwd())
-    hipporoom, objects = get_hippos(f"./datasets/{DATASET_NAME}", pad=2)
-    set_api_key("../api_key")
+    hipporoom, objects = get_hippos(cfg.paths.scene_dir, pad=2)
+    set_api_key(cfg.secrets.openai_key)
 
     composer = SceneComposer.create(
         cfg,
         asset_lookup=HIPPO,
-        target_dir=get_target_dir(DATASET_NAME),
+        target_dir=cfg.paths.out_scene_dir,
         objectplans=objects,
         roomplan=hipporoom
     )
