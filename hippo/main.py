@@ -43,6 +43,9 @@ def main(cfg):
     hipporoom, objects = get_hippos(cfg.paths.scene_dir, pad=2)
     set_api_key(cfg.secrets.openai_key)
 
+    with open(f"{cfg.paths.out_scene_dir}/hydra_config.yaml", "w") as f:
+        OmegaConf.save(cfg, f)
+
     composer = SceneComposer.create(
         cfg,
         asset_lookup=HIPPO,
