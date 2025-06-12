@@ -59,7 +59,19 @@ class SceneComposer(SelfDataclass):
 
     @property
     def done_paths(self):
-        return list(map(lambda x: f"{self.target_dir}/{x}", os.listdir(self.target_dir)))
+        all_paths_in_target_dir = list(map(lambda x: f"{self.target_dir}/{x}", os.listdir(self.target_dir)))
+
+        ret = []
+        for p in all_paths_in_target_dir:
+            works = True
+            for n in ["scene.json", "cfg.yaml", "concrete_assets"]:
+                if not os.path.exists(f"{p}/{n}"):
+                    works = False
+                    break
+            if works:
+                ret.append(p)
+
+        return ret
 
     @property
     def asset_dir(self):
@@ -146,7 +158,7 @@ class SceneComposer(SelfDataclass):
             if len(obj) > 1:
                 obj = obj[0]
 
-            obj.concretize(concrete_asset_dir)
+            obj.concretize(self.cfg, concrete_asset_dir)
 
             # Ensure the 'objects' list exists in the scene
             if 'objects' not in scene:

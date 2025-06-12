@@ -5,3 +5,4 @@ defaults:
   - skillprediction: none
   - paths: default
   - secrets: secrets
+  - assetfitting: rot_and_aspect_fit

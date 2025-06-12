@@ -9,15 +9,6 @@ from hippo.reconstruction.composer import SceneComposer
 from llmqueries.llm import set_api_key
 
 
-def get_target_dir(dataset_name, target_dir="./sampled_scenes"):
-    target_dir = os.path.join(target_dir, dataset_name)
-    os.makedirs(target_dir, exist_ok=True)
-    runid = len(os.listdir(target_dir))
-
-    TARGET_DIR = f"{target_dir}/{runid}"
-    os.makedirs(TARGET_DIR, exist_ok=True)
-    return TARGET_DIR
-
 import os
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 
@@ -26,9 +17,6 @@ import hydra
 HIPPO = None
 
 from omegaconf import OmegaConf
-OmegaConf.register_new_resolver(
-    "load_file", lambda filename: Path(filename).read_text()
-)
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
@@ -43,9 +31,7 @@ def main(cfg):
     hipporoom, objects = get_hippos(cfg.paths.scene_dir, pad=2)
     set_api_key(cfg.secrets.openai_key)
 
-    with open(f"{cfg.paths.out_scene_dir}/hydra_config.yaml", "w") as f:
-        OmegaConf.save(cfg, f)
-
+    #os.makedirs(cfg.paths.out_scene_dir, exist_ok=True)
     composer = SceneComposer.create(
         cfg,
         asset_lookup=HIPPO,
