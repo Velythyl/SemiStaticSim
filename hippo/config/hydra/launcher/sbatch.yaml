@@ -22,7 +22,7 @@ setup:
   - "module load libffi"
   - "ulimit -n 16384"
   - "source $HOME/Holodeck/venv/bin/activate"
-  - "export PYTHONPATH=$HOME/Holodeck:$PYTHONPATH"
+  - "export PYTHONPATH=$HOME/Holodeck:$HOME/Holodeck/hippo:$PYTHONPATH"
   - "export TMPFILE=$(mktemp)"
   - 'Xvfb -screen 0 180x180x24 -displayfd 3 3> "$TMPFILE" &'
   - "sleep 30"
