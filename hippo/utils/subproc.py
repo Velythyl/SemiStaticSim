@@ -7,7 +7,7 @@ import time
 from contextlib import contextmanager
 from io import StringIO
 import queue
-from typing import List, Union
+from typing import List, Union, Any
 
 
 @dataclasses.dataclass
@@ -17,6 +17,7 @@ class SubprocessResult:
     stdout: str
     stderr: str
     stdout_stderr: str
+    process: Any = None
 
     @property
     def success(self):
@@ -27,7 +28,7 @@ class SubprocessResult:
         return not self.success
 
 
-def run_subproc(cmd, callback=None, shell=False, timeout=None, timeout_cleanup_func=None, raise_timeout_exception=False):
+def run_subproc(cmd, callback=None, shell=False, timeout=None, timeout_cleanup_func=None, raise_timeout_exception=False, immediately_return=False):
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -106,16 +107,31 @@ def run_subproc(cmd, callback=None, shell=False, timeout=None, timeout_cleanup_f
 
     stdout_event = threading.Event()
     stdout_thread = threading.Thread(target=reader, args=(process.stdout, stdout_buf, 'stdout', stdout_event))
+    stdout_thread.daemon = True
     stderr_event = threading.Event()
     stderr_thread = threading.Thread(target=reader, args=(process.stderr, stderr_buf, 'stderr', stderr_event))
+    stdout_thread.daemon = True
     printer_thread = threading.Thread(target=printer)
+    printer_thread.daemon = True
 
     stdout_thread.start()
     stderr_thread.start()
     printer_thread.start()
     if callback is not None:
+        assert immediately_return is False
         callback_thread = threading.Thread(target=callbacker)
+        callback_thread.daemon = True
         callback_thread.start()
+
+    if immediately_return:
+        return SubprocessResult(
+            cmd=cmd,
+            returncode=None,
+            stdout=stdout_buf,
+            stderr=stderr_buf,
+            stdout_stderr=combined_buf,
+            process=process
+        )
 
     TIMED_OUT = False
     TIMEOUT_EXCEPTION = None

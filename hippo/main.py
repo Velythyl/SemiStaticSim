@@ -1,4 +1,5 @@
 from pathlib import Path
+from time import sleep
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 
@@ -28,8 +29,9 @@ def main(cfg):
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
 
-            run_subproc("cd $HOME/TRELLIS && source venv2/bin/activate && huggingface-cli login --token ${secrets.hf_token} && python3 flaskserver.py")
-
+            trellis_proc = run_subproc("cd $HOME/TRELLIS && source venv2/bin/activate && huggingface-cli login --token ${secrets.hf_token} && python3 flaskserver.py && echo READYTORUN", shell=True, immediately_return=False)
+            while "READYTORUN" not in trellis_proc.stdout_stderr.getvalue():
+                sleep(10)
             
             HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 
