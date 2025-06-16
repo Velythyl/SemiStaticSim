@@ -52,4 +52,11 @@ if __name__ == '__main__':
 
 PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
 
+
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=30  hydra.launcher.gres=gpu:0 hydra.launcher.cpu
+s_per_task=6 hydra.launcher.mem_gb=32 hydra.launcher.array_parallelism=60 hydra.launcher.partition=long-cpu  secrets=secrets_cluster  paths.conceptgraphs_dir="./datasets/concept-nodes" assetfitting=rot_and_axisscale,rot_and_aspect_fill,rot_and_aspect_fit  paths.scene_id='replica_office2_cg-detector_2025-06-10-20-34-08.445148,replica_room0_cg-detector_2025-06-10-20-16-50.243828,replica_office0_cg-detector_2025-06-10-20-25-14.795112,replica
+_office3_cg-detector_2025-06-10-20-40-27.070705,replica_room1_cg-detector_2025-06-10-20-04-54.511655,replica_office1_cg-detector_2025-06-10-20-29-28.683537,replica_office4_cg-detector_2025-06-10-20-45-18.828598,replica_ro
+om2_cg-detector_2025-06-10-20-21-16.981182'  paths.out_dir="./sampled_scenes/firstrun"
+
 """

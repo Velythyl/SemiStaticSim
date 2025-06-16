@@ -28,7 +28,7 @@ setup:
   - "sleep 30"
   - 'export DISPLAY=:$(cat "$TMPFILE")'
   - "cat $DISPLAY"
-  #- "sleep $((RANDOM % 100))"
+  - "sleep $((RANDOM % 30))"
 
 # module load cuda/12.1.1/cudnn
 # module load python/3.10
