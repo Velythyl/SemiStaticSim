@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 home = Path.home()
 
-TRELLIS_GEN_DIR = f"{home}/TRELLIS"
+TRELLIS_GEN_DIR = f"{home}/.TRELLIS"
 
 def path_in_cache(path):
     path = path.replace(".", "/")

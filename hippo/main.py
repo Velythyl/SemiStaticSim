@@ -39,9 +39,12 @@ def main(cfg):
         objectplans=objects,
         roomplan=hipporoom
     )
+    print("Writing down compositions...")
     composer.write_compositions_in_order(1)
 
+    print("Taking topdown view...")
     composer.take_topdown()
+    print("Done with scene composition and topdown view.")
 
 
 if __name__ == '__main__':
