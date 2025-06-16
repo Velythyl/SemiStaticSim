@@ -6,6 +6,7 @@ from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
 from hippo.reconstruction.assetlookup.CLIPLookup import CLIPLookup
 from hippo.reconstruction.assetlookup.TRELLISLookup import TRELLISLookup
 from hippo.reconstruction.composer import SceneComposer
+from hippo.utils.subproc import run_subproc
 from llmqueries.llm import set_api_key
 
 
@@ -26,6 +27,10 @@ def main(cfg):
         if cfg.assetlookup.method == "CLIP":
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
+
+            run_subproc("cd $HOME/TRELLIS && source venv2/bin/activate && huggingface-cli login --token ${secrets.hf_token} && python3 flaskserver.py")
+
+            
             HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 
     hipporoom, objects = get_hippos(cfg.paths.scene_dir, pad=2)
