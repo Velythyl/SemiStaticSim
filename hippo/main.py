@@ -28,10 +28,16 @@ def main(cfg):
         if cfg.assetlookup.method == "CLIP":
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
+            
 
-            trellis_proc = run_subproc("cd $HOME/TRELLIS && source venv2/bin/activate && huggingface-cli login --token ${secrets.hf_token} && python3 flaskserver.py && echo READYTORUN", shell=True, immediately_return=False)
-            while "READYTORUN" not in trellis_proc.stdout_stderr.getvalue():
+            trellis_proc = run_subproc(f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=1;HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py", shell=True, immediately_return=False)
+            TOTAL_WAIT_TIME = 0
+            while "Running on all addresses (0.0.0.0)" not in trellis_proc.stdout_stderr.getvalue():
+                print("Waiting for TRELLIS server to start...")
                 sleep(10)
+                TOTAL_WAIT_TIME += 10
+                if TOTAL_WAIT_TIME > 600:
+                    raise RuntimeError("TRELLIS server did not start in time! Check the logs for errors.")
             
             HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 

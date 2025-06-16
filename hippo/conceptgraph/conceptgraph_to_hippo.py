@@ -17,7 +17,10 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
 
     pcds = []
     pcd_colors = []
-    for obj in cg_objects:
+    for i, obj in enumerate(cg_objects):
+        #if i in [3, 13, 14, 25, 26]:
+        #    continue
+
         object_name = obj["label"].lower().replace(":","").replace(",", " ").strip()
 
         pcd = np.asarray(obj["pcd"].points)[:,[0,2,1]]
