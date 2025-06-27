@@ -1,8 +1,8 @@
-scene_id: "replica_office2_cg-detector_2025-06-10-20-34-08.445148"
+scene_id: "sacha_kitchen"
 
-conceptgraphs_dir: "./datasets/fullreplica"
+conceptgraphs_dir: "./datasets"
 scene_dir: "${paths.conceptgraphs_dir}/${paths.scene_id}"
 
-out_subdir: "fullreplica"
+out_subdir: "sacha_kitchen"
 out_dir: "./sampled_scenes"
 out_scene_dir: "${paths.out_dir}/${paths.out_subdir}/${paths.scene_id}/generated_on_${now:%Y-%m-%d-%H-%M-%S}"

@@ -24,6 +24,7 @@ from omegaconf import OmegaConf
 def main(cfg):
 
     global HIPPO
+    trellis_proc = None
     if HIPPO is None:
         if cfg.assetlookup.method == "CLIP":
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
@@ -45,7 +46,7 @@ def main(cfg):
             HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 
     set_api_key(cfg.secrets.openai_key)
-    hipporoom, objects = get_hippos(cfg.paths.scene_dir, pad=2)
+    hipporoom, objects = get_hippos(Path(cfg.paths.scene_dir).resolve(), pad=2)
 
     #os.makedirs(cfg.paths.out_scene_dir, exist_ok=True)
     composer = SceneComposer.create(
@@ -62,6 +63,13 @@ def main(cfg):
     composer.take_topdown()
     print("Done with scene composition and topdown view.")
 
+    if trellis_proc is not None:
+        print("Killing TRELLIS server...")
+        trellis_proc.process.kill()
+        print("TRELLIS server killed.")
+
+    print("Bye, have a nice day!")
+    os._exit(0)
 
 if __name__ == '__main__':
     main()

@@ -27,10 +27,18 @@ def convert(input_folder, target_uuid, target_folder):
             print("Conversion timed out! Make sure the timeout was long enough!")
             run_subproc(f'pkill singularity', shell=True) # fixme a bit messy, should get the PID instead
 
-        retcode = run_subproc(
+        import tempfile
+        tmpdir1 = tempfile.mkdtemp()
+        tmpdir2 = tempfile.mkdtemp()
+        tmpdir3 = tempfile.mkdtemp()
+
+        retcode = run_subproc( # bro come on...
             f'singularity run \
                   --bind {input_folder}:/input \
                   --bind {target_folder}:/output \
+                  --bind {tmpdir1}:/objathor/objathor/asset_conversion/colliders/linux \
+                  --bind {tmpdir2}:/tmp \
+                  --bind {tmpdir3}:/objathor/objathor/asset_conversion/colliders/__MACOSX \
                   --env UID={user_uid} \
                   {singularity_path} \
                   --uids={target_uuid} \
