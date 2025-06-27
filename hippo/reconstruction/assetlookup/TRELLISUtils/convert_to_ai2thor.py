@@ -19,7 +19,7 @@ def convert(input_folder, target_uuid, target_folder):
             run_subproc(
                 f"singularity build {singularity_path} docker://velythyl/objathorconvert",
                 shell=True,
-                timeout=60 * 3,
+                timeout=60 * 5,
                 raise_timeout_exception=True,
             )
 
