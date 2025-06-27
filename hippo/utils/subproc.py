@@ -37,6 +37,7 @@ def run_subproc(cmd, callback=None, shell=False, timeout=None, timeout_cleanup_f
         text=True,
         universal_newlines=True,
         bufsize=1,  # line-buffered
+        executable='/bin/bash'
     )
 
     stdout_buf = StringIO()

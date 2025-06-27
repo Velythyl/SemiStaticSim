@@ -1,7 +1,7 @@
 
 defaults:
   - meta: meta
-  - assetlookup: clip
+  - assetlookup: trellis
   - skillprediction: none
   - paths: default
   - secrets: secrets

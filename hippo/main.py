@@ -28,11 +28,20 @@ def main(cfg):
         if cfg.assetlookup.method == "CLIP":
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
-
-            trellis_proc = run_subproc("cd $HOME/TRELLIS && source venv2/bin/activate && huggingface-cli login --token ${secrets.hf_token} && python3 flaskserver.py && echo READYTORUN", shell=True, immediately_return=False)
-            while "READYTORUN" not in trellis_proc.stdout_stderr.getvalue():
-                sleep(10)
             
+            print("Starting TRELLIS server...")
+            # Ensure the TRELLIS server is started in a separate process
+            trellis_proc = run_subproc(f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=1;HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py", shell=True, immediately_return=True)
+            TOTAL_WAIT_TIME = 0
+            while "WARNING: This is a development server." not in trellis_proc.stdout_stderr.getvalue():
+                print("Waiting for TRELLIS server to start...")
+                sleep(10)
+                TOTAL_WAIT_TIME += 10
+                if TOTAL_WAIT_TIME > 600:
+                    raise RuntimeError("TRELLIS server did not start in time! Check the logs for errors.")
+            
+            sleep(10)
+            print("TRELLIS server started successfully.")
             HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
 
     set_api_key(cfg.secrets.openai_key)
