@@ -58,10 +58,11 @@ def load_conceptgraph(path):
         return grp
     segments_anno["segGroups"] = [setclip(grp,clip,pcd) for grp, clip, pcd in zip(segments_anno["segGroups"], clip_features, pcd_dict)]
 
+    from pathlib import Path
     for grp in segments_anno["segGroups"]:
         grp["paths"] = {
-            "mask": f"{path}/segments/{grp['id']}/mask",
-            "rgb": f"{path}/segments/{grp['id']}/rgb"
+            "mask": str(Path(f"{path}/segments/{grp['id']}/mask").resolve()),
+            "rgb": str(Path(f"{path}/segments/{grp['id']}/rgb").resolve())
         }
 
     return segments_anno

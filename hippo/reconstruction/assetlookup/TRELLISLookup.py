@@ -51,16 +51,21 @@ class TRELLISLookup:
             for rgb_file in rgb_files:
                 # Construct paths
                 rgb_path = os.path.join(image_dir, rgb_file)
-                mask_path = os.path.join(masks_dir, rgb_file)  # Assuming same filename
-
+                
                 # Check if mask exists
-                if not os.path.exists(mask_path):
-                    print(f"Warning: Mask not found for {rgb_file}, skipping...")
-                    continue
+                #if not os.path.exists(mask_path):
+                #    print(f"Warning: Mask not found for {rgb_file}, skipping...")
+                #    continue
 
                 # Load images
                 rgb_img = Image.open(rgb_path)
-                mask_img = Image.open(mask_path).convert('L')  # Convert mask to grayscale
+
+                mask_path = os.path.join(masks_dir, rgb_file)  # Assuming same filename
+                try:
+                    mask_img = Image.open(mask_path).convert('L')  # Convert mask to grayscale
+                except:
+                    mask_img = np.load(mask_path.replace(".png", ".npy")).astype(np.uint8)  # Load mask from .npy if .png not found
+                    mask_img = (mask_img > 0) * 255  # Convert to binary mask
 
                 # Convert images to numpy arrays
                 rgb_array = np.array(rgb_img)

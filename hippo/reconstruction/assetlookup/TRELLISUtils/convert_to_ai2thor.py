@@ -15,7 +15,7 @@ def convert(input_folder, target_uuid, target_folder):
         CONTAINER_NAME = f"{uuid.uuid4().hex[:8]}"
         def timeout_cleanup():
             print("Conversion timed out! Make sure the timeout was long enough!")
-            run_subproc(f'podman kill $(docker ps -q --filter "name={CONTAINER_NAME}")', shell=True)
+            run_subproc(f'podman kill $(podman ps -q --filter "name={CONTAINER_NAME}")', shell=True)
 
         run_subproc(f'podman pull velythyl/objathorconvert',
                               shell=True,
