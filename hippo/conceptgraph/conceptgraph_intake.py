@@ -26,6 +26,7 @@ def load_point_cloud(path):
     assert path.exists(), path
     pcd = o3d.io.read_point_cloud(str(path / "point_cloud.pcd"))
 
+
     segments_anno = load_segments_anno(path)
 
     # Build a pcd with random colors
@@ -35,7 +36,21 @@ def load_point_cloud(path):
         obj = pcd.select_by_index(ann["segments"])
         pcd_o3d.append(obj)
 
+
     return pcd_o3d
+
+def vis_cg(cg_pcds):
+    for objpcd in cg_pcds:
+        np.random.seed(int(np.sum(np.asarray(objpcd.points))))
+        color_for_obj = np.random.choice(range(256), size=3)
+        color_for_obj = np.repeat(color_for_obj[None], len(objpcd.points), axis=0)
+        objpcd.colors = o3d.utility.Vector3dVector(color_for_obj / 255)
+
+    combined = cg_pcds[0]
+    for other in cg_pcds[1:]:
+        combined = combined + other
+
+    o3d.visualization.draw_geometries([combined])
 
 def load_clip_features(path):
     path = Path(path)

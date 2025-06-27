@@ -105,6 +105,72 @@ def disambiguate(bbox1, bbox2, tresh_overlap=0.8, tresh_noice=0.5):
 
     return True, True
 
+from scipy.spatial import ConvexHull, KDTree
+
+def disambiguate2(cloud1, cloud2, overlap_threshold=0.1, volume_threshold=1e-6):
+    """
+    Compare two point clouds and determine which to keep based on overlap and volume.
+
+    Args:
+        cloud1 (np.ndarray): First point cloud (N x 3)
+        cloud2 (np.ndarray): Second point cloud (M x 3)
+        overlap_threshold (float): Fraction of points that must overlap to consider clouds the same
+        volume_threshold (float): Minimum volume difference to consider one cloud larger
+
+    Returns:
+        tuple: (keep_cloud1, keep_cloud2) booleans indicating which clouds to keep
+    """
+    # Check if either cloud is empty
+    if len(cloud1) == 0 or len(cloud2) == 0:
+        return (len(cloud1) > 0, len(cloud2) > 0)
+
+    # Compute volumes using convex hull
+    def compute_volume(points):
+        if len(points) < 4:  # Need at least 4 points for a 3D convex hull
+            return 0
+        try:
+            hull = ConvexHull(points)
+            return hull.volume
+        except:
+            return 0
+
+    vol1 = compute_volume(cloud1)
+    vol2 = compute_volume(cloud2)
+
+    # Check for overlap
+    def check_overlap(cloud_a, cloud_b, threshold):
+        if len(cloud_a) == 0 or len(cloud_b) == 0:
+            return False
+
+        # Build KDTree for cloud_b
+        tree = KDTree(cloud_b)
+
+        # Find nearest neighbor in cloud_b for each point in cloud_a
+        distances, _ = tree.query(cloud_a, k=1)
+
+        # Count points that are very close (consider them overlapping)
+        close_points = np.sum(distances < 0.01)  # 1cm threshold for overlap
+        overlap_fraction = close_points / len(cloud_a)
+
+        return overlap_fraction >= threshold
+
+    has_overlap = check_overlap(cloud1, cloud2, overlap_threshold) or \
+                  check_overlap(cloud2, cloud1, overlap_threshold)
+
+    # Determine which to keep
+    if has_overlap:
+        if abs(vol1 - vol2) < volume_threshold:
+            # Essentially same volume, keep both
+            return (True, False)
+        elif vol1 > vol2:
+            return (True, False)
+        else:
+            return (False, True)
+    else:
+        # No overlap, keep both
+        return (True, True)
+
+
 def rescale_asset(asset_dir, asset_id, scaling):
     import os
     asset_path = os.path.join(asset_dir, asset_id)

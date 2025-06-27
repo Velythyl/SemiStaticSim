@@ -19,6 +19,8 @@ TOKENS_PER_MINUTE_DICT = {
     "gpt-3.5-turbo": 30000,
     "gpt-4": 10000,
     "gpt-3.5-turbo-16k": 30000,
+    "gpt-4.1-nano-2025-04-14": 200000,
+    "gpt-4.1-mini-2025-04-14": 200000,
     "bbllm": np.inf
 }
 WINDOW_SIZE = 65  # Time window in seconds for rate limit tracking
@@ -49,7 +51,7 @@ def enforce_rate_limit(gpt_version, requested_tokens):
     tokens_used_last_minute = sum(tokens for _, tokens in token_usage_log)
 
     # If the next request exceeds the rate limit, wait until tokens refresh
-    if tokens_used_last_minute + requested_tokens > TOKENS_PER_MINUTE_DICT[gpt_version]:
+    if tokens_used_last_minute + requested_tokens > TOKENS_PER_MINUTE_DICT[gpt_version.lower()]:
         oldest_request_time = token_usage_log[0][0] if token_usage_log else current_time
         wait_time = (oldest_request_time + WINDOW_SIZE) - current_time
         if wait_time > 0:

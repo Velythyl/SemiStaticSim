@@ -1,17 +1,101 @@
+import copy
 import itertools
 from typing import Callable
 
-from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph
+from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph, vis_cg
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
-from hippo.utils.spatial_utils import get_size, disambiguate, get_bounding_box, filter_points_by_y_quartile
+from hippo.utils.spatial_utils import get_size, disambiguate, disambiguate2, get_bounding_box, filter_points_by_y_quartile
 from hippo.utils.string_utils import get_uuid
 
 import numpy as np
 
+def chunks(xs, n):
+    n = max(1, n)
+    return (xs[i:i+n] for i in range(0, len(xs), n))
+
+def filter_segGroups(cg):
+    cg = copy.deepcopy(cg)
+    objects = cg["segGroups"]
+
+
+    """
+    for i, obj in enumerate(copy.deepcopy(cg["segGroups"])):
+       for out in ["wall", "BACKGROUND", "door"]:
+           if out in obj["label"] or out in obj["caption"]:
+               cg["segGroups"][i] = None
+    ret = list(filter(lambda seggroup: seggroup is not None, cg["segGroups"]))
+    cg["segGroups"] = ret
+    """
+
+    BATCH_SIZE = 5
+    chunked = chunks(cg["segGroups"], BATCH_SIZE)
+
+    counter = 0
+    for i, chunk in enumerate(chunked):
+        string = []
+        for j, obj in enumerate(chunk):
+            string += [f"{j}: {obj['label']} - {obj['caption']}"]
+        string = "\n".join(string)
+
+        prompt = f"""
+I have a list of objects. I want to remove "background" objects, such as walls, doors, windows, ceilings. 
+Do not remove objects that can be interacted with by humans, even if they are affixed to background objects.
+If there is an electronic component to the object, always keep it.
+Only remove objects that are part of the structure of the building such as walls, doors, windows, ceilings, sideboards, wall dividers, etc.
+Also, some objects have faulty labels, such as describing entire parts of the scene. We need to remove the objects with captions that describe more than one object. 
+We only want to keep singular objects.
+Make sure to remove all walls, doors, windows, and ceilings! Even if doors are technically interactable.
+
+First, write your reasoning. Then, write a list of objects to remove by their ID. So, just return something like:
+
+```
+[0,4,9]
+```
+Where 0,4 and 9 are IDs of object to remove.
+Make sure to include the ```.
+It is OK to output an empty list if there are no objects to remove.
+
+Here are my objects:
+{string}
+""".strip()
+
+        from llmqueries.llm import LLM
+        _, response = LLM(prompt, "gpt-4.1-mini-2025-04-14", max_tokens=1000, temperature=0, stop=None, logprobs=1,
+                          frequency_penalty=0)
+
+        partial_parse = response.split('```\n[')[-1].split("]\n```")[0]
+
+        for resp_obj in partial_parse.split(","):
+            try:
+                objid = int(resp_obj.strip())
+                objid = counter + objid
+                cg["segGroups"][objid] = None
+            except:
+                pass
+
+        counter += len(chunk)
+
+    #out_filter = ["wall", "BACKGROUND", "door"]
+
+    #for i, obj in enumerate(copy.deepcopy(cg["segGroups"])):
+    #    for out in ["wall", "BACKGROUND", "door"]:
+    #        if out in obj["label"] or out in obj["caption"]:
+    #            cg["segGroups"][i] = None
+    ret = list(filter(lambda seggroup: seggroup is not None, cg["segGroups"]))
+    cg["segGroups"] = ret
+    return cg
+
+import open3d as o3d
 
 def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
     cg = load_conceptgraph(path)
+
+    #vis_cg([o["pcd"] for o in cg["segGroups"]])
+
+    cg = filter_segGroups(cg)
     cg_objects = cg["segGroups"]
+
+    #vis_cg([o["pcd"] for o in cg["segGroups"]])
 
     hippo_objects = []
 
@@ -84,9 +168,11 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
         hippo_object = hippo_object.replace(_position=position, _desired_size=size)
         hippo_object = hippo_object.set_pcd_(pcd, pcd_color)
 
-        if hippo_object.object_name not in name2objs:
-            name2objs[hippo_object.object_name] = []
-        name2objs[hippo_object.object_name].append((hippo_object, get_bounding_box(original_pcd), len(original_pcd)))
+        names_to_add = [hippo_object.object_name] + hippo_object.object_name.split(" ")
+        for name_to_add in names_to_add:
+            if name_to_add not in name2objs:
+                name2objs[name_to_add] = []
+            name2objs[name_to_add].append((hippo_object, get_bounding_box(original_pcd), len(original_pcd), original_pcd))
         id2objs[hippo_object.object_name_id] = hippo_object
 
     def keep_delete(keep, id):
@@ -94,14 +180,45 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
             if id in id2objs:
                 del id2objs[id]
 
+    def vis_id2obj():
+        pcds = []
+        for k, v in id2objs.items():
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(np.array(v._cg_pcd_points))
+            pcd.colors = o3d.utility.Vector3dVector(np.array(v._cg_pcd_colours))
+            pcds.append(pcd)
+        return vis_cg(pcds)
+
     # disambiguation step
     for name, hippo_objects in name2objs.items():
         if len(hippo_objects) == 1:
             continue
 
-        for (obj1, bbox1, num_pcd1), (obj2, bbox2, num_pcd2) in itertools.combinations(hippo_objects, 2):
-            keep1, keep2 = disambiguate(bbox1, bbox2)
+        for (obj1, bbox1, num_pcd1, original_pcd_1), (obj2, bbox2, num_pcd2, original_pcd_2) in itertools.combinations(hippo_objects, 2):
+            if obj1.object_name_id not in id2objs:
+                continue
+            if obj2.object_name_id not in id2objs:
+                continue
+            if obj1.object_name_id == obj2.object_name_id:
+                print("How is this happening? FIXME")
+                continue
 
+            keep1, keep2 = disambiguate2(original_pcd_1, original_pcd_2)
+
+            if sum((keep1, keep2)) <= 1:
+                print("Removing")
+                print(obj2.object_name_id if keep1 else obj1.object_name_id)
+                print("in favor of")
+                print(obj1.object_name_id if keep1 else obj2.object_name_id)
+                print("Vis prior")
+                vis_id2obj()
+
+            keep_delete(keep1, obj1.object_name_id)
+            keep_delete(keep2, obj2.object_name_id)
+
+            if sum((keep1, keep2)) <= 1:
+                vis_id2obj()
+            continue
             if keep1 == keep2:  # either true, true or false, false
                 keep_delete(keep1, obj1.object_name_id)
                 keep_delete(keep2, obj2.object_name_id)

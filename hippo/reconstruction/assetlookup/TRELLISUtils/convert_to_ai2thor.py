@@ -2,6 +2,7 @@ import os
 import subprocess
 import uuid
 
+from hippo.reconstruction.assetlookup.TRELLISUtils.cache import TRELLIS_GEN_DIR
 from hippo.utils.subproc import run_subproc
 
 
@@ -12,7 +13,37 @@ def convert(input_folder, target_uuid, target_folder):
 
     user_uid = os.getuid()
     try:
-        CONTAINER_NAME = f"{uuid.uuid4().hex[:8]}"
+        # need to first create the singularity container...
+        singularity_path = f"{TRELLIS_GEN_DIR}/objathorconvert.sif"
+        if not os.path.exists(singularity_path):
+            run_subproc(
+                f"singularity build {singularity_path} docker://velythyl/objathorconvert",
+                shell=True,
+                timeout=60 * 3,
+                raise_timeout_exception=True,
+            )
+
+        def timeout_cleanup():
+            print("Conversion timed out! Make sure the timeout was long enough!")
+            run_subproc(f'pkill singularity', shell=True) # fixme a bit messy, should get the PID instead
+
+        retcode = run_subproc(
+            f'singularity run \
+                  --bind {input_folder}:/input \
+                  --bind {target_folder}:/output \
+                  --env UID={user_uid} \
+                  {singularity_path} \
+                  --uids={target_uuid} \
+                  --glb_paths=/input/{target_uuid}.glb',
+            shell=True,
+            timeout=60 * 3,
+            raise_timeout_exception=True,
+            timeout_cleanup_func=timeout_cleanup
+            )
+
+
+
+        """
         def timeout_cleanup():
             print("Conversion timed out! Make sure the timeout was long enough!")
             run_subproc(f'podman kill $(docker ps -q --filter "name={CONTAINER_NAME}")', shell=True)
@@ -29,7 +60,7 @@ def convert(input_folder, target_uuid, target_folder):
                               timeout=60 * 3,
                               raise_timeout_exception=True,
                               timeout_cleanup_func=timeout_cleanup
-                              )
+                              )"""
         assert retcode.success
         return True
     except subprocess.TimeoutExpired:
