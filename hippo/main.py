@@ -1,3 +1,12 @@
+import os
+import tempfile
+
+from hippo.utils.file_utils import get_tmp_file
+
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+os.environ['JAX_PLATFORMS'] = 'cpu'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 from pathlib import Path
 from time import sleep
 
@@ -11,8 +20,7 @@ from hippo.utils.subproc import run_subproc
 from llmqueries.llm import set_api_key
 
 
-import os
-os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+
 
 import hydra
 
@@ -27,7 +35,7 @@ def main(cfg):
     trellis_proc = None
     if HIPPO is None:
         if cfg.assetlookup.method == "CLIP":
-            HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
+            HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
             
             print("Starting TRELLIS server...")
@@ -43,10 +51,10 @@ def main(cfg):
             
             sleep(10)
             print("TRELLIS server started successfully.")
-            HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, similarity_threshold=28, consider_size=True)
+            HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
 
     set_api_key(cfg.secrets.openai_key)
-    hipporoom, objects = get_hippos(Path(cfg.paths.scene_dir).resolve(), pad=2)
+    hipporoom, objects = get_hippos(cfg, Path(cfg.paths.scene_dir).resolve(), pad=cfg.scene.pad)
 
     #os.makedirs(cfg.paths.out_scene_dir, exist_ok=True)
     composer = SceneComposer.create(
@@ -57,7 +65,8 @@ def main(cfg):
         roomplan=hipporoom
     )
     print("Writing down compositions...")
-    composer.write_compositions_in_order(1)
+    composer.write_random_compositions(10)
+    #composer.write_compositions_in_order(1)
 
     print("Taking topdown view...")
     composer.take_topdown()
@@ -72,6 +81,12 @@ def main(cfg):
     os._exit(0)
 
 if __name__ == '__main__':
+    import socket
+
+    if "pop-os" in socket.gethostname():
+        run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
+        os.environ["DISPLAY"] = f":99"
+
     main()
 
 

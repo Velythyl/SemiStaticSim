@@ -25,7 +25,7 @@ class _Hippo(SelfDataclass):
 @dataclass
 class HippoRoomPlan(_Hippo):
     id: str
-    floor_type: str = "white"
+    floor_type: str = "light grey drywall, smooth"
     wall_type: str = "light grey drywall, smooth"
     coords: List[Tuple[float,float]] =  ((0, 0), (0, 6), (7, 6), (7, 0))
 
@@ -45,6 +45,9 @@ def dict2xyztuple(dic):
 def xyztuple_precision(tup):
     return (round(tup[0], 3), round(tup[1],3), round(tup[2],3))
 
+from diskcache import FanoutCache, Cache
+CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
+cache = Cache(CACHEPATH)
 
 @dataclass
 class HippoObject(_Hippo):
@@ -95,17 +98,22 @@ class HippoObject(_Hippo):
         return pcd
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores, assets_dir):
-        _is_objaverse_asset = []
-        for fa in found_assets:
-            try:
-                from ai2thor.util.runtime_assets import load_existing_thor_asset_file
-                obj = load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, f"{fa}/{fa}")
-                IS_OBJAVERSE_OBJECT = True
-            except:
-                IS_OBJAVERSE_OBJECT = False
-            _is_objaverse_asset.append(IS_OBJAVERSE_OBJECT)
+        # fixme we used to compute this here, is it even relevant ?
+        #_is_objaverse_asset = []
+        #for fa in found_assets:
+        #    try:
+        #        from ai2thor.util.runtime_assets import load_existing_thor_asset_file
+        #        obj = load_existing_thor_asset_file(OBJATHOR_ASSETS_DIR, f"{fa}/{fa}")
+        #        IS_OBJAVERSE_OBJECT = True
+        #    except:
+        #        IS_OBJAVERSE_OBJECT = False
+        #    _is_objaverse_asset.append(IS_OBJAVERSE_OBJECT)
 
+        #
+        # I think its fine because we did use_thor_objects=False for ObjectRetriever, so objs should always be Objaverse
+        #
 
+        _is_objaverse_asset = [True] * len(found_assets)
         return self.replace(
             _is_objaverse_asset=tuple(_is_objaverse_asset),
             _found_assetIds=found_assets,
@@ -238,11 +246,15 @@ class HippoObject(_Hippo):
                 # 4. save obj without actually doing the rotation
                 # 5. write rotation into the scene definition
 
+
+                from hippo.reconstruction.assetlookup.assettranslate import translate
+                obj = translate(obj, self._cg_pcd_points)
+
                 if cfg.assetfitting.rotate:
                     from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, \
                         rotate_point_cloud_y_axis, add_scaling_to_transmat
-                    euler_rots, transformation_mat_rots = align(pcd_to_align=(pcd_or_mesh_to_np(obj)), target_pcd=self._cg_pcd_points)
-                    obj = transform_ai2thor_object(obj, transformation_mat_rots)
+                    euler_rots, transformation_mat_rots = align(pcd_to_align=obj, target_pcd=self._cg_pcd_points)
+                    obj = transform_ai2thor_object(obj, np.array(transformation_mat_rots))
 
                 from hippo.reconstruction.assetlookup.assetscale import scale_object
                 obj = scale_object(cfg, obj, self._cg_pcd_points)
@@ -276,14 +288,6 @@ class HippoObject(_Hippo):
                 }}, f, indent=4)
 
             return
-            # todo ask chatgpt for these properties, as well as the ones related to ai2thor skills such as isToggleavle isBreakable isFillable etc
-            with open(os.path.join(target_directory_for_this_self, "thor_metadata.json"), "w") as f:
-                json.dump({"assetMetadata":{
-                    "primaryProperty": "CanPickup",
-                    "secondaryProperties": [
-                        "Receptacle"
-                    ]
-                }}, f, indent=4) #json.dump(self._assetMetadata, f, indent=4)
 
 def figure_out_scaling(self_pcd, asset, euler_rot_to_align_asset_to_self):
     from hippo.reconstruction.assetlookup.assetalign import pcd_or_mesh_to_np, rotate_point_cloud_y_axis

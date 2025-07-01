@@ -23,8 +23,8 @@ DEFAULT_THOR_METADATA = {       # doesn't actually matter much; gets overwritten
 
 class TRELLISLookup:
 
-    def __init__(self, cfg, objaverse_asset_dir: str, do_weighted_random_selection: bool, similarity_threshold: float, consider_size: bool):
-        self.clip_lookup = CLIPLookup(cfg, objaverse_asset_dir, do_weighted_random_selection, similarity_threshold, consider_size)
+    def __init__(self, cfg, objaverse_asset_dir: str, do_weighted_random_selection: bool, consider_size: bool):
+        self.clip_lookup = CLIPLookup(cfg, objaverse_asset_dir, do_weighted_random_selection, consider_size)
         self._TRELLIS_client = None
         self.cfg = cfg
 

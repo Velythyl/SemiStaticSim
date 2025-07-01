@@ -1,8 +1,9 @@
 
 defaults:
   - meta: meta
-  - assetlookup: trellis
+  - assetlookup: clip
   - skillprediction: none
   - paths: default
   - secrets: secrets
-  - assetfitting: norot_and_axisscale
+  - assetfitting: rot_and_aspect_fit
+  - scene: sacha_kitchen_gen

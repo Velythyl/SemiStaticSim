@@ -16,11 +16,13 @@ from hippo.reconstruction.scenedata import HippoRoomPlan, HippoObject
 
 class CLIPLookup:
 
-    def __init__(self, cfg, objaverse_asset_dir: str, do_weighted_random_selection: bool, similarity_threshold: float, consider_size: bool):
+    def __init__(self, cfg, objaverse_asset_dir: str, do_weighted_random_selection: bool, consider_size: bool):
         confirm_paths_exist()
 
+        self.cfg = cfg
+
         self.do_weighted_random_selection = do_weighted_random_selection
-        self.similarity_threshold = similarity_threshold
+        self.similarity_threshold = cfg.assetlookup.clip_similarity_thresh
         self.consider_size = consider_size
 
         (
@@ -57,6 +59,8 @@ class CLIPLookup:
             self.clip_model, self.clip_preprocess, self.clip_tokenizer, None
         )
 
+        self.size_comparison_thresh = cfg.assetlookup.clip_size_comparison_thresh
+
     def generate_rooms(self, scene, plan: str=None, hipporoom: HippoRoomPlan=None):
         if not plan:
             assert hipporoom is not None
@@ -65,9 +69,12 @@ class CLIPLookup:
             assert plan is not None
 
         rooms = self.floor_generator.get_plan("programmatic floor query", plan)
+        for room in rooms:
+            room["floorMaterial"] = {"name": "PureWhite"}
+            room["wallMaterial"] = {"name": "EggshellDrywall"}
         scene["rooms"] = rooms
 
-        scene["wall_height"] = 3
+        scene["wall_height"] = self.cfg.scene.wall_height
         wall_height, walls = self.wall_generator.generate_walls(scene)
         scene["wall_height"] = wall_height
         scene["walls"] = walls
@@ -102,7 +109,7 @@ class CLIPLookup:
 
         return scene
 
-    def lookup_assets(self, obj: HippoObject, size_comparison_tresh=0.1):
+    def lookup_assets(self, obj: HippoObject, size_comparison_thresh=None):
         candidates = self.object_retriever.retrieve(
             [f"a 3D model of {obj.object_name}, {obj.object_description}"],
             self.similarity_threshold,
@@ -132,7 +139,9 @@ class CLIPLookup:
 
         sizes = np.array(sizes)
         size_comparizon = np.linalg.norm(sizes - np.array(obj._desired_size), axis=1)
-        size_ok = size_comparizon < size_comparison_tresh
+        if size_comparison_thresh is None:
+            size_comparison_thresh = self.size_comparison_thresh
+        size_ok = size_comparizon < size_comparison_thresh
 
         if size_ok.sum() >= 1:
 

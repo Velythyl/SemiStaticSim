@@ -4,7 +4,7 @@ from typing import Callable
 
 from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph, vis_cg
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
-from hippo.utils.spatial_utils import get_size, disambiguate, disambiguate2, get_bounding_box, filter_points_by_y_quartile
+from hippo.utils.spatial_utils import get_size, disambiguate, disambiguate2, disambiguate3, get_bounding_box, filter_points_by_y_quartile
 from hippo.utils.string_utils import get_uuid
 
 import numpy as np
@@ -87,12 +87,12 @@ Here are my objects:
 
 import open3d as o3d
 
-def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
+def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
     cg = load_conceptgraph(path)
 
     #vis_cg([o["pcd"] for o in cg["segGroups"]])
 
-    cg = filter_segGroups(cg)
+    #cg = filter_segGroups(cg)
     cg_objects = cg["segGroups"]
 
     #vis_cg([o["pcd"] for o in cg["segGroups"]])
@@ -106,11 +106,23 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
         #    continue
 
         object_name = obj["label"].lower().replace(":","").replace(",", " ").strip()
+        RM_OBJ = False
+        for substr in cfg.scene.remove_obj_name_substr:
+            if len(substr) > 0 and substr in object_name:
+                RM_OBJ = True
+                break
+
+        object_description = obj["caption"]
+        for substr in cfg.scene.remove_obj_desc_substr:
+            if len(substr) > 0 and substr in object_description:
+                RM_OBJ = True
+                break
+        if RM_OBJ:
+            continue
 
         pcd = np.asarray(obj["pcd"].points)[:,[0,2,1]]
         pcd_color = np.asarray(obj["pcd"].colors)
 
-        object_description = obj["caption"]
         clip_features = obj["clip_features"]
 
         pcds.append(pcd)
@@ -203,12 +215,12 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
             if obj2.object_name_id not in id2objs:
                 continue
             if obj1.object_name_id == obj2.object_name_id:
-                print("How is this happening? FIXME")
+                print("How is this happening? FIXME in conceptgraph_to_hippo")
                 continue
 
-            keep1, keep2 = disambiguate2(original_pcd_1, original_pcd_2)
+            keep1, keep2 = disambiguate(bbox1,original_pcd_1, bbox2,original_pcd_2)
 
-            if sum((keep1, keep2)) <= 1:
+            if False: #sum((keep1, keep2)) <= 1:
                 print("Removing")
                 print(obj2.object_name_id if keep1 else obj1.object_name_id)
                 print("in favor of")
@@ -219,7 +231,7 @@ def get_hippos(path, pad=lambda bounddists: bounddists * 0.25):
             keep_delete(keep1, obj1.object_name_id)
             keep_delete(keep2, obj2.object_name_id)
 
-            if sum((keep1, keep2)) <= 1:
+            if False: #sum((keep1, keep2)) <= 1:
                 vis_id2obj()
             continue
             if keep1 == keep2:  # either true, true or false, false

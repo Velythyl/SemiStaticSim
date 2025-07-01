@@ -33,7 +33,7 @@ class SceneComposer(SelfDataclass):
     @classmethod
     def create(cls, cfg, asset_lookup: AssetLookup, target_dir: str, objectplans: Tuple[HippoObject], roomplan: HippoRoomPlan, KEEP_TOP_K: int = 3):
         looked_up_objectplans = []
-        for obj in objectplans:
+        for obj in tqdm(objectplans, desc="Looking up viable assets..."):
             looked_up_obj = asset_lookup.lookup_assets(obj)[:KEEP_TOP_K]
 
             if cfg.skillprediction.method == None:
@@ -87,6 +87,7 @@ class SceneComposer(SelfDataclass):
     @property
     def _object_indices_prod(self):
         product = list(itertools.product(*self._object_indices))
+        print(f"Found {len(product)} valid scenes.")
         return product
 
     def __len__(self):
@@ -128,11 +129,11 @@ class SceneComposer(SelfDataclass):
 
     def generate_random_compositions(self, MAX_NUM=10):
         prod = self._object_indices_prod
-
-        randprod = []
-        for obj_indices in prod:
-            random.shuffle(obj_indices)
-            randprod.append(obj_indices)
+        random.shuffle(prod)
+        #randprod = []
+        #for obj_indices in prod:
+        #    random.shuffle(obj_indices)
+        #    randprod.append(obj_indices)
 
         yield from self.generate_compositions_in_order(prod, MAX_NUM)
 

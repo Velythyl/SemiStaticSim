@@ -10,7 +10,6 @@ import tiktoken
 import barebonesllmchat
 import numpy as np
 import openai
-from diskcache import FanoutCache, Cache
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Define rate limit parameters (adjust based on API tier)
@@ -104,6 +103,7 @@ def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, lo
 
     return ret
 
+from diskcache import FanoutCache, Cache
 CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
 cache = Cache(CACHEPATH)
 

@@ -69,7 +69,7 @@ def is_fully_contained(bbox1, bbox2):
     return contained(bbox2, bbox1) or contained(bbox1, bbox2)
 
 
-def disambiguate(bbox1, bbox2, tresh_overlap=0.8, tresh_noice=0.5):
+def disambiguate(bbox1, cloud1, bbox2, cloud2, tresh_overlap=0.8, tresh_noice=0.5):
     # Step 1: Check for zero volumes
     volume1 = calculate_volume(bbox1)
     volume2 = calculate_volume(bbox2)
@@ -89,6 +89,13 @@ def disambiguate(bbox1, bbox2, tresh_overlap=0.8, tresh_noice=0.5):
 
     # Step 3: Calculate intersection volume
     intersection_volume = calculate_intersection_volume(bbox1, bbox2)
+
+    if intersection_volume != 0:
+        if len(cloud1) > len(cloud2):
+            return True, False
+        else:
+            return False, True
+    return True, True
 
     # Step 4: Calculate overlap ratios
     smaller_volume = min(volume1, volume2)
@@ -149,13 +156,123 @@ def disambiguate2(cloud1, cloud2, overlap_threshold=0.1, volume_threshold=1e-6):
         distances, _ = tree.query(cloud_a, k=1)
 
         # Count points that are very close (consider them overlapping)
-        close_points = np.sum(distances < 0.01)  # 1cm threshold for overlap
+        close_points = np.sum(distances < 0.30)  # 0.01 is 1cm threshold for overlap
         overlap_fraction = close_points / len(cloud_a)
 
         return overlap_fraction >= threshold
 
     has_overlap = check_overlap(cloud1, cloud2, overlap_threshold) or \
                   check_overlap(cloud2, cloud1, overlap_threshold)
+
+    # Determine which to keep
+    if has_overlap:
+        if abs(vol1 - vol2) < volume_threshold:
+            # Essentially same volume, keep both
+            return (True, False)
+        elif vol1 > vol2:
+            return (True, False)
+        else:
+            return (False, True)
+    else:
+        # No overlap, keep both
+        return (True, True)
+
+from diskcache import FanoutCache, Cache
+CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
+cache = Cache(CACHEPATH)
+@cache.memoize()
+def pcd2mesh(cloud1):
+    pcd1 = o3d.geometry.PointCloud()
+    pcd1.points = o3d.utility.Vector3dVector(cloud1)
+
+
+    # Create mesh from point clouds using ball pivoting
+    # (or you could use other methods like Poisson reconstruction)
+    # Estimate normals for both point clouds
+    pcd1.estimate_normals()
+
+    # Parameters for ball pivoting
+    radii = [0.05, 0.1, 0.2, 0.4]  # adjust based on your point cloud density
+
+    # Create meshes
+    mesh1 = open3d.t.geometry.TriangleMesh.from_legacy(
+        o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+            pcd1, o3d.utility.DoubleVector(radii)))
+    return mesh1
+
+
+def disambiguate3(cloud1, cloud2, overlap_threshold=0.1, volume_threshold=1e-6):
+    """
+    Compare two point clouds and determine which to keep based on overlap and volume.
+
+    Args:
+        cloud1 (np.ndarray): First point cloud (N x 3)
+        cloud2 (np.ndarray): Second point cloud (M x 3)
+        overlap_threshold (float): Fraction of points that must overlap to consider clouds the same
+        volume_threshold (float): Minimum volume difference to consider one cloud larger
+
+    Returns:
+        tuple: (keep_cloud1, keep_cloud2) booleans indicating which clouds to keep
+    """
+    # Check if either cloud is empty
+    if len(cloud1) == 0 or len(cloud2) == 0:
+        return (len(cloud1) > 0, len(cloud2) > 0)
+
+    # Compute volumes using convex hull
+    def compute_volume(points):
+        if len(points) < 4:  # Need at least 4 points for a 3D convex hull
+            return 0
+        try:
+            hull = ConvexHull(points)
+            return hull.volume
+        except:
+            return 0
+
+    vol1 = compute_volume(cloud1)
+    vol2 = compute_volume(cloud2)
+
+
+    #has_overlap = check_overlap(cloud1, cloud2, overlap_threshold) or \
+    #              check_overlap(cloud2, cloud1, overlap_threshold)
+    def check_point_clouds_overlap(cloud1, cloud2):
+        """
+        Check if two point clouds overlap by converting them to meshes and testing for intersection.
+
+        Args:
+            cloud1 (np.ndarray): First point cloud (N x 3)
+            cloud2 (np.ndarray): Second point cloud (M x 3)
+
+        Returns:
+            bool: True if the point clouds overlap, False otherwise
+        """
+        # Return False if either cloud is empty
+        if len(cloud1) == 0 or len(cloud2) == 0:
+            return False
+
+        # Convert numpy arrays to Open3D point clouds
+        #pcd1 = o3d.geometry.PointCloud()
+        #pcd1.points = o3d.utility.Vector3dVector(cloud1)
+
+        #pcd2 = o3d.geometry.PointCloud()
+        #pcd2.points = o3d.utility.Vector3dVector(cloud2)
+
+        # Create mesh from point clouds using ball pivoting
+        # (or you could use other methods like Poisson reconstruction)
+        try:
+
+            mesh1 = pcd2mesh(cloud1)
+            mesh2 = pcd2mesh(cloud2)
+
+            # Check for intersection
+            intersection = mesh1.boolean_intersection(mesh2)
+            return len(np.array(intersection.vertex.positions)) > 0
+            #return intersection
+
+        except Exception as e:
+            print(f"Error in mesh creation/intersection: {e}")
+            return False
+    has_overlap = check_point_clouds_overlap(cloud1, cloud2) or check_point_clouds_overlap(cloud2, cloud1)
+
 
     # Determine which to keep
     if has_overlap:
@@ -235,7 +352,10 @@ def make_trans_mat_from_axisscale(scaling):
     ])
     return scale_matrix
 
-
+#from diskcache import FanoutCache, Cache
+#CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
+#cache = Cache(CACHEPATH)
+#@cache.memoize()
 def transform_ai2thor_object(obj, transformation_matrix):
     """
     Apply a 4x4 transformation matrix to an AI2-THOR object.
@@ -301,6 +421,29 @@ def pcd_bbox_size(obj):
 
     return {k: maxs[i] - mins[i] for i, k in enumerate(['x', 'y', 'z'])}
 
+def ai2thor_to_mesh(ai2thor_obj):
+    # Example: replace these with your actual data
+    newpcs = []
+    for p in ai2thor_obj["vertices"]:
+        newpcs.append(np.array([p['x'], p['y'], p['z']]))
+    vertices = np.vstack(newpcs)
+
+    triangles = np.array(ai2thor_obj["triangles"], dtype=np.int32).reshape(-1, 3)
+
+    normals = []
+    for p in ai2thor_obj["normals"]:
+        normals.append(np.array([p['x'], p['y'], p['z']]))
+    normals = np.vstack(normals)
+
+    # Create the TriangleMesh object
+    mesh = o3d.geometry.TriangleMesh()
+    mesh.vertices = o3d.utility.Vector3dVector(vertices)
+    mesh.triangles = o3d.utility.Vector3iVector(triangles)
+    mesh.vertex_normals = o3d.utility.Vector3dVector(normals)
+    return mesh
+
+def mesh_bbox(mesh):
+    ai2thor_to_mesh
 
 
 def vis_ai2thor_object(obj):

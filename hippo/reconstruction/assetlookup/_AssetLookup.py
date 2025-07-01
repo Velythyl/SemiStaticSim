@@ -26,7 +26,7 @@ class AssetLookup:
     def lookup_assets(self, obj: HippoObject):
         raise NotImplementedError()
 
-    def generate_rooms(self, scene, plan: str=None, hipporoom: HippoRoomPlan=None):
+    def generate_rooms(self, cfg, scene, plan: str=None, hipporoom: HippoRoomPlan=None):
         if not plan:
             assert hipporoom is not None
             plan = hipporoom.asholodeckstr()
@@ -36,7 +36,7 @@ class AssetLookup:
         rooms = self.floor_generator.get_plan("programmatic floor query", plan)
         scene["rooms"] = rooms
 
-        scene["wall_height"] = 3
+        scene["wall_height"] = cfg.scene.wall_height
         wall_height, walls = self.wall_generator.generate_walls(scene)
         scene["wall_height"] = wall_height
         scene["walls"] = walls

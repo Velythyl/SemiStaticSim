@@ -172,7 +172,7 @@ def center_point_cloud(points):
 
     return centered_points
 
-def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=1000):
+def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=1000, mesh_keep_vertex_OR_sample_points="sample_points"):
     if isinstance(pcd_or_mesh, jnp.ndarray) or isinstance(pcd_or_mesh, tuple) or isinstance(pcd_or_mesh, list):
         return pcd_or_mesh_to_np(np.array(pcd_or_mesh))
 
@@ -182,16 +182,25 @@ def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=1000):
         return center_point_cloud(pcd_or_mesh.copy())
 
     if isinstance(pcd_or_mesh, o3d.geometry.PointCloud):
-        pcd = pcd_or_mesh.voxel_down_sample(voxel_size=0.05)
-        pcd = np.asarray(pcd.points)
+        #pcd = pcd_or_mesh.voxel_down_sample(voxel_size=0.05)
+        pcd = np.asarray(pcd_or_mesh.points)
         return pcd_or_mesh_to_np(pcd)
 
     if isinstance(pcd_or_mesh, Dict):
-        newpcs = []
-        for p in pcd_or_mesh["vertices"]:
-            newpcs.append(np.array([p['x'], p['y'], p['z']]))
-        pcd = np.vstack(newpcs)
-        return pcd_or_mesh_to_np(pcd)
+        if mesh_keep_vertex_OR_sample_points == "keep_vertex":
+
+            newpcs = []
+            for p in pcd_or_mesh["vertices"]:
+                newpcs.append(np.array([p['x'], p['y'], p['z']]))
+            pcd = np.vstack(newpcs)
+            return pcd_or_mesh_to_np(pcd)
+
+        else:
+            from hippo.utils.spatial_utils import ai2thor_to_mesh
+            mesh = ai2thor_to_mesh(pcd_or_mesh)
+            pcd = mesh.sample_points_poisson_disk(number_of_points=NUM_POINTS_TO_KEEP)
+            return pcd_or_mesh_to_np(pcd)
+
 
     if isinstance(pcd_or_mesh, o3d.geometry.TriangleMesh):
         return pcd_or_mesh_to_np(pcd_or_mesh.sample_points_uniformly(number_of_points=NUM_POINTS_TO_KEEP))
@@ -697,14 +706,18 @@ def remove_translation_from_transmat(matrix):
 
     return result
 
-def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=10, do_global_tune=False):
+#from diskcache import FanoutCache, Cache
+#CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
+#cache = Cache(CACHEPATH)
+#@cache.memoize()
+def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=200, do_global_tune=False):
     if target_pcd is None:
         target_pcd = pcd_to_align
         assert spoof_rad is not None
     if spoof_rad is not None:
         pcd_to_align = rotate_point_cloud_y_axis(pcd_or_mesh_to_np(pcd), spoof_rad)
 
-    pcd_to_align = pcd_or_mesh_to_np(pcd_to_align)
+    pcd_to_align = pcd_or_mesh_to_np(pcd_to_align, mesh_keep_vertex_OR_sample_points="sample_points")
     target_pcd = pcd_or_mesh_to_np(target_pcd)
 
 
@@ -759,6 +772,7 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
 
         tuned_transform = fine_tune(pcd_to_align, target_pcd, found_rot)
 
+
         #tuned_transform = keep_only_y_rotation(tuned_transform)
         #print(tuned_transform)
 
@@ -769,7 +783,7 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
             #transform_point_cloud(pcd_to_align, transmat)
             draw_registration_result(transform_point_cloud(pcd_to_align, tuned_transform), target_pcd)
 
-        return transmat_to_euler(tuned_transform, degrees=True), tuned_transform
+        return np.array([0, transmat_to_euler(tuned_transform, degrees=True)[1], 0]), euler_to_matrix_4x4(0, transmat_to_euler(tuned_transform, degrees=False)[1], 0, degrees=False) #tuned_transform
 
     raise AssertionError("Why did the function not return? lol")
 
