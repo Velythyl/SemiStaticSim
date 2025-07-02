@@ -65,7 +65,7 @@ def main(cfg):
         roomplan=hipporoom
     )
     print("Writing down compositions...")
-    composer.write_random_compositions(10)
+    composer.write_random_compositions(100)
     #composer.write_compositions_in_order(1)
 
     print("Taking topdown view...")

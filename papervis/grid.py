@@ -1,13 +1,13 @@
 import os
 from typing import Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 import math
 
 def transform(img):
-    return img
+    #return img
     # Identity transform for now
-    return crop(img, (50,100), (50, 100))
+    return border(crop(img, (650,1250), (400, 1550)))
 
 def crop(img: Image.Image, x: Tuple[int, int], y: Tuple[int, int]) -> Image.Image:
     """
@@ -24,6 +24,19 @@ def crop(img: Image.Image, x: Tuple[int, int], y: Tuple[int, int]) -> Image.Imag
     x_min, x_max = x
     y_min, y_max = y
     return img.crop((x_min, y_min, x_max, y_max))
+
+def border(img: Image.Image, border_width: int=5) -> Image.Image:
+    """
+    Add a black border of given width to the image.
+
+    Parameters:
+        img: PIL.Image.Image — the input image
+        border_width: int — thickness of the border in pixels
+
+    Returns:
+        A new image with the border added.
+    """
+    return ImageOps.expand(img, border=border_width, fill='black')
 
 def find_topdown_images(root_dir):
     topdown_paths = []
@@ -62,7 +75,7 @@ def create_image_grid(images):
 
 # Example usage
 if __name__ == "__main__":
-    root_directory = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/sacha_kitchen/sacha_kitchen/generated_on_2025-07-01-15-20-26"
+    root_directory = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/sacha_kitchen/sacha_kitchen/generated_on_2025-07-02-11-37-26"
     paths = find_topdown_images(root_directory)
     images = load_and_transform_images(paths)
     grid = create_image_grid(images)

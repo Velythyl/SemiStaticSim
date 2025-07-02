@@ -1,4 +1,6 @@
 import itertools
+import json
+import random
 from typing import Any, Callable
 
 import numpy as np
@@ -12,6 +14,7 @@ from ai2holodeck.generation.rooms import FloorPlanGenerator
 from ai2holodeck.generation.utils import get_bbox_dims, get_annotations
 from ai2holodeck.generation.walls import WallGenerator
 from hippo.reconstruction.scenedata import HippoRoomPlan, HippoObject
+from omegaconf import ListConfig
 
 
 class CLIPLookup:
@@ -68,16 +71,75 @@ class CLIPLookup:
         if not hipporoom:
             assert plan is not None
 
+        def cfgmat2mat(cfgmat):
+            if isinstance(cfgmat, list) or isinstance(cfgmat, ListConfig):
+                return cfgmat2mat(random.choice(cfgmat))
+
+            assert isinstance(cfgmat, str)
+            return cfgmat
+
         rooms = self.floor_generator.get_plan("programmatic floor query", plan)
         for room in rooms:
-            room["floorMaterial"] = {"name": "PureWhite"}
-            room["wallMaterial"] = {"name": "EggshellDrywall"}
+            room["floorMaterial"] = {"name": cfgmat2mat(self.cfg.scene.floor_material)}
+            room["wallMaterial"] = {"name": cfgmat2mat(self.cfg.scene.wall_material)}
         scene["rooms"] = rooms
 
-        scene["wall_height"] = self.cfg.scene.wall_height
+        scene["wall_height"] = hipporoom.wall_height
         wall_height, walls = self.wall_generator.generate_walls(scene)
-        scene["wall_height"] = wall_height
+        scene["wall_height"] = hipporoom.wall_height
         scene["walls"] = walls
+
+        PROCEDURAL_LIGHTS = f"""
+        {{
+                "ceilingColor": {{
+                    "b": 1,
+                    "g": 1,
+                    "r": 1
+                }},
+                "ceilingMaterial": {{
+                    "name": "PVCLit"
+                }},
+                "floorColliderThickness": 1.0,
+                "lights": [
+                    {{
+                        "id": "mainlight",
+                        "type": "point",
+                        "position": {{
+                            "x": {hipporoom.center[0]},
+                            "y": {max(hipporoom.wall_height-0.5, 3)},
+                            "z": {hipporoom.center[1]}
+                        }},
+                        "intensity": 1,
+                        "range": 100,
+                        "rgb": {{
+                            "r": 1.0,
+                            "g": 1,
+                            "b": 1
+                        }},
+                        "shadow": {{
+                            "type": "Soft",
+                            "strength": 1,
+                            "normalBias": 0,
+                            "bias": 0.05,
+                            "nearPlane": 0.2,
+                            "resolution": "FromQualitySettings"
+                        }},
+                        "roomId": "living room",
+                        "layer": "Procedural0",
+                        "cullingMaskOff": [
+                            "Procedural1",
+                            "Procedural2",
+                            "Procedural3"
+                        ]
+                    }}
+                ],
+                "receptacleHeight": 0.7,
+                "reflections": [],
+                "skyboxId": "SkyOakland"
+            }}
+        """
+
+        scene["proceduralParameters"] = json.loads(PROCEDURAL_LIGHTS)
 
         def apply_to_positions(data: Any, func: Callable[[float, float, float], dict]):
             """
@@ -129,6 +191,8 @@ class CLIPLookup:
                 for k in ["door", "window", "frame"]
             )
         ]
+
+        candidates = candidates[:self.cfg.assetlookup.clip_keep_top_k]
 
         def get_asset_size(uid):
             size = get_bbox_dims(self.database[uid])

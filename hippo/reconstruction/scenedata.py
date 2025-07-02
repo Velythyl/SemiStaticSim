@@ -28,6 +28,8 @@ class HippoRoomPlan(_Hippo):
     floor_type: str = "light grey drywall, smooth"
     wall_type: str = "light grey drywall, smooth"
     coords: List[Tuple[float,float]] =  ((0, 0), (0, 6), (7, 6), (7, 0))
+    center: Tuple[float,float] = (3.5, 3)
+    wall_height: float = 3
 
     def asprompt(self):
         # todo

@@ -250,7 +250,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
     maxbound = (maxbound[0],maxbound[2])
     roomId = cg["sceneId"] + f"-{get_uuid()}"
     coords = ((minbound[0], minbound[1]), (minbound[0], maxbound[1]), (maxbound[0], maxbound[1]), (maxbound[0], minbound[1]))
-    roomplan = HippoRoomPlan(id=roomId, coords=coords)
+    roomplan = HippoRoomPlan(id=roomId, coords=coords, center=(maxbound[0]-minbound[0], maxbound[1]-minbound[1]), wall_height=cfg.scene.wall_height)
 
     hippo_objects = [h.replace(roomId=roomId) for h in hippo_objects]
 

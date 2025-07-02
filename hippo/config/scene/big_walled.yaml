@@ -1,3 +1,7 @@
 wall_height: 3
 pad: 3
-filter_obs: [""]
+remove_obj_name_substr: ["interlocking mat"]  # removes any CG obj that contains any of the substrings in filter_obs
+remove_obj_desc_substr: [""]
+floor_material:  "PVCLit"
+wall_material: "EggshellDrywall"
+topdown_camera_y: "bounds_y"

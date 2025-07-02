@@ -1,3 +1,5 @@
+import copy
+
 from hippo.reconstruction.assetlookup.assetalign import align
 from hippo.reconstruction.scenedata import HippoObject
 import itertools

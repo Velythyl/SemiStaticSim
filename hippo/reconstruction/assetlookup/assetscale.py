@@ -14,7 +14,7 @@ def scale_object(cfg, ai2thor_obj, target_pcd):
     elif cfg.assetfitting.scaling.startswith("aspect"):
         type = cfg.assetfitting.scaling.replace("aspect", "").strip()
 
-        assert type in ["fit", "fill", "avg"]
+        assert type in ["fit", "fill", "avg", "weighted"]
 
         ret = aspect_scale(ai2thor_obj, target_pcd, type)
         return axis_scale(ret, target_pcd, vertical_only=True)  # forces asset to match exactly in vertical axis
@@ -66,6 +66,9 @@ def aspect_scale(ai2thor_obj, target_pcd, mode='fit'):
         uniform_scale = np.max(scale_factors)  # Ensures object fills target
     elif mode == "avg":
         uniform_scale = np.mean(scale_factors) # Best fit
+    elif mode == 'weighted':
+        weights = scale_factors
+        uniform_scale = np.sum(weights * scale_factors) / np.sum(weights)
     else:
         raise ValueError("mode must be either 'fit' or 'fill'")
 

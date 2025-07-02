@@ -5,5 +5,6 @@ defaults:
   - skillprediction: none
   - paths: default
   - secrets: secrets
-  - assetfitting: rot_and_aspect_fit
-  - scene: sacha_kitchen_gen
+  - assetfitting: rot_and_aspect_weighted
+  - scene: sacha_kitchen_gen_floor
+  - parallelism: default

@@ -35,7 +35,7 @@ def all_edges_white(img):
     return True
 
 
-def get_top_down_frame(controller):
+def get_top_down_frame(controller, cfg=None):
     # Setup the top-down camera
     event = controller.step(action="GetMapViewCameraProperties", raise_for_failure=True)
     pose = copy.deepcopy(event.metadata["actionReturn"])
@@ -43,7 +43,7 @@ def get_top_down_frame(controller):
     bounds = event.metadata["sceneBounds"]["size"]
 
     pose["fieldOfView"] = 60
-    pose["position"]["y"] = bounds["y"]
+    pose["position"]["y"] = bounds["y"] if cfg is None or cfg.scene.topdown_camera_y == "bounds_y" else cfg.scene.topdown_camera_y
     del pose["orthographicSize"]
 
     try:
@@ -52,6 +52,9 @@ def get_top_down_frame(controller):
         )
     except:
         wall_height = 2.5
+
+    if cfg is not None and cfg.scene.topdown_camera_y != "bounds_y":
+        wall_height = cfg.scene.topdown_camera_y
 
     for i in range(20):
         pose["orthographic"] = False

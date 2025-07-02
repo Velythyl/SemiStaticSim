@@ -21,6 +21,8 @@ from omegaconf import DictConfig, OmegaConf
 with open("../ai2holodeck/generation/empty_house.json", "r") as f:
     DEFAULT_SCENE = json.load(f)
 
+
+
 @dataclasses.dataclass
 class SceneComposer(SelfDataclass):
     cfg: DictConfig
@@ -28,13 +30,13 @@ class SceneComposer(SelfDataclass):
     target_dir: str
     objectplans: Tuple[HippoObject]
     roomplan: HippoRoomPlan
-    scene: Dict
+    #scene: Dict
 
     @classmethod
-    def create(cls, cfg, asset_lookup: AssetLookup, target_dir: str, objectplans: Tuple[HippoObject], roomplan: HippoRoomPlan, KEEP_TOP_K: int = 3):
+    def create(cls, cfg, asset_lookup: AssetLookup, target_dir: str, objectplans: Tuple[HippoObject], roomplan: HippoRoomPlan):
         looked_up_objectplans = []
         for obj in tqdm(objectplans, desc="Looking up viable assets..."):
-            looked_up_obj = asset_lookup.lookup_assets(obj)[:KEEP_TOP_K]
+            looked_up_obj = asset_lookup.lookup_assets(obj) #[:KEEP_TOP_K]
 
             if cfg.skillprediction.method == None:
                 looked_up_obj2 = looked_up_obj
@@ -46,7 +48,7 @@ class SceneComposer(SelfDataclass):
 
 
         #objectplans = tuple([asset_lookup.lookup_assets(x,asset_lookup.objaverse_asset_dir)[:KEEP_TOP_K] for x in objectplans])
-        scene = asset_lookup.generate_rooms(DEFAULT_SCENE, hipporoom=roomplan)
+
 
         return cls(
             cfg=cfg,
@@ -54,7 +56,7 @@ class SceneComposer(SelfDataclass):
             target_dir=target_dir,
             objectplans=looked_up_objectplans,
             roomplan=roomplan,
-            scene=scene
+            #scene=scene
         )
 
     @property
@@ -86,8 +88,8 @@ class SceneComposer(SelfDataclass):
 
     @property
     def _object_indices_prod(self):
-        product = list(itertools.product(*self._object_indices))
-        print(f"Found {len(product)} valid scenes.")
+        product = (itertools.product(*self._object_indices))
+        #print(f"Found {len(product)} valid scenes.")
         return product
 
     def __len__(self):
@@ -107,35 +109,96 @@ class SceneComposer(SelfDataclass):
             if COUNTER >= MAX_NUM:
                 break
 
-    def _write_compositions(self, generator, generationname):
-        COUNTER = 0
-        for selves in generator:
-            WRITE_DIR = f"{self.target_dir}/{generationname}{COUNTER}"
+    def _write_compositions(self, generator, generationname, prefetch=32):
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import os
+        import json
+        from omegaconf import OmegaConf
+        from tqdm import tqdm
+        import itertools
+        def process_one(index, selves):
+            WRITE_DIR = os.path.join(self.target_dir, f"{generationname}{index}")
             os.makedirs(WRITE_DIR, exist_ok=False)
-            CONCRETIZATION_DIR = f"{WRITE_DIR}/concrete_assets"
+
+            CONCRETIZATION_DIR = os.path.join(WRITE_DIR, "concrete_assets")
             os.makedirs(CONCRETIZATION_DIR, exist_ok=False)
 
             scene = selves.get_scene(CONCRETIZATION_DIR)
-            with open(f"{self.target_dir}/{generationname}{COUNTER}/scene.json", "w") as f:
+
+            with open(os.path.join(WRITE_DIR, "scene.json"), "w") as f:
                 json.dump(scene, f, indent=4)
 
-            with open(f"{self.target_dir}/{generationname}{COUNTER}/cfg.yaml", "w") as f:
+            with open(os.path.join(WRITE_DIR, "cfg.yaml"), "w") as f:
                 OmegaConf.save(config=self.cfg, f=f)
+        #process_one(0, next(generator))
 
-            COUNTER += 1
+        with ThreadPoolExecutor(max_workers=self.cfg.parallelism.composer_selves_max_workers) as executor:
+            futures = {}
+            index_gen = itertools.count()
+            gen_iter = iter(generator)
+
+            pbar = tqdm(desc="Writing compositions", unit="scene")
+
+            # Prefill the first N tasks
+            try:
+                for _ in range(prefetch):
+                    i = next(index_gen)
+                    selves = next(gen_iter)
+                    futures[executor.submit(process_one, i, selves)] = i
+            except StopIteration:
+                pass  # generator had fewer than `prefetch` items
+
+            # As each future completes, submit another
+            while futures:
+                for future in as_completed(futures):
+                    i = futures.pop(future)
+                    try:
+                        future.result()
+                    except Exception as e:
+                        print(f"Error in composition {i}: {e}")
+                    pbar.update(1)
+
+                    try:
+                        j = next(index_gen)
+                        selves = next(gen_iter)
+                        futures[executor.submit(process_one, j, selves)] = j
+                    except StopIteration:
+                        break  # done submitting new work
 
     def write_compositions_in_order(self, MAX_NUM=10):
         self._write_compositions(self.generate_compositions_in_order(MAX_NUM=MAX_NUM), "in_order_")
 
     def generate_random_compositions(self, MAX_NUM=10):
-        prod = self._object_indices_prod
-        random.shuffle(prod)
-        #randprod = []
-        #for obj_indices in prod:
-        #    random.shuffle(obj_indices)
-        #    randprod.append(obj_indices)
+        if max([len(x) for x in self._object_indices]) <= 10:
+            prod = list(self._object_indices_prod)
+            random.shuffle(prod)
+            return prod
 
-        yield from self.generate_compositions_in_order(prod, MAX_NUM)
+        def generator():
+            USED = set()
+
+            def gen_one():
+                to_use = []
+                for obj in self._object_indices:
+                    to_use.append(random.choice(obj))
+                to_use = tuple(to_use)
+                return to_use
+
+            def gen_unique(callcount=0):
+                to_use = gen_one()
+                if to_use in USED:
+                    if callcount >= MAX_NUM:
+                        raise Exception("Too many calls to generate unique compositions. Perhaps you requested too many compositions for a too-small set of assets? If not, you might need to implement reservoir sampling here.")
+                    return gen_unique(callcount=callcount+1)
+
+                USED.add(to_use)
+                return to_use
+
+            for _ in range(MAX_NUM):
+                yield gen_unique()
+
+
+        yield from self.generate_compositions_in_order(generator(), MAX_NUM)
 
     def write_random_compositions(self, MAX_NUM=10):
         return self._write_compositions(self.generate_random_compositions(MAX_NUM=MAX_NUM), "random_")
@@ -152,23 +215,26 @@ class SceneComposer(SelfDataclass):
         return self._write_compositions(self.generate_most_likely_composition(), "most_likely_")
 
     def get_scene(self, concrete_asset_dir):
-        scene = copy.deepcopy(self.scene)
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from tqdm import tqdm
+        import copy
 
-        for obj in tqdm(self.objectplans, desc="Concretizing objects..."):
+        scene = self.asset_lookup.generate_rooms(copy.deepcopy(DEFAULT_SCENE), hipporoom=self.roomplan)
+        scene = copy.deepcopy(scene)
+        if 'objects' not in scene:
+            scene['objects'] = []
 
+        def process_object(obj):
             if len(obj) > 1:
                 obj = obj[0]
-
             obj.concretize(self.cfg, concrete_asset_dir)
+            return obj.as_holodeckdict()
 
-            # Ensure the 'objects' list exists in the scene
-            if 'objects' not in scene:
-                scene['objects'] = []
-
-            new_object = obj.as_holodeckdict()
-
-            # Add the new object to the scene
-            scene['objects'].append(new_object)
+        with ThreadPoolExecutor(max_workers=self.cfg.parallelism.composer_concretizer_max_workers) as executor:
+            futures = [executor.submit(process_object, obj) for obj in self.objectplans]
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Concretizing objects..."):
+                new_object = future.result()
+                scene['objects'].append(new_object)
 
         return scene
 
@@ -185,9 +251,22 @@ class SceneComposer(SelfDataclass):
             else:
                 todo_paths.append(path + "/scene.json")
 
-        for path in todo_paths:
+        def process_path(path):
             controller = get_hippo_controller(path, width=2048, height=2048)
-            top_image = get_top_down_frame(controller)
+            top_image = get_top_down_frame(controller, cfg=self.cfg)
 
-            savepath = "/".join(path.split("/")[:-1]) + "/topdown.png"
+            savepath = os.path.join(os.path.dirname(path), "topdown.png")
             top_image.save(savepath)
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from tqdm import tqdm
+        import copy
+        with ThreadPoolExecutor(max_workers=1) as executor: # fixme to augment this, would need to remove the unlink to the build dir found in hippo controller
+            futures = {executor.submit(process_path, path): path for path in todo_paths}
+
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Generating top-down images"):
+                path = futures[future]
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"Failed to process {path}: {e}")
