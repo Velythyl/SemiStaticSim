@@ -28,10 +28,13 @@ from omegaconf import OmegaConf
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
 
-
+    print("Running HIPPO scene composition...")
+    print("Loading CG...")
     set_api_key(cfg.secrets.openai_key)
     hipporoom, objects = get_hippos(cfg, Path(cfg.paths.scene_dir).resolve(), pad=cfg.scene.pad)
 
+    print("CG loaded, number of objects:", len(objects))
+    print("Loading AssetLookup...")
     from hippo.reconstruction.assetlookup.CLIPLookup import CLIPLookup
     from hippo.reconstruction.assetlookup.TRELLISLookup import TRELLISLookup
     from hippo.reconstruction.composer import SceneComposer
@@ -42,11 +45,11 @@ def main(cfg):
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
 
-            if False:
+            if "pop-os" not in socket.gethostname():
                 print("Starting TRELLIS server...")
                 # Ensure the TRELLIS server is started in a separate process
                 trellis_proc = run_subproc(
-                    f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=1;HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py",
+                    f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=0;HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py",
                     shell=True, immediately_return=True)
                 TOTAL_WAIT_TIME = 0
                 while "WARNING: This is a development server." not in trellis_proc.stdout_stderr.getvalue():
@@ -60,7 +63,8 @@ def main(cfg):
                 print("TRELLIS server started successfully.")
 
             HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
-
+    print("AssetLookup loaded.")
+    print("Looking up assets...")
     #os.makedirs(cfg.paths.out_scene_dir, exist_ok=True)
     composer = SceneComposer.create(
         cfg,
@@ -69,6 +73,7 @@ def main(cfg):
         objectplans=objects,
         roomplan=hipporoom
     )
+    print("Assets looked up.")
 
     print("Writing down compositions...")
     if cfg.scene.scene_generation_method == "random":
@@ -95,7 +100,7 @@ def main(cfg):
 if __name__ == '__main__':
     import socket
 
-    if False and "pop-os" in socket.gethostname():
+    if True:# and "pop-os" in socket.gethostname():
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
         os.environ["DISPLAY"] = f":99"
 
@@ -110,4 +115,9 @@ PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
 
 PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=30  hydra.launcher.gres=gpu:0 hydra.launcher.cpus_per_task=6 hydra.launcher.mem_gb=32 hydra.launcher.array_parallelism=60 hydra.launcher.partition=long-cpu  secrets=secrets_cluster  paths.conceptgraphs_dir="./datasets/concept-nodes" assetfitting=rot_and_axisscale,rot_and_aspect_fill,rot_and_aspect_fit  paths.scene_id='replica_office2_cg-detector_2025-06-10-20-34-08.445148,replica_room0_cg-detector_2025-06-10-20-16-50.243828,replica_office0_cg-detector_2025-06-10-20-25-14.795112,replica_office3_cg-detector_2025-06-10-20-40-27.070705,replica_room1_cg-detector_2025-06-10-20-04-54.511655,replica_office1_cg-detector_2025-06-10-20-29-28.683537,replica_office4_cg-detector_2025-06-10-20-45-18.828598,replica_room2_cg-detector_2025-06-10-20-21-16.981182'  paths.out_dir="./sampled_scenes/firstrun"
 
+
+HF_HOME=/network/scratch/c/charlie.gauthier/hfcache XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24"
+
+
+CUDA_VISIBLE_DEVICES=-1 XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
 """

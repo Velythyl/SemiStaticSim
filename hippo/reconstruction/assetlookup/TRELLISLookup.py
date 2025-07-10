@@ -94,7 +94,10 @@ class TRELLISLookup:
 
             image_dir = masked_dir
 
-
+        if self.cfg.assetlookup.clear_TRELLIS_cache_for_this_scene:
+            print(f"Clearing TRELLIS cache for asset <{image_dir}>...")
+            cache.clear_cache(image_dir)
+            print("Cache cleared.")
 
         if cache.cache_says_trellis_fails(image_dir):
             print(f"TRELLIS pipeline can't handle <{image_dir}>, falling back to OBJAVERSE...")
