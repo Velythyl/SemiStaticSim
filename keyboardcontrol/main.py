@@ -337,7 +337,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
 
 
 if __name__ == "__main__":
-    main(scene_name="/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/sacha_kitchen/sacha_kitchen/generated_on_2025-07-01-13-22-21/in_order_0/scene.json",  # FloorPlan19_physics ## room
+    main(scene_name="/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/replica_room0_banner/replica_room0_cg-detector_2025-04-04-18-03-58/generated_on_2025-07-10-15-30-43/random_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree

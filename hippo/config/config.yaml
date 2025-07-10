@@ -1,10 +1,10 @@
 
 defaults:
   - meta: meta
-  - assetlookup: clip
+  - assetlookup: trellis
   - skillprediction: none
   - paths: default
   - secrets: secrets
-  - assetfitting: rot_and_aspect_weighted
-  - scene: sacha_kitchen_gen_floor
+  - assetfitting: rot_and_axisscale
+  - scene: gen_banner
   - parallelism: default

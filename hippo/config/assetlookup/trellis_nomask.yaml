@@ -3,4 +3,4 @@ client_port: 7077
 use_masks: False
 clip_size_comparison_thresh: 100 # 0.1 is fair, 0.5 is coarse, 100 is disabled. 0.1 is less objects than 100
 clip_similarity_thresh: 28 # 28 is holodeck. 1 is more than 28, 20
-clip_keep_top_k: int = 100
+clip_keep_top_k: 100

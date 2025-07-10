@@ -98,7 +98,7 @@ class TRELLISLookup:
 
         if cache.cache_says_trellis_fails(image_dir):
             print(f"TRELLIS pipeline can't handle <{image_dir}>, falling back to OBJAVERSE...")
-            return self.clip_lookup.lookup_assets(obj, size_comparison_tresh=size_comparison_tresh)
+            return self.clip_lookup.lookup_assets(obj)
 
         # cache lookup
         IS_FOUND_IN_CACHE = cache.is_in_cache(image_dir)
@@ -177,7 +177,7 @@ class TRELLISLookup:
 
         if cache.cache_says_trellis_fails(image_dir):
             print(f"TRELLIS pipeline can't handle <{image_dir}>, falling back to OBJAVERSE...")
-            return self.clip_lookup.lookup_assets(obj, size_comparison_tresh=size_comparison_tresh)
+            return self.clip_lookup.lookup_assets(obj)
 
         with open(f"{cache.path_in_cache_for_metadata(image_dir)}/bbox.json", "r") as f:
             bbox = json.load(f)

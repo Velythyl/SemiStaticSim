@@ -250,12 +250,12 @@ class HippoObject(_Hippo):
 
 
                 from hippo.reconstruction.assetlookup.assettranslate import translate
-                obj = translate(obj, self._cg_pcd_points)
+                #obj = translate(obj, self._cg_pcd_points)
 
                 if cfg.assetfitting.rotate:
                     from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, \
                         rotate_point_cloud_y_axis, add_scaling_to_transmat
-                    euler_rots, transformation_mat_rots = align(pcd_to_align=obj, target_pcd=self._cg_pcd_points)
+                    euler_rots, transformation_mat_rots = align(pcd_to_align=obj, target_pcd=self._cg_pcd_points, round_rot=cfg.assetfitting.round_rot)
                     obj = transform_ai2thor_object(obj, np.array(transformation_mat_rots))
 
                 from hippo.reconstruction.assetlookup.assetscale import scale_object

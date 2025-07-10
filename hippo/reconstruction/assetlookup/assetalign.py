@@ -710,7 +710,7 @@ def remove_translation_from_transmat(matrix):
 #CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
 #cache = Cache(CACHEPATH)
 #@cache.memoize()
-def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=200, do_global_tune=False):
+def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=200, do_global_tune=False, round_rot=None):
     if target_pcd is None:
         target_pcd = pcd_to_align
         assert spoof_rad is not None
@@ -753,6 +753,10 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
         draw_registration_result(rotate_point_cloud_y_axis(pcd_to_align, found_rot), target_pcd)
 
     if not do_global_tune and not do_fine_tune:
+        def round_angle(angle, N):
+            return N * round(angle / N)
+        if round_rot is not None:
+            found_rot = math.radians(round_angle(math.degrees(found_rot), round_rot))
         return np.array([0, math.degrees(found_rot), 0]), euler_to_matrix_4x4(0, found_rot, 0, degrees=False)
 
     if do_global_tune:

@@ -1,6 +1,8 @@
 import os
 import tempfile
+from llmqueries.llm import set_api_key
 
+from hippo.utils.subproc import run_subproc
 from hippo.utils.file_utils import get_tmp_file
 
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
@@ -13,11 +15,6 @@ from time import sleep
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 
 from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
-from hippo.reconstruction.assetlookup.CLIPLookup import CLIPLookup
-from hippo.reconstruction.assetlookup.TRELLISLookup import TRELLISLookup
-from hippo.reconstruction.composer import SceneComposer
-from hippo.utils.subproc import run_subproc
-from llmqueries.llm import set_api_key
 
 
 
@@ -31,30 +28,38 @@ from omegaconf import OmegaConf
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
 
+
+    set_api_key(cfg.secrets.openai_key)
+    hipporoom, objects = get_hippos(cfg, Path(cfg.paths.scene_dir).resolve(), pad=cfg.scene.pad)
+
+    from hippo.reconstruction.assetlookup.CLIPLookup import CLIPLookup
+    from hippo.reconstruction.assetlookup.TRELLISLookup import TRELLISLookup
+    from hippo.reconstruction.composer import SceneComposer
     global HIPPO
     trellis_proc = None
     if HIPPO is None:
         if cfg.assetlookup.method == "CLIP":
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
-            
-            print("Starting TRELLIS server...")
-            # Ensure the TRELLIS server is started in a separate process
-            trellis_proc = run_subproc(f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=1;HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py", shell=True, immediately_return=True)
-            TOTAL_WAIT_TIME = 0
-            while "WARNING: This is a development server." not in trellis_proc.stdout_stderr.getvalue():
-                print("Waiting for TRELLIS server to start...")
-                sleep(10)
-                TOTAL_WAIT_TIME += 10
-                if TOTAL_WAIT_TIME > 600:
-                    raise RuntimeError("TRELLIS server did not start in time! Check the logs for errors.")
-            
-            sleep(10)
-            print("TRELLIS server started successfully.")
-            HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
 
-    set_api_key(cfg.secrets.openai_key)
-    hipporoom, objects = get_hippos(cfg, Path(cfg.paths.scene_dir).resolve(), pad=cfg.scene.pad)
+            if False:
+                print("Starting TRELLIS server...")
+                # Ensure the TRELLIS server is started in a separate process
+                trellis_proc = run_subproc(
+                    f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=1;HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py",
+                    shell=True, immediately_return=True)
+                TOTAL_WAIT_TIME = 0
+                while "WARNING: This is a development server." not in trellis_proc.stdout_stderr.getvalue():
+                    print("Waiting for TRELLIS server to start...")
+                    sleep(10)
+                    TOTAL_WAIT_TIME += 10
+                    if TOTAL_WAIT_TIME > 600:
+                        raise RuntimeError("TRELLIS server did not start in time! Check the logs for errors.")
+
+                sleep(10)
+                print("TRELLIS server started successfully.")
+
+            HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
 
     #os.makedirs(cfg.paths.out_scene_dir, exist_ok=True)
     composer = SceneComposer.create(
@@ -64,12 +69,19 @@ def main(cfg):
         objectplans=objects,
         roomplan=hipporoom
     )
+
     print("Writing down compositions...")
-    composer.write_random_compositions(100)
+    if cfg.scene.scene_generation_method == "random":
+        composer.write_random_compositions(cfg.scene.num_scenes_to_generate)
+    elif cfg.scene.scene_generation_method == "in_order":
+        composer.write_compositions_in_order(cfg.scene.num_scenes_to_generate)
+    elif cfg.scene.scene_generation_method == "most_likely":
+        composer.write_most_likely_composition(cfg.scene.num_scenes_to_generate)
+
     #composer.write_compositions_in_order(1)
 
     print("Taking topdown view...")
-    composer.take_topdown()
+    composer.take_photos()
     print("Done with scene composition and topdown view.")
 
     if trellis_proc is not None:
@@ -83,7 +95,7 @@ def main(cfg):
 if __name__ == '__main__':
     import socket
 
-    if "pop-os" in socket.gethostname():
+    if False and "pop-os" in socket.gethostname():
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
         os.environ["DISPLAY"] = f":99"
 

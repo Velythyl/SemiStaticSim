@@ -4,4 +4,9 @@ remove_obj_name_substr: [""]  # removes any CG obj that contains any of the subs
 remove_obj_desc_substr: [""]
 floor_material:  "PVCLit"
 wall_material: "EggshellDrywall"
+
 topdown_camera_y: "bounds_y"
+
+
+num_scenes_to_generate: 1
+scene_generation_method: "random"

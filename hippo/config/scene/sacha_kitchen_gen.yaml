@@ -5,3 +5,7 @@ remove_obj_desc_substr: [""]
 floor_material:  ["TexturesCom_MarbleWhite0067_1_seamless_S", "Pillow"]
 wall_material: "TexturesCom_MarbleWhite0067_1_seamless_S"
 topdown_camera_y: 1
+
+
+num_scenes_to_generate: 1
+scene_generation_method: "random"

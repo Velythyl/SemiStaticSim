@@ -1,13 +1,13 @@
 import os
 from typing import Tuple
-
+from tqdm import tqdm
 from PIL import Image, ImageOps
 import math
 
 def transform(img):
     #return img
     # Identity transform for now
-    return border(crop(img, (650,1250), (400, 1550)))
+    return border(crop(img, (650,1275), (400, 1600)))
 
 def crop(img: Image.Image, x: Tuple[int, int], y: Tuple[int, int]) -> Image.Image:
     """
@@ -48,7 +48,7 @@ def find_topdown_images(root_dir):
 
 def load_and_transform_images(paths):
     images = []
-    for path in paths:
+    for path in tqdm(paths):
         img = Image.open(path).convert("RGB")
         images.append(transform(img))
     return images
@@ -62,22 +62,43 @@ def create_image_grid(images):
     grid_cols = math.ceil(math.sqrt(count))
     grid_rows = math.ceil(count / grid_cols)
 
+
+    grid_cols = grid_cols // 2
+    grid_rows = math.ceil(count / grid_cols)
+
+    grid_cols = int(grid_cols)
+    grid_rows = int(grid_rows)
+
     # Assume all images are the same size
     width, height = images[0].size
     grid_image = Image.new('RGB', (grid_cols * width, grid_rows * height))
 
-    for idx, img in enumerate(images):
+    for idx, img in enumerate(tqdm(images)):
         row = idx // grid_cols
         col = idx % grid_cols
         grid_image.paste(img, (col * width, row * height))
+
+    # Check and resize if necessary
+    max_size = 3000
+    if grid_image.width > max_size or grid_image.height > max_size:
+        print("Final image was too large for LaTeX, resizing it.")
+        scale_factor = max_size / max(grid_image.width, grid_image.height)
+        print("Resize factor:", scale_factor)
+        new_size = (
+            int(grid_image.width * scale_factor),
+            int(grid_image.height * scale_factor)
+        )
+        grid_image = grid_image.resize(new_size, Image.LANCZOS)
+
+    grid_image = grid_image.rotate(90, expand=True)
 
     return grid_image
 
 # Example usage
 if __name__ == "__main__":
-    root_directory = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/sacha_kitchen/sacha_kitchen/generated_on_2025-07-02-11-37-26"
+    root_directory = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/RANDOM_SACHA_KITCHEN/filtered"
     paths = find_topdown_images(root_directory)
     images = load_and_transform_images(paths)
     grid = create_image_grid(images)
     if grid:
-        grid.save("grid_output.png")
+        grid.save("scenegen.jpeg")

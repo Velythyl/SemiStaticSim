@@ -35,7 +35,7 @@ def all_edges_white(img):
     return True
 
 
-def get_top_down_frame(controller, cfg=None):
+def get_top_down_frame(controller, cfg=None, scene=None):
     # Setup the top-down camera
     event = controller.step(action="GetMapViewCameraProperties", raise_for_failure=True)
     pose = copy.deepcopy(event.metadata["actionReturn"])
@@ -77,11 +77,201 @@ def get_top_down_frame(controller, cfg=None):
 
         pose["position"]["y"] += 0.75
 
-    controller.stop()
+    #controller.stop()
     image = Image.fromarray(top_down_frame)
 
     return image
 
+
+def get_replica_pov(controller, cfg, scene):
+
+
+    #wall_height = max([point["y"] for point in scene["walls"][0]["polygon"]])
+
+    ret_images = []
+    room_images = {}
+    for room in scene["rooms"]:
+        room_name = room["roomType"]
+        camera_height = 3 #(wall_height - 0.2) if cfg is None or cfg.scene.topdown_camera_y == "bounds_y" else cfg.scene.topdown_camera_y
+
+        room_vertices = [[point["x"], point["z"]] for point in room["floorPolygon"]]
+        room_center = np.mean(room_vertices, axis=0)
+        floor_center = np.array([room_center[0], 0, room_center[1]])
+
+        camera_center = np.array([room_vertices[0][0], camera_height, room_vertices[1][0]])
+
+        controller.step(
+            action="AddThirdPartyCamera",
+            position=dict(
+                x=camera_center[0], y=camera_center[1], z=camera_center[2]
+            ),
+            rotation=dict(x=0, y=0, z=0),
+        )
+
+        corners = np.array(
+            [[point[0], 0, point[1]] for point in room_vertices]
+        )
+        farest_corner = np.argmax(np.linalg.norm(corners - camera_center, axis=1))
+
+        def quicktune(pos, ang):
+            # 2,3,1   45,45,0
+            controller.step(
+                action="UpdateThirdPartyCamera",
+                rotation=dict(x=ang[0], y=ang[1], z=ang[2]),
+                position=dict(
+                    x=pos[0], y=pos[1], z=pos[2]
+                ),
+            )
+
+            x = Image.fromarray(controller.last_event.third_party_camera_frames[0])
+            x.show()
+            # use debugger to tune with quicktune
+
+
+        POSES = [[(6,2.5,5), (35,210,0)]]
+
+        for (x,y,z), (a1,a2,a3) in POSES:
+            controller.step(
+                action="UpdateThirdPartyCamera",
+                rotation=dict(x=a1, y=a2, z=a3),
+                position=dict(
+                    x=x, y=y, z=z
+                ),
+            )
+
+        x = Image.fromarray(controller.last_event.third_party_camera_frames[0])
+        #x.show()
+        ret_images.append(x)
+    return ret_images
+
+    """"
+
+
+        for corner in corners:
+
+            def look_at_angles(camera_center, corner_point):
+                # Convert to numpy arrays
+                camera_center = np.array(camera_center)
+                corner_point = np.array(corner_point)
+
+                # Compute direction vector
+                dir_vec = corner_point - camera_center
+
+                # Normalize
+                dir_vec = dir_vec / np.linalg.norm(dir_vec)
+
+                # Yaw: angle in XZ plane from +Z axis
+                yaw = np.arctan2(dir_vec[0], dir_vec[2])  # radians
+
+                # Pitch: angle up/down from horizontal plane
+                horizontal_dist = np.sqrt(dir_vec[0] ** 2 + dir_vec[2] ** 2)
+                pitch = np.arctan2(dir_vec[1], horizontal_dist)  # radians
+
+                # Optional: convert to degrees
+                yaw_deg = np.degrees(yaw)
+                pitch_deg = np.degrees(pitch)
+
+                return yaw_deg, pitch_deg
+            def swapaxes(p):
+                p = p.copy()
+                y = p[1]
+                p[1] = p[2]
+                p[2] = y
+                return p
+            yaw_deg, pitch_deg = look_at_angles(swapaxes(camera_center), swapaxes(corner))
+
+            def quicktune(pos, ang):
+                # 2,3,1   45,45,0
+                controller.step(
+                    action="UpdateThirdPartyCamera",
+                    rotation=dict(x=ang[0], y=ang[1], z=ang[2]),
+                    position=dict(
+                        x=pos[0], y=pos[1], z=pos[2]
+                    ),
+                )
+
+                x = Image.fromarray(controller.last_event.third_party_camera_frames[0])
+                x.show()
+
+            images = []
+            #for angle in tqdm(range(0, 360, 90)):
+            controller.step(
+                action="UpdateThirdPartyCamera",
+                rotation=dict(x=yaw_deg, y=45, z=0),
+                position=dict(
+                    x=camera_center[0], y=camera_center[1], z=camera_center[2]
+                ),
+            )
+            images.append(
+                Image.fromarray(controller.last_event.third_party_camera_frames[0])
+            )
+
+        room_images[room_name] = images
+    assert len(room_images) == 1
+    return room_images[list(room_images.keys())[0]]
+    #controller.stop()
+    #return room_images
+
+"""
+def get_hippo_room_images(controller, cfg, scene):
+
+
+    wall_height = max([point["y"] for point in scene["walls"][0]["polygon"]])
+
+    room_images = {}
+    for room in scene["rooms"]:
+        room_name = room["roomType"]
+        camera_height = (wall_height - 0.2) if cfg is None or cfg.scene.topdown_camera_y == "bounds_y" else cfg.scene.topdown_camera_y
+
+        room_vertices = [[point["x"], point["z"]] for point in room["floorPolygon"]]
+
+        room_center = np.mean(room_vertices, axis=0)
+        floor_center = np.array([room_center[0], 0, room_center[1]])
+        camera_center = np.array([room_center[0], camera_height, room_center[1]])
+        corners = np.array(
+            [[point[0], camera_height, point[1]] for point in room_vertices]
+        )
+        farest_corner = np.argmax(np.linalg.norm(corners - camera_center, axis=1))
+
+        vector_1 = floor_center - camera_center
+        vector_2 = farest_corner - camera_center
+        x_angle = (
+            90
+            - np.arccos(
+                np.dot(vector_1, vector_2)
+                / (np.linalg.norm(vector_1) * np.linalg.norm(vector_2))
+            )
+            * 180
+            / np.pi
+        )
+
+        if not controller.last_event.third_party_camera_frames:
+            controller.step(
+                action="AddThirdPartyCamera",
+                position=dict(
+                    x=camera_center[0], y=camera_center[1], z=camera_center[2]
+                ),
+                rotation=dict(x=0, y=0, z=0),
+            )
+
+        images = []
+        for angle in tqdm(range(0, 360, 90)):
+            controller.step(
+                action="UpdateThirdPartyCamera",
+                rotation=dict(x=x_angle, y=angle + 45, z=0),
+                position=dict(
+                    x=camera_center[0], y=camera_center[1], z=camera_center[2]
+                ),
+            )
+            images.append(
+                Image.fromarray(controller.last_event.third_party_camera_frames[0])
+            )
+
+        room_images[room_name] = images
+    assert len(room_images) == 1
+    return room_images[list(room_images.keys())[0]]
+    #controller.stop()
+    #return room_images
 
 def get_top_down_frame_ithor(scene, objaverse_asset_dir, width=1024, height=1024):
     controller = Controller(

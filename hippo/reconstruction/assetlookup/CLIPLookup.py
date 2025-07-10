@@ -113,8 +113,8 @@ class CLIPLookup:
                         "range": 100,
                         "rgb": {{
                             "r": 1.0,
-                            "g": 1,
-                            "b": 1
+                            "g": 0.9,
+                            "b": 0.8
                         }},
                         "shadow": {{
                             "type": "Soft",

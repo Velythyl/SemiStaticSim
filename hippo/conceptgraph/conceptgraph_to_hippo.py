@@ -6,7 +6,7 @@ from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph, vis_cg
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
 from hippo.utils.spatial_utils import get_size, disambiguate, disambiguate2, disambiguate3, get_bounding_box, filter_points_by_y_quartile
 from hippo.utils.string_utils import get_uuid
-
+from omegaconf import ListConfig
 import numpy as np
 
 def chunks(xs, n):
@@ -141,27 +141,38 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
 
     bounddists = maxbound - _minbound
 
-    if isinstance(pad, int) or isinstance(pad, float):
-        pad = np.ones(3) * pad
-    elif isinstance(pad, np.ndarray) or isinstance(pad, tuple) or isinstance(pad, list):
-        pad = np.array(pad)
-        pad[1] = 0
-    elif isinstance(pad, Callable):
+    ### Figure out wall padding
+    if isinstance(pad, Callable):
         pad = pad(bounddists)
         pad = np.array(pad)
-        pad[1] = 0
 
-    pad = np.ones(3) * pad
-    pad[1] = 0
+    if isinstance(pad, int) or isinstance(pad, float):
+        pad = np.ones(3) * pad
+
+    if (isinstance(pad, np.ndarray) or isinstance(pad, tuple) or isinstance(pad, list) or isinstance(pad, ListConfig)):
+        if len(pad) == 3:
+            pad = np.array(pad)
+            pad[1] = 0
+            lowpad = pad
+            highpad = pad
+        elif len(pad) == 4:
+            lowpad = [pad[0],0,pad[1]]
+            highpad = [pad[2],0,pad[3]]
+        else:
+            raise ValueError("invalid pad")
+    else:
+        raise ValueError("invalid pad")
+    #pad = np.ones(3) * pad
+    #pad[1] = 0
 
     def shift_above_0(item):
-        return item - _minbound + pad
+        return item - _minbound + lowpad
 
     pcds = [shift_above_0(pcd) for pcd in pcds]
 
     allpoints = np.concatenate(pcds)
     minbound, maxbound = allpoints.min(axis=0), allpoints.max(axis=0)
-    minbound, maxbound = minbound-pad, maxbound+pad
+    minbound, maxbound = minbound-lowpad, maxbound+highpad
     assert (minbound == 0).all()
 
     id2objs = {}
@@ -171,19 +182,19 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
 
         pcd, pcd_color = filter_points_by_y_quartile(pcd, 1, 99, points_colors=pcd_color)
 
-        position = np.median(pcd, axis=0)
-        position[1] = np.min(pcd[:,1])
+        position = np.mean(pcd, axis=0)
+        #position[1] = np.min(pcd[:,1])
         #if position[1] < 0.1:
         #    position[1] = 0.0
 
         print(position)
-        assert (position >= (minbound+pad)).all()
+        assert (position >= (minbound+lowpad)).all()
 #        assert (position <= (maxbound-pad)).all()
         size = get_size(pcd, as_dict=False)
         hippo_object = hippo_object.replace(_position=position, _desired_size=size)
         hippo_object = hippo_object.set_pcd_(pcd, pcd_color)
 
-        names_to_add = [hippo_object.object_name] + hippo_object.object_name.split(" ")
+        names_to_add = [hippo_object.object_name] #+ hippo_object.object_name.split(" ")
         for name_to_add in names_to_add:
             if name_to_add not in name2objs:
                 name2objs[name_to_add] = []
@@ -250,9 +261,20 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
     maxbound = (maxbound[0],maxbound[2])
     roomId = cg["sceneId"] + f"-{get_uuid()}"
     coords = ((minbound[0], minbound[1]), (minbound[0], maxbound[1]), (maxbound[0], maxbound[1]), (maxbound[0], minbound[1]))
-    roomplan = HippoRoomPlan(id=roomId, coords=coords, center=(maxbound[0]-minbound[0], maxbound[1]-minbound[1]), wall_height=cfg.scene.wall_height)
+    roomplan = HippoRoomPlan(id=roomId, coords=coords, center=(maxbound[0]-minbound[0], maxbound[1]-minbound[1]), wall_height=cfg.scene.wall_height, floor_type=cfg.scene.floor_material, wall_type=cfg.scene.wall_material)
 
     hippo_objects = [h.replace(roomId=roomId) for h in hippo_objects]
+
+    def vis_final_pcds():
+        pcds = []
+        for ho in hippo_objects:
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(np.array(ho._cg_pcd_points))
+            pcd.colors = o3d.utility.Vector3dVector(np.array(ho._cg_pcd_colours))
+            pcds.append(pcd)
+        return vis_cg(pcds)
+    if False:
+        vis = vis_final_pcds()
 
     return roomplan, hippo_objects
 

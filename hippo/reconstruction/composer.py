@@ -9,14 +9,14 @@ from typing import Tuple, Dict, List, Union
 import numpy as np
 from tqdm import tqdm
 
-from ai2holodeck.generation.utils import get_top_down_frame
+from ai2holodeck.generation.utils import get_top_down_frame, get_hippo_room_images, get_replica_pov
 from hippo.ai2thor_hippo_controller import get_hippo_controller
 from hippo.reconstruction.assetlookup._AssetLookup import AssetLookup
 from hippo.reconstruction.llm_annotation import LLM_annotate
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
 from hippo.utils.selfdataclass import SelfDataclass
 import multiprocessing as mp
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, ListConfig
 
 with open("../ai2holodeck/generation/empty_house.json", "r") as f:
     DEFAULT_SCENE = json.load(f)
@@ -30,10 +30,11 @@ class SceneComposer(SelfDataclass):
     target_dir: str
     objectplans: Tuple[HippoObject]
     roomplan: HippoRoomPlan
+    consider_walls_and_floors_in_scene_count: bool
     #scene: Dict
 
     @classmethod
-    def create(cls, cfg, asset_lookup: AssetLookup, target_dir: str, objectplans: Tuple[HippoObject], roomplan: HippoRoomPlan):
+    def create(cls, cfg, asset_lookup: AssetLookup, target_dir: str, objectplans: Tuple[HippoObject], roomplan: HippoRoomPlan, consider_walls_and_floors_in_scene_count=False):
         looked_up_objectplans = []
         for obj in tqdm(objectplans, desc="Looking up viable assets..."):
             looked_up_obj = asset_lookup.lookup_assets(obj) #[:KEEP_TOP_K]
@@ -50,14 +51,40 @@ class SceneComposer(SelfDataclass):
         #objectplans = tuple([asset_lookup.lookup_assets(x,asset_lookup.objaverse_asset_dir)[:KEEP_TOP_K] for x in objectplans])
 
 
-        return cls(
+        ret = cls(
             cfg=cfg,
             asset_lookup=asset_lookup,
             target_dir=target_dir,
             objectplans=looked_up_objectplans,
             roomplan=roomplan,
+            consider_walls_and_floors_in_scene_count=consider_walls_and_floors_in_scene_count
             #scene=scene
         )
+
+        print("Number of scenes in composer:", ret.number_of_scenes)
+        return ret
+
+    @property
+    def number_of_scenes(self):
+        from math import factorial
+        from functools import reduce
+
+        def multinomial(counts):
+            total = sum(counts)
+            denominator = reduce(lambda x, y: x * factorial(y), counts, 1)
+            return factorial(total) // denominator
+
+        objs = [len(obj) for obj in self.objectplans]
+        for num, obj in zip(objs, self.objectplans):
+            print(f'We found {num} assets for object "{obj.object_name}"')
+
+        if self.consider_walls_and_floors_in_scene_count:
+            if isinstance(self.roomplan.wall_type, list) or isinstance(self.roomplan.wall_type, ListConfig):
+                objs += [len(self.roomplan.wall_type)]
+            if isinstance(self.roomplan.floor_type, list) or isinstance(self.roomplan.floor_type, ListConfig):
+                objs += [len(self.roomplan.floor_type)]
+
+        return multinomial(objs)
 
     @property
     def done_paths(self):
@@ -135,7 +162,7 @@ class SceneComposer(SelfDataclass):
         with ThreadPoolExecutor(max_workers=self.cfg.parallelism.composer_selves_max_workers) as executor:
             futures = {}
             index_gen = itertools.count()
-            gen_iter = iter(generator)
+            gen_iter = (generator)
 
             pbar = tqdm(desc="Writing compositions", unit="scene")
 
@@ -172,7 +199,8 @@ class SceneComposer(SelfDataclass):
         if max([len(x) for x in self._object_indices]) <= 10:
             prod = list(self._object_indices_prod)
             random.shuffle(prod)
-            return prod
+            yield from self.generate_compositions_in_order(prod, MAX_NUM)
+            return
 
         def generator():
             USED = set()
@@ -195,13 +223,15 @@ class SceneComposer(SelfDataclass):
                 return to_use
 
             for _ in range(MAX_NUM):
-                yield gen_unique()
+                unique = gen_unique()
+                ret_self = next(self.generate_compositions_in_order([unique]))
+                yield ret_self
 
-
-        yield from self.generate_compositions_in_order(generator(), MAX_NUM)
+        yield from generator()
 
     def write_random_compositions(self, MAX_NUM=10):
-        return self._write_compositions(self.generate_random_compositions(MAX_NUM=MAX_NUM), "random_")
+        generator = self.generate_random_compositions(MAX_NUM=MAX_NUM)
+        return self._write_compositions(generator, "random_")
 
     def generate_most_likely_composition(self):
         objs = []
@@ -238,7 +268,7 @@ class SceneComposer(SelfDataclass):
 
         return scene
 
-    def take_topdown(self, paths: Union[List[str],str]=None):
+    def take_photos(self, paths: Union[List[str],str]=None):
         if paths is None:
             paths = self.done_paths
         if isinstance(paths, str):
@@ -251,12 +281,28 @@ class SceneComposer(SelfDataclass):
             else:
                 todo_paths.append(path + "/scene.json")
 
+        photo_funcs = [("replica_pov.png", get_replica_pov), ("topdown.png", get_top_down_frame), ("room_image.png", get_hippo_room_images)]
+
         def process_path(path):
             controller = get_hippo_controller(path, width=2048, height=2048)
-            top_image = get_top_down_frame(controller, cfg=self.cfg)
+            with open(path) as f:
+                scene_dict = json.load(f)
 
-            savepath = os.path.join(os.path.dirname(path), "topdown.png")
-            top_image.save(savepath)
+            for name, photo_func in photo_funcs:
+                img = photo_func(controller, cfg=self.cfg, scene=scene_dict)
+                if not isinstance(img, list):
+                    savepath = os.path.join(os.path.dirname(path), name)
+                    img.save(savepath)
+                else:
+                    for i, im in enumerate(img):
+                        p = os.path.join(os.path.dirname(path), name).replace(".png", f"{i}.png")
+                        im.save(p)
+
+            controller.stop()
+
+        for p in todo_paths:
+            process_path(p)
+        return
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
         from tqdm import tqdm

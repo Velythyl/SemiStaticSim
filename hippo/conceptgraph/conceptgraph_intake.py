@@ -1,8 +1,104 @@
+import copy
 import json
 from pathlib import Path
 
 import numpy as np
 import open3d as o3d
+
+import numpy as np
+
+
+def sample_prism_surface(center, dims, N):
+    """
+    Sample N points approximately uniformly on the surface of a rectangular prism.
+
+    Parameters
+    ----------
+    center : array-like of shape (3,)
+        (cx, cy, cz) — center of the prism.
+    dims : array-like of shape (3,)
+        (dx, dy, dz) — width (x), height (y), depth (z).
+    N : int
+        Number of points to sample.
+
+    Returns
+    -------
+    points : ndarray of shape (N, 3)
+        Sampled points.
+    """
+    cx, cy, cz = center
+    dx, dy, dz = dims
+
+    # Areas of each pair of opposite faces
+    A_xy = dx * dy
+    A_yz = dy * dz
+    A_xz = dx * dz
+    total_area = 2 * (A_xy + A_yz + A_xz)
+
+    # Probabilities proportional to face areas
+    probs = np.array([
+        A_xy, A_xy,  # z = top/bottom
+        A_yz, A_yz,  # x = left/right
+        A_xz, A_xz  # y = front/back
+    ]) / total_area
+
+    # Sample which face each point goes to
+    faces = np.random.choice(6, size=N, p=probs)
+
+    points = np.zeros((N, 3))
+
+    # Half-dimensions
+    hx, hy, hz = dx / 2, dy / 2, dz / 2
+
+    # For each face, sample points
+    for i in range(6):
+        mask = (faces == i)
+        n_i = np.sum(mask)
+        if n_i == 0:
+            continue
+
+        u = np.random.uniform(-1, 1, size=(n_i,))
+        v = np.random.uniform(-1, 1, size=(n_i,))
+
+        if i == 0:  # z = +hz
+            points[mask] = np.column_stack((
+                cx + u * hx,
+                cy + v * hy,
+                np.full(n_i, cz + hz)
+            ))
+        elif i == 1:  # z = -hz
+            points[mask] = np.column_stack((
+                cx + u * hx,
+                cy + v * hy,
+                np.full(n_i, cz - hz)
+            ))
+        elif i == 2:  # x = +hx
+            points[mask] = np.column_stack((
+                np.full(n_i, cx + hx),
+                cy + u * hy,
+                cz + v * hz
+            ))
+        elif i == 3:  # x = -hx
+            points[mask] = np.column_stack((
+                np.full(n_i, cx - hx),
+                cy + u * hy,
+                cz + v * hz
+            ))
+        elif i == 4:  # y = +hy
+            points[mask] = np.column_stack((
+                cx + u * hx,
+                np.full(n_i, cy + hy),
+                cz + v * hz
+            ))
+        elif i == 5:  # y = -hy
+            points[mask] = np.column_stack((
+                cx + u * hx,
+                np.full(n_i, cy - hy),
+                cz + v * hz
+            ))
+
+    return points
+
 
 def pcd_visualize(pcd):
     visualizer = o3d.visualization.Visualizer()
@@ -27,6 +123,19 @@ def load_point_cloud(path):
     pcd = o3d.io.read_point_cloud(str(path / "point_cloud.pcd"))
 
 
+
+    if False:
+        # Get points as numpy array
+        points = np.asarray(pcd.points)
+        # Mirror along X axis
+        points[:, 0] *= -1  # Assign back
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+        points = np.asarray(pcd.points)
+        prism = sample_prism_surface([0,0,0], [1,1,1], 1000)
+        points = np.concatenate([points, prism])
+        pcd.points = o3d.utility.Vector3dVector(points)
+
     segments_anno = load_segments_anno(path)
 
     # Build a pcd with random colors
@@ -41,7 +150,7 @@ def load_point_cloud(path):
 
 def vis_cg(cg_pcds):
     for objpcd in cg_pcds:
-        np.random.seed(int(np.sum(np.asarray(objpcd.points))))
+        np.random.seed(int(np.sum(np.asarray(objpcd.points))) % (2**32 - 1))
         color_for_obj = np.random.choice(range(256), size=3)
         color_for_obj = np.repeat(color_for_obj[None], len(objpcd.points), axis=0)
         objpcd.colors = o3d.utility.Vector3dVector(color_for_obj / 255)
@@ -79,6 +188,22 @@ def load_conceptgraph(path):
             "mask": str(Path(f"{path}/segments/{grp['id']}/mask").resolve()),
             "rgb": str(Path(f"{path}/segments/{grp['id']}/rgb").resolve())
         }
+
+    for i, grp in enumerate(copy.deepcopy(segments_anno["segGroups"])):
+        for to_remove in ["ceiling"]:#, "wall", "grid window", "window pane", "window blinds", "blinds", "door"]:
+            if to_remove in grp["label"]:
+                segments_anno["segGroups"][i] = None
+    segments_anno["segGroups"] = list(filter(lambda x: x is not None, segments_anno["segGroups"]))
+
+    def vis_id2obj():
+        pcds = []
+        for v in segments_anno["segGroups"]:
+            #pcd = o3d.geometry.PointCloud()
+            #pcd.points = o3d.utility.Vector3dVector(np.array(v._cg_pcd_points))
+            #pcd.colors = o3d.utility.Vector3dVector(np.array(v._cg_pcd_colours))
+            pcds.append(v["pcd"])
+        return vis_cg(pcds)
+    vis_id2obj()
 
     return segments_anno
 
