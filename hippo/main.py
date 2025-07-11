@@ -6,7 +6,7 @@ from hippo.utils.subproc import run_subproc
 from hippo.utils.file_utils import get_tmp_file
 
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
-os.environ['JAX_PLATFORMS'] = 'cpu'
+#os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 from pathlib import Path
@@ -46,10 +46,24 @@ def main(cfg):
         elif cfg.assetlookup.method == "TRELLIS":
 
             if "pop-os" not in socket.gethostname():
+                print("Finding free port for TRELLIS server...")
+                def find_free_port_in_range(start=1024, end=65535):
+                    for port in range(start, end):
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            try:
+                                s.bind(('', port))
+                                return port
+                            except OSError:
+                                continue
+                    raise RuntimeError("No free ports found in range")
+                free_port = find_free_port_in_range()
+                print(f"Free port found: {free_port}")
+                print("Hopefully, someone doesn't steal the port in the meantime...")
+
                 print("Starting TRELLIS server...")
                 # Ensure the TRELLIS server is started in a separate process
                 trellis_proc = run_subproc(
-                    f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=0;HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py",
+                    f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=0 HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py --port={free_port}",
                     shell=True, immediately_return=True)
                 TOTAL_WAIT_TIME = 0
                 while "WARNING: This is a development server." not in trellis_proc.stdout_stderr.getvalue():
@@ -120,4 +134,6 @@ HF_HOME=/network/scratch/c/charlie.gauthier/hfcache XDG_RUNTIME_DIR=/tmp PYTHONP
 
 
 CUDA_VISIBLE_DEVICES=-1 XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
+
+XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
 """
