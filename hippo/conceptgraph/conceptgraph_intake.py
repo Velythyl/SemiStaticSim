@@ -205,6 +205,7 @@ def load_conceptgraph(path):
 
 
     segments_anno["segGroups"] = list(filter(lambda x: x is not None, segments_anno["segGroups"]))
+    print([x["label"] for x in segments_anno["segGroups"]])
 
     def vis_id2obj():
         pcds = []
