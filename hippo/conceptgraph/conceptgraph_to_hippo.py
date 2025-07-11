@@ -204,9 +204,10 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
 
             # Step 3: compute weights
             # Here we use Gaussian weights: w_i = exp( - (d_i / scale)^2 )
-            if scale <= 0:
-                scale = np.std(distances)  # fallback: use spread of points
-            weights = np.exp(-(distances / scale) ** 2)
+            #if scale <= 0:
+            #    scale = np.std(distances)  # fallback: use spread of points
+            #weights = np.exp(-(distances / scale) ** 2)
+            weights = 1 / distances
 
             # Step 4: compute weighted centroid
             weighted_sum = np.sum(weights[:, None] * pcd, axis=0)
