@@ -194,12 +194,12 @@ def load_conceptgraph(path):
             if to_remove in grp["label"]:
                 segments_anno["segGroups"][i] = None
 
-        #FOUND_KEEP = False
-        #for only_keep in ["wooden sideboard", "wooden cabinet", "grid window"]:
-        #    if only_keep in grp["label"]:
-        #        FOUND_KEEP = True
-        #if not FOUND_KEEP:
-        #    segments_anno["segGroups"][i] = None
+        FOUND_KEEP = False
+        for only_keep in ["wooden cabinet", "grid window", "armchair"]:
+            if only_keep in grp["label"]:
+                FOUND_KEEP = True
+        if not FOUND_KEEP:
+            segments_anno["segGroups"][i] = None
     segments_anno["segGroups"] = list(filter(lambda x: x is not None, segments_anno["segGroups"]))
 
     def vis_id2obj():

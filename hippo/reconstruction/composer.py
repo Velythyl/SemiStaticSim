@@ -283,7 +283,7 @@ class SceneComposer(SelfDataclass):
             else:
                 todo_paths.append(path + "/scene.json")
 
-        photo_funcs = [("replica_pov.png", get_replica_pov), ("topdown.png", get_top_down_frame), ("room_image.png", get_hippo_room_images)]
+        photo_funcs = [("replica_pov.png", get_replica_pov), ("topdown.png", get_top_down_frame)]#, ("room_image.png", get_hippo_room_images)]
 
         def process_path(path):
             controller = get_hippo_controller(path, width=2048, height=2048)

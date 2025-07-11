@@ -45,7 +45,7 @@ def main(cfg):
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
 
-            if "pop-os" not in socket.gethostname():
+            if False: #"pop-os" not in socket.gethostname():
                 print("Finding free port for TRELLIS server...")
                 def find_free_port_in_range(start=1024, end=65535):
                     for port in range(start, end):
