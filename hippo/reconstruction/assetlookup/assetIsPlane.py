@@ -2,55 +2,47 @@ import jax
 import jax.numpy as jnp
 
 
-def is_single_plane(points, noise_threshold=0.015, min_points=10, min_extent_ratio=10.0):
+def is_single_plane(points, noise_threshold=0.05, min_points=10):
     """
     Check if a point cloud is approximately a single plane with noise tolerance.
 
     Args:
         points: (N, 3) array of 3D points
-        noise_threshold: Max ratio of smallest eigenvalue to sum of eigenvalues to accept as planar
+        noise_threshold: Ratio of smallest eigenvalue to sum of eigenvalues that
+                         defines the noise tolerance (lower = more tolerant)
         min_points: Minimum number of points required for plane detection
-        min_extent_ratio: Minimum ratio of extent along largest eigenvalue to smallest extent direction
 
     Returns:
-        bool: True if the points form a single plane within noise and extent criteria
+        bool: True if the points form a single plane within noise tolerance
         plane_params: (4,) array containing plane equation coefficients (a,b,c,d) for ax+by+cz+d=0
     """
     if len(points) < min_points:
         return False, jnp.array([0., 0., 0., 0.])
 
+    # Center the points
     centroid = jnp.mean(points, axis=0)
     centered = points - centroid
 
+    # Compute covariance matrix
     cov = jnp.cov(centered, rowvar=False)
 
-    # SVD is equivalent to eigen decomposition of covariance
+    # Compute eigenvalues (using SVD for stability)
     with jax.default_device(jax.devices('cpu')[0]):
         _, s, vh = jnp.linalg.svd(cov)
     eigenvalues = s
     eigenvectors = vh.T
 
-    # Check flatness: smallest eigenvalue vs sum
+    # Check if the smallest eigenvalue is small compared to the others
     ratio = eigenvalues[2] / (eigenvalues.sum() + 1e-10)
-    is_flat_enough = ratio < noise_threshold
 
-    # Project points onto eigenbasis to compute extents
-    projected = centered @ eigenvectors  # (N,3) in principal axes
+    is_plane = ratio < noise_threshold
 
-    extents = jnp.max(projected, axis=0) - jnp.min(projected, axis=0)  # length along each axis
-
-    # Require that the two largest extents are much bigger than the smallest
-    extent_ratio = (extents[0] + 1e-6) / (extents[2] + 1e-6)  # largest to smallest extent
-    is_large_enough = extent_ratio > min_extent_ratio
-
-    is_plane = is_flat_enough and is_large_enough
-
+    # Get plane equation (normal is eigenvector for smallest eigenvalue)
     normal = eigenvectors[:, 2]
     d = -jnp.dot(normal, centroid)
     plane_params = jnp.concatenate([normal, jnp.array([d])])
-    print(f"This object is a plane? {is_plane}")
-    return is_plane, plane_params
 
+    return is_plane, plane_params
 
 
 # JIT compile for better performance

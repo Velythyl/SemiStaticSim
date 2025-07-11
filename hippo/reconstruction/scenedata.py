@@ -57,6 +57,8 @@ class HippoObject(_Hippo):
     object_description: str
     roomId: Union[HippoRoomPlan, str]
 
+    _is_planar_according_to_llm: bool = False
+
     _position: Tuple[float, float, float] = (0, 0, 0)
     _rotation: Tuple[float, float, float] = (0, 0, 0)
 
@@ -115,8 +117,27 @@ class HippoObject(_Hippo):
         # I think its fine because we did use_thor_objects=False for ObjectRetriever, so objs should always be Objaverse
         #
 
+        import llmqueries
+        from llmqueries.llm import LLM
+        prompt = f"""
+I need your help to detect "planar" objects. If the object is planar, please output OBJECT_IS_PLANAR anywhere in your answer. Otherwise, output OBJECT_IS_NOT_PLANAR.
+
+Keep your answers brief.
+
+Examples of planar objects: door, photograph, window, ceiling, etc.
+Examples of non-planar objects: sofa, armchair, table. etc.
+
+---
+
+Now consider this object: {self.object_name}
+        """
+        _, resp = LLM(prompt=prompt.strip(), gpt_version="gpt-4.1-mini-2025-04-14")
+
+        is_planar = "OBJECT_IS_PLANAR" in resp
+
         _is_objaverse_asset = [True] * len(found_assets)
         return self.replace(
+            _is_planar_according_to_llm=is_planar,
             _is_objaverse_asset=tuple(_is_objaverse_asset),
             _found_assetIds=found_assets,
             _found_sizes=found_sizes,
@@ -257,7 +278,7 @@ class HippoObject(_Hippo):
                 if cfg.assetfitting.rotate:
                     from hippo.reconstruction.assetlookup.assetalign import align, pcd_or_mesh_to_np, \
                         rotate_point_cloud_y_axis, add_scaling_to_transmat
-                    euler_rots, transformation_mat_rots = align(pcd_to_align=obj, target_pcd=self._cg_pcd_points, round_rot=cfg.assetfitting.round_rot)
+                    euler_rots, transformation_mat_rots = align(pcd_to_align=obj, target_pcd=self._cg_pcd_points, round_rot=cfg.assetfitting.round_rot, is_planar_according_to_llm=self._is_planar_according_to_llm)
                     obj = transform_ai2thor_object(obj, np.array(transformation_mat_rots))
 
                 from hippo.reconstruction.assetlookup.assetscale import scale_object

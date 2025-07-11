@@ -709,9 +709,11 @@ def remove_translation_from_transmat(matrix):
 def try_rescue_planes(pcd_to_align, target_pcd):
     # rescues cases where a plane is generated flat on the ground, yet should be standing
 
-    from hippo.reconstruction.assetlookup.assetIsPlane import is_single_plane
-    if not is_single_plane(pcd_to_align):
-        return pcd_to_align, np.array([0,0,0])
+    #from hippo.reconstruction.assetlookup.assetIsPlane import is_plane_object
+    #if not (is_plane_object(target_pcd) and is_plane_object(pcd_to_align)):
+    #    print("Is not a plane, skipping rescue attempt")
+    #    return pcd_to_align, np.array([0,0,0])
+    #print("Is a plane, attempting rescue")
 
     rots_to_try = [(0,0,0), (90, 0, 0), (0, 0, 90)] # , (90,0,90)]
 
@@ -730,7 +732,7 @@ def try_rescue_planes(pcd_to_align, target_pcd):
 #CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
 #cache = Cache(CACHEPATH)
 #@cache.memoize()
-def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=200, do_global_tune=False, round_rot=None):
+def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=200, do_global_tune=False, round_rot=None, is_planar_according_to_llm=None):
     if target_pcd is None:
         target_pcd = pcd_to_align
         assert spoof_rad is not None
@@ -766,7 +768,10 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
             print("Downscaled to edges")
             draw_registration_result(pcd_to_align, target_pcd)
 
-    pcd_to_align, rescue_rots = try_rescue_planes(pcd_to_align, target_pcd)
+    if is_planar_according_to_llm:
+        pcd_to_align, rescue_rots = try_rescue_planes(pcd_to_align, target_pcd)
+    else:
+        rescue_rots = np.zeros(3)
     found_rot = global_align(pcd_to_align, target_pcd)
     if not DISABLE_VIS:
         print("Gross rotation")

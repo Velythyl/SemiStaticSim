@@ -7,7 +7,7 @@ from collections import deque
 from pathlib import Path
 
 import tiktoken
-import barebonesllmchat
+#import barebonesllmchat
 import numpy as np
 import openai
 from tenacity import retry, stop_after_attempt, wait_exponential
