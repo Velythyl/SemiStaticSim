@@ -180,7 +180,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
     for hippo_object, pcd, pcd_color in (zip(hippo_objects,pcds, pcd_colors)):
         original_pcd = pcd
 
-        pcd, pcd_color = filter_points_by_y_quartile(pcd, 1, 99, points_colors=pcd_color)
+        #pcd, pcd_color = filter_points_by_y_quartile(pcd, 1, 99, points_colors=pcd_color)
 
         def weighted_centroid(pcd: np.ndarray, scale: float = 1.0) -> np.ndarray:
             """
