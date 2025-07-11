@@ -199,6 +199,9 @@ Now consider this object: {self.object_name}
 
         del asdict["_position"]
         del asdict["_rotation"]
+        del asdict["_cg_pcd_points"]
+        del asdict["_cg_pcd_colours"]
+        del asdict["_clip_features"]
 
         asdict["IS_HIPPO"] = True
 
