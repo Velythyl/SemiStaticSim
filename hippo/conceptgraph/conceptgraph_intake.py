@@ -195,7 +195,7 @@ def load_conceptgraph(path):
                 segments_anno["segGroups"][i] = None
 
         #FOUND_KEEP = False
-        #for only_keep in ["wooden sideboard", "wooden cabinet", "grid window"]:
+        #for only_keep in ["wooden cabinet", "grid window", "armchair", "boat photograph"]:
         #    if only_keep in grp["label"]:
         #        FOUND_KEEP = True
         #if not FOUND_KEEP:

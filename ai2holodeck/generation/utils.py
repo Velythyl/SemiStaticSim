@@ -139,9 +139,9 @@ def get_replica_pov(controller, cfg, scene):
                 ),
             )
 
-        x = Image.fromarray(controller.last_event.third_party_camera_frames[0])
-        #x.show()
-        ret_images.append(x)
+            x = Image.fromarray(controller.last_event.third_party_camera_frames[0])
+            #x.show()
+            ret_images.append(x)
     return ret_images
 
     """"

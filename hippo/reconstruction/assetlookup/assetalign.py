@@ -706,6 +706,26 @@ def remove_translation_from_transmat(matrix):
 
     return result
 
+def try_rescue_planes(pcd_to_align, target_pcd):
+    # rescues cases where a plane is generated flat on the ground, yet should be standing
+
+    from hippo.reconstruction.assetlookup.assetIsPlane import is_single_plane
+    if not is_single_plane(pcd_to_align):
+        return pcd_to_align, np.array([0,0,0])
+
+    rots_to_try = [(0,0,0), (90, 0, 0), (0, 0, 90)] # , (90,0,90)]
+
+    def try_rot(rot):
+        try_pcd = transform_point_cloud(pcd_to_align, euler_to_matrix_4x4(*rot, degrees=True))
+        loss = get_score(try_pcd, target_pcd,rad=0)
+        return loss
+
+    losses = np.array([try_rot(r) for r in rots_to_try])
+    best_rot = losses.argmin()
+    return transform_point_cloud(pcd_to_align, euler_to_matrix_4x4(*rots_to_try[best_rot], degrees=True)), np.array(rots_to_try[best_rot])
+
+
+
 #from diskcache import FanoutCache, Cache
 #CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
 #cache = Cache(CACHEPATH)
@@ -719,7 +739,6 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
 
     pcd_to_align = pcd_or_mesh_to_np(pcd_to_align, mesh_keep_vertex_OR_sample_points="sample_points")
     target_pcd = pcd_or_mesh_to_np(target_pcd)
-
 
 
 
@@ -747,6 +766,7 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
             print("Downscaled to edges")
             draw_registration_result(pcd_to_align, target_pcd)
 
+    pcd_to_align, rescue_rots = try_rescue_planes(pcd_to_align, target_pcd)
     found_rot = global_align(pcd_to_align, target_pcd)
     if not DISABLE_VIS:
         print("Gross rotation")
@@ -757,8 +777,10 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
             return N * round(angle / N)
         if round_rot is not None:
             found_rot = math.radians(round_angle(math.degrees(found_rot), round_rot))
-        return np.array([0, math.degrees(found_rot), 0]), euler_to_matrix_4x4(0, found_rot, 0, degrees=False)
+        return (np.array([rescue_rots[0], rescue_rots[1] + math.degrees(found_rot), rescue_rots[2]]),
+                euler_to_matrix_4x4(math.radians(rescue_rots[0]), math.radians(rescue_rots[1]) + found_rot, math.radians(rescue_rots[2]) + 0, degrees=False))
 
+    raise NotImplementedError("Need to handle rescue rots")
     if do_global_tune:
         transmat = execute_global_registration(pcd_to_align, target_pcd, voxel_size=0.05, init_yrot=found_rot)
         transmat = add_yrot_to_trans_mat(transmat, found_rot)

@@ -261,6 +261,10 @@ class SceneComposer(SelfDataclass):
                 obj = obj[0]
             obj.concretize(self.cfg, concrete_asset_dir)
             return obj.as_holodeckdict()
+        for obj in self.objectplans:
+            new_object = process_object(obj)
+            scene['objects'].append(new_object)
+        return scene
 
         with ThreadPoolExecutor(max_workers=self.cfg.parallelism.composer_concretizer_max_workers) as executor:
             futures = [executor.submit(process_object, obj) for obj in self.objectplans]
