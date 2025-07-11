@@ -205,7 +205,7 @@ def pcd_or_mesh_to_np(pcd_or_mesh, NUM_POINTS_TO_KEEP=1000, mesh_keep_vertex_OR_
     if isinstance(pcd_or_mesh, o3d.geometry.TriangleMesh):
         return pcd_or_mesh_to_np(pcd_or_mesh.sample_points_uniformly(number_of_points=NUM_POINTS_TO_KEEP))
 
-def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array):
+def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array, get_best_score=False):
     trials = jnp.linspace(0,  2*np.pi, 100)
 
     BATCH_SIZE = 100
@@ -219,6 +219,9 @@ def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array):
     #scores = jax.vmap(functools.partial(get_score, pcd_to_rotate, pcd_to_match))(trials)
     best_rot = scores.argmin()
     found_rot = trials[best_rot]
+
+    if get_best_score:
+        return found_rot, scores[best_rot]
     return found_rot
 
 def swap_yz(pcd: np.array):
@@ -717,9 +720,11 @@ def try_rescue_planes(pcd_to_align, target_pcd):
 
     rots_to_try = [(0,0,0), (90, 0, 0), (0, 0, 90)] # , (90,0,90)]
 
+    
+
     def try_rot(rot):
         try_pcd = transform_point_cloud(pcd_to_align, euler_to_matrix_4x4(*rot, degrees=True))
-        loss = get_score(try_pcd, target_pcd,rad=0)
+        loss = global_align(try_pcd, target_pcd, get_best_score=True)[1]
         return loss
 
     losses = np.array([try_rot(r) for r in rots_to_try])

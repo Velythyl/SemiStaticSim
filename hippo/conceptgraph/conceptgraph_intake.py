@@ -190,8 +190,7 @@ def load_conceptgraph(path):
         }
 
     for i, grp in enumerate(copy.deepcopy(segments_anno["segGroups"])):
-        grp["label"] = grp["label"].replace(": ", "").lower()
-        for to_remove in ["ceiling", "window blinds", "blinds", "wall", "window blinds", "blinds", "wooden sideboard"]: #, "door"]:
+        for to_remove in ["ceiling", "window blinds", "blinds", "wall", "window blinds", "blinds", "wooden cabinet", "light switches", "water droplet"]:#, "wooden sideboard"]: #, "door"]:
             if to_remove in grp["label"]:
                 segments_anno["segGroups"][i] = None
 
@@ -205,6 +204,8 @@ def load_conceptgraph(path):
 
 
     segments_anno["segGroups"] = list(filter(lambda x: x is not None, segments_anno["segGroups"]))
+    for grp in segments_anno["segGroups"]:
+        grp["label"] = grp["label"].replace(": ", "").lower()
     print([x["label"] for x in segments_anno["segGroups"]])
 
     def vis_id2obj():
