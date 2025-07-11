@@ -220,7 +220,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
         #position[1] = np.min(pcd[:,1])
         #if position[1] < 0.1:
         #    position[1] = 0.0
-
+        print(hippo_object.object_name)
         print(position)
         assert (position >= (minbound+lowpad)).all()
 #        assert (position <= (maxbound-pad)).all()
