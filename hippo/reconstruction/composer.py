@@ -261,6 +261,7 @@ class SceneComposer(SelfDataclass):
                 obj = obj[0]
             obj.concretize(self.cfg, concrete_asset_dir)
             return obj.as_holodeckdict()
+
         #for obj in self.objectplans:
         #    new_object = process_object(obj)
         #    scene['objects'].append(new_object)

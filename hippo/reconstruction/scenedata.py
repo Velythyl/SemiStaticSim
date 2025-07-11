@@ -218,6 +218,8 @@ class HippoObject(_Hippo):
         )
 
     def concretize(self, cfg, target_directory):
+        print(f"Concretizing {self.object_name}")
+
         all_selves = self
 
         for self in all_selves:
