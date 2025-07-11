@@ -6,7 +6,7 @@ from hippo.utils.subproc import run_subproc
 from hippo.utils.file_utils import get_tmp_file
 
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
-#os.environ['JAX_PLATFORMS'] = 'cpu'
+os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 from pathlib import Path
@@ -114,7 +114,7 @@ def main(cfg):
 if __name__ == '__main__':
     import socket
 
-    if True:# and "pop-os" in socket.gethostname():
+    if False: #True:# and "pop-os" in socket.gethostname():
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
         os.environ["DISPLAY"] = f":99"
 

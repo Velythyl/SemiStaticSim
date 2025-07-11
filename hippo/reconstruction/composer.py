@@ -250,6 +250,8 @@ class SceneComposer(SelfDataclass):
         import copy
 
         scene = self.asset_lookup.generate_rooms(copy.deepcopy(DEFAULT_SCENE), hipporoom=self.roomplan)
+
+        #print(self.objectplans[0]._position, self.objectplans[1]._position)
         scene = copy.deepcopy(scene)
         if 'objects' not in scene:
             scene['objects'] = []

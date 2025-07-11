@@ -182,7 +182,40 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
 
         pcd, pcd_color = filter_points_by_y_quartile(pcd, 1, 99, points_colors=pcd_color)
 
-        position = np.mean(pcd, axis=0)
+        def weighted_centroid(pcd: np.ndarray, scale: float = 1.0) -> np.ndarray:
+            """
+            Estimate centroid of noisy point cloud by weighting points based on distance to naive mean.
+
+            Parameters:
+                pcd (np.ndarray): point cloud of shape (N, 3)
+                scale (float): scaling factor for weighting function. Larger means less aggressive weighting.
+
+            Returns:
+                position (np.ndarray): estimated position, shape (3,)
+            """
+            if pcd.ndim != 2 or pcd.shape[1] != 3:
+                raise ValueError("pcd must be of shape (N, 3)")
+
+            # Step 1: naive centroid
+            naive_centroid = np.mean(pcd, axis=0)
+
+            # Step 2: compute distances to naive centroid
+            distances = np.linalg.norm(pcd - naive_centroid, axis=1)
+
+            # Step 3: compute weights
+            # Here we use Gaussian weights: w_i = exp( - (d_i / scale)^2 )
+            if scale <= 0:
+                scale = np.std(distances)  # fallback: use spread of points
+            weights = np.exp(-(distances / scale) ** 2)
+
+            # Step 4: compute weighted centroid
+            weighted_sum = np.sum(weights[:, None] * pcd, axis=0)
+            sum_weights = np.sum(weights)
+            refined_centroid = weighted_sum / sum_weights
+
+            return refined_centroid
+
+        position = weighted_centroid(pcd) #np.mean(pcd, axis=0)
         #position[1] = np.min(pcd[:,1])
         #if position[1] < 0.1:
         #    position[1] = 0.0
