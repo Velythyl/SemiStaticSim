@@ -29,7 +29,7 @@ from omegaconf import OmegaConf
 def main(cfg):
     from hippo.reconstruction.composer import SceneComposer
 
-    target_dir = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/replica_room0_banner/replica_room0_cg-detector_2025-04-04-18-03-58/generated_on_2025-07-10-14-46-20"
+    target_dir = "/home/charlie/Downloads/tema/bli (copy)"
     composer = SceneComposer(
         cfg,
         asset_lookup=None,

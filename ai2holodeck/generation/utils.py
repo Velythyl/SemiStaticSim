@@ -128,7 +128,7 @@ def get_replica_pov(controller, cfg, scene):
             # use debugger to tune with quicktune
 
 
-        POSES = [[(6,2.5,5), (35,210,0)]]
+        POSES = [[(6,2.5,5), (35,210,0)], [(6,3,5), (40,210,0)]]
 
         for (x,y,z), (a1,a2,a3) in POSES:
             controller.step(

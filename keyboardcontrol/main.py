@@ -337,7 +337,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
 
 
 if __name__ == "__main__":
-    main(scene_name="/home/charlie/Downloads/tema/bla/random_0",  # FloorPlan19_physics ## room
+    main(scene_name="/home/charlie/Downloads/tema/blo/random_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree
