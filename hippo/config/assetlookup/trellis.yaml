@@ -5,3 +5,4 @@ clip_size_comparison_thresh: 100 # 0.1 is fair, 0.5 is coarse, 100 is disabled. 
 clip_similarity_thresh: 28 # 28 is holodeck. 1 is more than 28, 20
 clip_keep_top_k: 100
 clear_TRELLIS_cache_for_this_scene: False
+method_human_readable_name: "TRELLIS-yes-mask"

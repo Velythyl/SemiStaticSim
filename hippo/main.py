@@ -45,7 +45,7 @@ def main(cfg):
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
 
-            if False: #"pop-os" not in socket.gethostname():
+            if "pop-os" not in socket.gethostname():
                 print("Finding free port for TRELLIS server...")
                 def find_free_port_in_range(start=1024, end=65535):
                     for port in range(start, end):
@@ -75,6 +75,7 @@ def main(cfg):
 
                 sleep(10)
                 print("TRELLIS server started successfully.")
+                cfg.assetlookup.client_port = free_port
 
             HIPPO = TRELLISLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
     print("AssetLookup loaded.")
@@ -109,12 +110,12 @@ def main(cfg):
         print("TRELLIS server killed.")
 
     print("Bye, have a nice day!")
-    os._exit(0)
+    #os._exit(0)
 
 if __name__ == '__main__':
     import socket
 
-    if False: #True:# and "pop-os" in socket.gethostname():
+    if True:# and "pop-os" in socket.gethostname():
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
         os.environ["DISPLAY"] = f":99"
 
@@ -135,5 +136,5 @@ HF_HOME=/network/scratch/c/charlie.gauthier/hfcache XDG_RUNTIME_DIR=/tmp PYTHONP
 
 CUDA_VISIBLE_DEVICES=-1 XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
 
-XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
+pkill python; XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
 """
