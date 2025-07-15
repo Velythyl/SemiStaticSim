@@ -14,7 +14,6 @@ from time import sleep
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 
-from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
 
 
 
@@ -31,6 +30,7 @@ def main(cfg):
     print("Running HIPPO scene composition...")
     print("Loading CG...")
     set_api_key(cfg.secrets.openai_key)
+    from hippo.conceptgraph.conceptgraph_to_hippo import get_hippos
     hipporoom, objects = get_hippos(cfg, Path(cfg.paths.scene_dir).resolve(), pad=cfg.scene.pad)
 
     print("CG loaded, number of objects:", len(objects))
@@ -110,12 +110,15 @@ def main(cfg):
         print("TRELLIS server killed.")
 
     print("Bye, have a nice day!")
-    #os._exit(0)
+    os._exit(0)
 
 if __name__ == '__main__':
     import socket
+    os.environ["XDG_RUNTIME_DIR"] = "/tmp"
+    os.makedirs("/tmp/.X11-unix", exist_ok=True)
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    if True:# and "pop-os" in socket.gethostname():
+    if True: #True:# and "pop-os" in socket.gethostname():
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
         os.environ["DISPLAY"] = f":99"
 
