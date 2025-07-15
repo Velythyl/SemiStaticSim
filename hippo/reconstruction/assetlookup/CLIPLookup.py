@@ -135,7 +135,12 @@ class CLIPLookup:
                 ],
                 "receptacleHeight": 0.7,
                 "reflections": [],
-                "skyboxId": "SkyOakland"
+
+                "skyboxColor": {
+                  "b": 0.0,
+                  "g": 0.0,
+                  "r": 0.0
+                },
             }}
         """
 

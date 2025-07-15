@@ -29,7 +29,7 @@ from omegaconf import OmegaConf
 def main(cfg):
     from hippo.reconstruction.composer import SceneComposer
 
-    target_dir = "/home/charlie/Downloads/tema/bli (copy)"
+    target_dir = "/home/charlie/Downloads/tema/yerp"
     composer = SceneComposer(
         cfg,
         asset_lookup=None,
