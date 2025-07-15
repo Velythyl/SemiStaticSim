@@ -157,6 +157,13 @@ class SceneComposer(SelfDataclass):
 
             with open(os.path.join(WRITE_DIR, "cfg.yaml"), "w") as f:
                 OmegaConf.save(config=self.cfg, f=f)
+
+        counter = 0
+        for self in generator:
+            process_one(counter, self)
+            counter += 1
+        return
+        #exit()
         #process_one(0, next(generator))
 
         with ThreadPoolExecutor(max_workers=self.cfg.parallelism.composer_selves_max_workers) as executor:

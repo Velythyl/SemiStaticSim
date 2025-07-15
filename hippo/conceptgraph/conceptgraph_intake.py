@@ -190,7 +190,7 @@ def load_conceptgraph(path):
         }
 
     for i, grp in enumerate(copy.deepcopy(segments_anno["segGroups"])):
-        for to_remove in ["ceiling", "window", "window blinds", "blinds", "wall", "window blinds", "blinds", "water droplet", "wooden sideboard", "carpet", "rug", "floor rug", "floor carpet"]:#, "wooden sideboard"]: #, "door"]:
+        for to_remove in ["ceiling", "window", "window blinds", "blinds", "wall", "window blinds", "blinds", "water droplet", "carpet", "rug", "floor rug", "floor carpet"]:#, "wooden sideboard"]: #, "door"]:
             if to_remove in grp["label"]:
                 segments_anno["segGroups"][i] = None
 

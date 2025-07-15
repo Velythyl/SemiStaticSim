@@ -136,11 +136,11 @@ class CLIPLookup:
                 "receptacleHeight": 0.7,
                 "reflections": [],
 
-                "skyboxColor": {
+                "skyboxColor": {{
                   "b": 0.0,
                   "g": 0.0,
                   "r": 0.0
-                },
+                }}
             }}
         """
 
