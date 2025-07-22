@@ -26,6 +26,14 @@ from omegaconf import OmegaConf
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
+    if "HYDRA_SPOOF" in os.environ and os.environ["HYDRA_SPOOF"] == "toplevel":
+        print("Detected HYDRA_SPOOF environment variable. Launching bottom-level code now...")
+        from hydra.core.hydra_config import HydraConfig 
+        hc = HydraConfig.get()
+        overrides = hc.overrides.task
+        print(overrides)
+        return run_subproc(f'cd /home/mila/c/charlie.gauthier/Holodeck/hippo && source ../venv/bin/activate && CUDA_VISIBLE_DEVICES=-1 HYDRA_SPOOF="bottomlevel" PYTHONPATH=..:$PYTHONPATH python3 main.py {" ".join(overrides)}', shell=True)
+
 
     print("Running HIPPO scene composition...")
     print("Loading CG...")
@@ -45,7 +53,7 @@ def main(cfg):
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
 
-            if "pop-os" not in socket.gethostname():
+            if False: # "pop-os" not in socket.gethostname():
                 print("Finding free port for TRELLIS server...")
                 def find_free_port_in_range(start=1024, end=65535):
                     for port in range(start, end):
@@ -56,6 +64,11 @@ def main(cfg):
                             except OSError:
                                 continue
                     raise RuntimeError("No free ports found in range")
+                def find_free_port_in_range(start=1024, end=65535):
+                    import socket
+                    sock = socket.socket()
+                    sock.bind(('', 0))
+                    return sock.getsockname()[-1]
                 free_port = find_free_port_in_range()
                 print(f"Free port found: {free_port}")
                 print("Hopefully, someone doesn't steal the port in the meantime...")
@@ -66,12 +79,16 @@ def main(cfg):
                     f"cd /home/mila/c/charlie.gauthier/TRELLIS && source venv2/bin/activate && CUDA_VISIBLE_DEVICES=0 HF_HOME=/network/scratch/c/charlie.gauthier/hfcache python3 flaskserver.py --port={free_port}",
                     shell=True, immediately_return=True)
                 TOTAL_WAIT_TIME = 0
-                while "WARNING: This is a development server." not in trellis_proc.stdout_stderr.getvalue():
+                while True:
                     print("Waiting for TRELLIS server to start...")
                     sleep(10)
                     TOTAL_WAIT_TIME += 10
                     if TOTAL_WAIT_TIME > 600:
                         raise RuntimeError("TRELLIS server did not start in time! Check the logs for errors.")
+                    if "WARNING: This is a development server." in trellis_proc.stdout_stderr.getvalue():
+                        break
+                    if "* Running on all addresses" in trellis_proc.stdout_stderr.getvalue():
+                        break
 
                 sleep(10)
                 print("TRELLIS server started successfully.")
@@ -101,6 +118,7 @@ def main(cfg):
     #composer.write_compositions_in_order(1)
 
     print("Taking topdown view...")
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"   # this IS necessary, but WHY??? We already set it to -1 above! somehow it flips back to 0!? And this only happens on a multirun, not on `mila code`!
     composer.take_photos()
     print("Done with scene composition and topdown view.")
 
@@ -113,6 +131,10 @@ def main(cfg):
     os._exit(0)
 
 if __name__ == '__main__':
+    
+
+
+
     import socket
     os.environ["XDG_RUNTIME_DIR"] = "/tmp"
     os.makedirs("/tmp/.X11-unix", exist_ok=True)
@@ -140,4 +162,13 @@ HF_HOME=/network/scratch/c/charlie.gauthier/hfcache XDG_RUNTIME_DIR=/tmp PYTHONP
 CUDA_VISIBLE_DEVICES=-1 XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
 
 pkill python; XDG_RUNTIME_DIR=/tmp PYTHONPATH=..:$PYTHONPATH xvfb-run -a -s "-screen 0 1400x900x24" python3 main.py
+
+
+
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=120  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=6 hydra.launcher.mem_gb=32 hydra.launcher.array_parallelism=60 hydra.launcher.partition=unkillable  secrets=secrets_cluster  assetfitting=rot_and_axisscale  paths.scene_id='replica_office2_cg-detector_2025-06-10-20-34-08.445148'  paths.out_dir="./sampled_scenes/DEBUGGINGVIS"
+
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=120  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main  secrets=secrets_cluster  assetfitting=rot_and_axisscale  paths.scene_id='replica_office2_cg-detector_2025-06-10-20-34-08.445148,replica_room0_cg-detector_2025-06-10-20-16-50.243828,replica_office0_cg-detector_2025-06-10-20-25-14.795112,replica_office3_cg-detector_2025-06-10-20-40-27.070705,replica_room1_cg-detector_2025-06-10-20-04-54.511655,replica_office1_cg-detector_2025-06-10-20-29-28.683537,replica_office4_cg-detector_2025-06-10-20-45-18.828598,replica_room2_cg-detector_2025-06-10-20-21-16.981182' assetlookup=trellis,trellis_nomask,clip  paths.out_dir="./sampled_scenes/allreplicagrid"
+
 """

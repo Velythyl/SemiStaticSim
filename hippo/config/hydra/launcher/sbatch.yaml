@@ -14,21 +14,21 @@ array_parallelism: 10 # max num of tasks to run in parallel (via job array)
 setup:
   - "export WANDB_DIR=${hydra.sweep.dir}"
   - "export HYDRA_SWEEP_DIR=${hydra.sweep.dir}"
-  - "export BREAK=False"
-  - "export HF_HOME=/network/scratch/c/charlie.gauthier/hfcache"
+  #- "export BREAK=False"
+  #- "export HF_HOME=/network/scratch/c/charlie.gauthier/hfcache"
   # WANDB ?
   - 'export TQDM_DISABLE=1'
-  - "module load python/3.10"
-  - "module load cuda/12.1.1/cudnn/9.3"
-  - "module load libffi"
-  - "ulimit -n 16384"
+  #- "module load python/3.10"
+  #- "module load cuda/12.1.1/cudnn/9.3"
+  #- "module load libffi"
+  #- "ulimit -n 16384"
   #- "export XDG_RUNTIME_DIR=/tmp"
   #- "[ \"$MY_STRING\" = \"TRELLIS\" ] && echo \"Running TRELLIS\" || echo \"Not running TRELLIS\""
   #- '[ "${assetlookup.method}" = "TRELLIS" ] && { cd $HOME/TRELLIS && source venv2/bin/activate && huggingface-cli login --token ${secrets.hf_token} && python3 flaskserver.py & } || echo "Not running TRELLIS"'
   #- '[ "${assetlookup.method}" = "TRELLIS" ] &&  sleep 180 || echo "Not running TRELLIS"'
-  - "mkdir -p /tmp/.X11-unix"
+  #- "mkdir -p /tmp/.X11-unix"
   - "source $HOME/Holodeck/venv/bin/activate"
-  - "export PYTHONPATH=$HOME/Holodeck:$HOME/Holodeck/hippo:$PYTHONPATH"
+  - "export PYTHONPATH=..:$PYTHONPATH" #:$HOME/Holodeck/hippo:$PYTHONPATH"
   #- "export TMPFILE=$(mktemp)"
   #- 'Xvfb -screen 0 180x180x24 -displayfd 3 3> "$TMPFILE" &'
   #- "sleep 30"
@@ -36,6 +36,7 @@ setup:
   #- 'export DISPLAY=:$(cat "$TMPFILE")'
   #- "echo $DISPLAY"
   #- "sleep $((RANDOM % 30))"
+  - 'export HYDRA_SPOOF="toplevel"'
   - "export CUDA_VISIBLE_DEVICES=-1"
 
 # module load cuda/12.1.1/cudnn
