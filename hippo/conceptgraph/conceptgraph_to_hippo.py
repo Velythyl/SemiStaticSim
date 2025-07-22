@@ -228,7 +228,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
         hippo_object = hippo_object.replace(_position=position, _desired_size=size)
         hippo_object = hippo_object.set_pcd_(pcd, pcd_color)
 
-        names_to_add = [hippo_object.object_name] #+ hippo_object.object_name.split(" ")
+        names_to_add = [hippo_object.object_name] + hippo_object.object_name.split(" ")
         for name_to_add in names_to_add:
             if name_to_add not in name2objs:
                 name2objs[name_to_add] = []

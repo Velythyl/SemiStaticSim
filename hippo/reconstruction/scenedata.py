@@ -10,6 +10,7 @@ import numpy as np
 import open3d as o3d
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
+from hippo.reconstruction.assetlookup.assetIsPlane import ask_llm_if_plane
 from hippo.utils.dict_utils import recursive_map
 from hippo.utils.selfdataclass import SelfDataclass
 from hippo.utils.spatial_utils import transform_ai2thor_object
@@ -118,26 +119,11 @@ class HippoObject(_Hippo):
         #
 
         import llmqueries
-        from llmqueries.llm import LLM
-        prompt = f"""
-I need your help to detect "planar" objects. If the object is planar, please output OBJECT_IS_PLANAR anywhere in your answer. Otherwise, output OBJECT_IS_NOT_PLANAR.
 
-Keep your answers brief.
-
-Examples of planar objects: door, photograph, window, ceiling, etc.
-Examples of non-planar objects: sofa, armchair, table. etc.
-
----
-
-Now consider this object: {self.object_name}
-        """
-        _, resp = LLM(prompt=prompt.strip(), gpt_version="gpt-4.1-mini-2025-04-14")
-
-        is_planar = "OBJECT_IS_PLANAR" in resp
 
         _is_objaverse_asset = [True] * len(found_assets)
         return self.replace(
-            _is_planar_according_to_llm=is_planar,
+            _is_planar_according_to_llm=ask_llm_if_plane(self.object_name),
             _is_objaverse_asset=tuple(_is_objaverse_asset),
             _found_assetIds=found_assets,
             _found_sizes=found_sizes,

@@ -189,8 +189,13 @@ def load_conceptgraph(path):
             "rgb": str(Path(f"{path}/segments/{grp['id']}/rgb").resolve())
         }
 
+    for grp in segments_anno["segGroups"]:
+        grp["label"] = grp["label"].replace(": ", "").lower()
+
+    segments_anno = make_pcd_axis_aligned(segments_anno)    # align before filtering pcds because we will need the background pcds such as walls, doors, etc
+
     for i, grp in enumerate(copy.deepcopy(segments_anno["segGroups"])):
-        for to_remove in ["ceiling", "window", "window blinds", "blinds", "wall", "window blinds", "blinds", "water droplet", "carpet", "rug", "floor rug", "floor carpet"]:#, "wooden sideboard"]: #, "door"]:
+        for to_remove in ["background", "ceiling", "window", "window blinds", "blinds", "wall", "window blinds", "blinds", "water droplet", "carpet", "rug", "floor rug", "floor carpet"]:#, "wooden sideboard"]: #, "door"]:
             if to_remove in grp["label"]:
                 segments_anno["segGroups"][i] = None
 
@@ -208,6 +213,7 @@ def load_conceptgraph(path):
         grp["label"] = grp["label"].replace(": ", "").lower()
     print([x["label"] for x in segments_anno["segGroups"]])
 
+
     def vis_id2obj():
         pcds = []
         for v in segments_anno["segGroups"]:
@@ -219,6 +225,124 @@ def load_conceptgraph(path):
     #vis_id2obj()
 
     return segments_anno
+
+
+def make_pcd_axis_aligned(segments_anno):
+    from hippo.reconstruction.assetlookup.assetIsPlane import is_single_plane
+    from scipy.optimize import minimize
+    from scipy.spatial.transform._rotation import Rotation
+
+    # Extract point clouds and check if they're planes
+    pcd_labels = []
+    pcds = []
+    pcd_is_plane = []
+    pcd_plane_params = []
+    for v in segments_anno["segGroups"]:
+        print(v["label"])
+        pcd_labels.append(v["label"])
+        pcds.append(v["pcd"])
+
+        try:
+            is_plane, plane_params = is_single_plane(pcds[-1])
+
+            if is_plane:
+                from hippo.reconstruction.assetlookup.assetIsPlane import ask_llm_if_plane
+                llm_says_is_plane = ask_llm_if_plane(pcd_labels[-1])
+                if not llm_says_is_plane:
+                    is_plane = False
+        except:
+            is_plane = False
+
+        pcd_is_plane.append(is_plane)
+        pcd_plane_params.append(plane_params)
+        print("is plane:", is_plane)
+
+
+
+
+    # Filter only planes and their parameters (normal vectors)
+    plane_normals = []
+    plane_pcds = []
+    for is_plane, params, pcd in zip(pcd_is_plane, pcd_plane_params, pcds):
+        if is_plane:
+            # Assuming plane_params contains the normal vector (a, b, c) in ax + by + cz + d = 0
+            normal = params[:3]  # First three components are the normal
+            normal = normal / np.linalg.norm(normal)  # Normalize
+            plane_normals.append(normal)
+            plane_pcds.append(pcd)
+
+    #vis_cg(plane_pcds)
+
+    if not plane_normals:
+        return None #raise ValueError("No planes found in the point cloud segments")
+
+    # We'll find the rotation around the vertical (Z) axis that best aligns all planes
+    # with either X or Y axes (for vertical planes) or with Z axis (for horizontal planes)
+
+    def alignment_error(angle_deg):
+        """Compute how much all plane normals disagree with being axis-aligned after rotation."""
+        total_error = 0.0
+        angle_rad = np.radians(angle_deg)
+
+        # Create rotation matrix around vertical axis
+        rot = Rotation.from_rotvec([0, 0, angle_rad[0]]).as_matrix()
+
+        rotated_pcds = []
+        for normal, pcd in zip(plane_normals, plane_pcds):
+            rotated_normal = rot @ normal
+
+            # For each plane, compute how far it is from being axis-aligned
+            # We consider both possibilities (aligned with X, Y, or Z)
+            # The error is the minimum of the angles to any principal axis
+
+            # Dot products with principal axes
+            dot_x = abs(rotated_normal[0])
+            dot_y = abs(rotated_normal[1])
+            dot_z = abs(rotated_normal[2])
+
+            # The best alignment is with the axis it's closest to
+            max_dot = max(dot_x, dot_y, dot_z)
+
+            # Error is 1 - max_dot (since dot product of aligned vectors is 1)
+            error = 1 - max_dot
+            total_error += error
+
+            # Rotate the point cloud
+            colors = pcd.colors
+            pcd = np.array(pcd.points)
+            rotated_pcd = (rot @ pcd.T).T  # Transpose to handle (N,3) shape
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(rotated_pcd)
+            pcd.colors = colors
+            rotated_pcds.append(pcd)
+
+        #vis_cg(rotated_pcds)
+        return total_error
+
+    # Find the rotation angle that minimizes the alignment error
+
+    result = minimize(alignment_error, x0=0, bounds=[(-45, 45)],method='Powell',  # Doesn't use gradient information
+    options={'ftol': 10, 'xtol': 1.0})
+    optimal_angle = result.x[0]
+    print("Powell angle:", optimal_angle)
+    #result = minimize(alignment_error, x0=optimal_angle, bounds=[(-45, 45)],method='Powell',  # Doesn't use gradient information
+    #options={'ftol': 1, 'xtol': 1.0, 'maxiter': 10})
+    #optimal_angle = result.x[0]
+    #print("Refined angle:", optimal_angle)
+
+    # Apply the rotation to all point clouds
+    rot = Rotation.from_rotvec([0, 0, np.radians(optimal_angle)]).as_matrix()
+
+    # Rotate all point clouds in the segments
+    for segment in segments_anno["segGroups"]:
+        pcd = segment["pcd"]
+
+        points = np.array(pcd.points)
+        points = (rot @ points.T).T
+
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+    return segments_anno#, optimal_angle
 
 
 

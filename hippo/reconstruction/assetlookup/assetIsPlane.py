@@ -1,6 +1,26 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
+import open3d
 
+def ask_llm_if_plane(label):
+    from llmqueries.llm import LLM
+    prompt = f"""
+    I need your help to detect "planar" objects. If the object is planar, please output OBJECT_IS_PLANAR anywhere in your answer. Otherwise, output OBJECT_IS_NOT_PLANAR.
+
+    Keep your answers brief.
+
+    Examples of planar objects: door, photograph, window, ceiling, etc.
+    Examples of non-planar objects: sofa, armchair, table. etc.
+
+    ---
+
+    Now consider this object: {label}
+            """
+    _, resp = LLM(prompt=prompt.strip(), gpt_version="gpt-4.1-mini-2025-04-14")
+
+    is_planar = "OBJECT_IS_PLANAR" in resp
+    return is_planar
 
 def is_single_plane(points, noise_threshold=0.05, min_points=10):
     """
@@ -16,6 +36,9 @@ def is_single_plane(points, noise_threshold=0.05, min_points=10):
         bool: True if the points form a single plane within noise tolerance
         plane_params: (4,) array containing plane equation coefficients (a,b,c,d) for ax+by+cz+d=0
     """
+    if isinstance(points, open3d.geometry.PointCloud):
+        points = np.array(points.points)
+
     if len(points) < min_points:
         return False, jnp.array([0., 0., 0., 0.])
 

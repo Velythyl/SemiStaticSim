@@ -115,7 +115,7 @@ def main(cfg):
 if __name__ == '__main__':
     import socket
 
-    if True:# and "pop-os" in socket.gethostname():
+    if False:# and "pop-os" in socket.gethostname():
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
         os.environ["DISPLAY"] = f":99"
 
