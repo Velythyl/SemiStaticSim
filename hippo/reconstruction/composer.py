@@ -298,7 +298,14 @@ class SceneComposer(SelfDataclass):
         photo_funcs = [("replica_pov.png", get_replica_pov), ("topdown.png", get_top_down_frame)]#, ("room_image.png", get_hippo_room_images)]
 
         def process_path(path):
-            controller = get_hippo_controller(path, width=2048, height=2048)
+            print(f"Processing path: {path}")
+            print("With cuda visible devices:", os.environ.get("CUDA_VISIBLE_DEVICES", "Not set"))
+            try:
+                controller = get_hippo_controller(path, width=2048, height=2048)
+            except Exception as e:
+                print(f"Failed to create controller for {path}: {e}")
+                raise e
+            print(f"Controller created for {path}")
             with open(path) as f:
                 scene_dict = json.load(f)
 
@@ -311,8 +318,9 @@ class SceneComposer(SelfDataclass):
                     for i, im in enumerate(img):
                         p = os.path.join(os.path.dirname(path), name).replace(".png", f"{i}.png")
                         im.save(p)
-
+            print(f"Photos taken for {path}")
             controller.stop()
+            print(f"Controller stopped for {path}")
 
         for p in todo_paths:
             process_path(p)

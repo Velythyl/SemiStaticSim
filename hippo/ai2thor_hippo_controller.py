@@ -63,22 +63,112 @@ def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASS
     assert not os.path.exists(_get_ai2thor_install_build_dir())
     os.symlink(_get_ai2thorbuilds_dir(), _get_ai2thor_install_build_dir(), target_is_directory=True)
 
-    controller = Controller(
-        #commid_id=THOR_COMMIT_ID, #'1dfe13e4926bb2e0be475e28405e98514c4035dc', #commit_id=THOR_COMMIT_ID, #'1dfe13e4926bb2e0be475e28405e98514c4035dc', # THOR_COMMIT_ID,
-        local_executable_path=f"{_get_ai2thor_install_build_dir()}/thor-Linux64-local/thor-Linux64-local",
-        local_build=True,
-        agentMode="default",
-        makeAgentsVisible=False,
-        scene=scene,
-        #gridSize=0.01,
-        action_hook_runner=ProceduralAssetHookRunner(
-            asset_directory=target_dir,
-            asset_symlink=True,
-            verbose=True,
-            load_file_in_unity=True
-        ),
-        **kwargs
-    )
+
+    cuda_visible_devices = list(
+            map(
+                int,
+                filter(
+                    lambda y: y.isdigit(),
+                    map(
+                        lambda x: x.strip(),
+                        os.environ.get("CUDA_VISIBLE_DEVICES", "").split(","),
+                    ),
+                ),
+            )
+        )
+    print("\n\n~~~AI2THOR GPU NOTICE~~~\n\n")
+    if len(cuda_visible_devices) > 0:
+        print("AI2Thor controller will use GPU(s):", cuda_visible_devices)
+        print("If this occurs on a cluster without a monitor, you need to set up a virtual display.")
+        print("You can also diagnose this when facing a `vulkaninfo` error. Remove access to the GPU!")
+    else:
+        print("AI2Thor controller will use CPU only.")
+    print("\n\n~~~~~~~~~~~~~~~~~~~~~~~\n\n")
+
+
+    try:
+        def find_free_port_in_range(start=1024, end=65535):
+            import socket
+            sock = socket.socket()
+            sock.bind(('', 0))
+            return sock.getsockname()[-1]
+            for port in range(start, end):
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    try:
+                        s.bind(('', port))
+                        return port
+                    except OSError:
+                        continue
+            raise RuntimeError("No free ports found in range")
+        
+        ai2thor_port = find_free_port_in_range()
+        print("Free port found for AI2Thor controller:", ai2thor_port)
+
+        os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/home/mila/c/charlie.gauthier/Holodeck/venv/lib/python3.10/site-packages/cv2/qt/plugins"
+        os.environ["QT_QPA_PLATFORM"] = "/home/mila/c/charlie.gauthier/Holodeck/venv/lib/python3.10/site-packages/cv2/qt/fonts"  # use offscreen rendering to avoid X11 issues
+        os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+        os.environ["TCM_ENABLE"] = "1"
+        os.environ["KMP_INIT_AT_FORK"] = "FALSE"
+        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"  # suppress TensorFlow warnings
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        os.environ["XDF_RUNTIME_DIR"] = "/tmp"  # fix for X11 issues in some environments
+        
+        if "ENVIRONMENT" in os.environ:
+            os.environ.pop("ENVIRONMENT")
+        print("Unsetting slurm variables...")
+        # yay jank :)
+        #UNSET_SLURM = []
+        for k, v in os.environ.items():
+            if k.startswith("SLURM"):
+                os.environ.pop(k)
+                #UNSET_SLURM.append(f"{k}")
+        #if len(UNSET_SLURM) > 0:
+        #    UNSET_SLURM = "env -u " + " -u ".join(UNSET_SLURM)
+        #else:
+        #    UNSET_SLURM = ""
+        #print("WILL UNSET SLURM ENV VARS:", UNSET_SLURM)
+
+
+        print("Local executable path for AI2Thor controller:", f"{_get_ai2thor_install_build_dir()}/thor-Linux64-local/thor-Linux64-local")
+
+        print("Attempting to create AI2Thor controller... this might time out. If so, you're SOL, I can't figure out how to fix it.")
+        
+
+        #import os
+       # import json
+
+        with open(f"/home/mila/c/charlie.gauthier/Holodeck/hippo/env{'_NO' if 'YERP' in os.environ else ''}_works.json", "w") as f:
+            json.dump(dict(os.environ), f, indent=2)
+
+
+
+        controller = Controller(
+            #commid_id=THOR_COMMIT_ID, #'1dfe13e4926bb2e0be475e28405e98514c4035dc', #commit_id=THOR_COMMIT_ID, #'1dfe13e4926bb2e0be475e28405e98514c4035dc', # THOR_COMMIT_ID,
+            local_executable_path=f"{_get_ai2thor_install_build_dir()}/thor-Linux64-local/thor-Linux64-local",
+            port=ai2thor_port,
+            local_build=True,
+            agentMode="default",
+            makeAgentsVisible=False,
+            scene=scene,
+            #server_timeout=200, # double the default timeout
+            #server_start_timeout=600, # double the default server start timeout
+            #gridSize=0.01,
+            action_hook_runner=ProceduralAssetHookRunner(
+                asset_directory=target_dir,
+                asset_symlink=True,
+                verbose=True,
+                load_file_in_unity=True
+            ),
+            **kwargs
+        )
+    except Exception as e:
+        from hippo.utils.subproc import run_subproc
+        print("Error while creating AI2Thor controller:", e)
+        run_subproc(f'pkill python', shell=True, immediately_return=True)
+        print("Exiting...")
+        os._exit(1)
+    
+    print("AI2Thor controller created successfully.")
 
     if get_runtime_container:
         ai2thor_objects = controller.last_event.metadata["objects"]
