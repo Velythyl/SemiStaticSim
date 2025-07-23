@@ -1,5 +1,8 @@
 import json
+import os
 import random
+import shutil
+
 import numpy as np
 from datasets import load_dataset
 from collections import defaultdict
@@ -8,7 +11,7 @@ from llmqueries.llm import set_api_key
 
 set_api_key(Path("/home/charlie/Desktop/Holodeck/hippo/secrets/openai_api_key.txt").read_text())
 # Load the HICO-DET dataset
-dataset = load_dataset("zhimeng/hico_det", cache_dir="/tmp")
+dataset = load_dataset("zhimeng/hico_det", cache_dir="/tmp/llmannotationexperiment")
 splits = dataset.keys()
 print("Available splits:", list(splits))
 
@@ -66,111 +69,151 @@ def process_dataset(dataset_split, desc, max_workers=4):
     return actions
 
 
-# Process datasets
-train_actions = process_dataset(dataset["train"], "Processing train set")
-test_actions = process_dataset(dataset["test"], "Processing test set")
+def run_exp(gpt_model):
+    # Process datasets
+    train_actions = process_dataset(dataset["train"], "Processing train set")
+    test_actions = process_dataset(dataset["test"], "Processing test set")
 
-# Combine results
-HOI_CLASSES = set(train_actions + test_actions)#.difference(set("'no_interaction'"))
-HOI_CLASSES.remove("no_interaction")
-NUM_HOI_CLASSES = len(HOI_CLASSES)
-
-
-def llm_annotate(sample_name, target_actions):
-    from llmannotationexperiment.llm_annotation import LLM_annotate
+    # Combine results
+    HOI_CLASSES = set(train_actions + test_actions)#.difference(set("'no_interaction'"))
+    TO_REMOVE = ["no_interaction", "move"]  # too common
+    HOI_CLASSES.remove("no_interaction")
+    NUM_HOI_CLASSES = len(HOI_CLASSES)
 
 
-    # Call the real LLM-based annotator
-    return LLM_annotate("gpt-4.1-2025-04-14", sample_name, target_actions)
+    def llm_annotate(sample_name, target_actions):
+        from llmannotationexperiment.llm_annotation import LLM_annotate
 
 
-# Filter samples with at least one target HOI
-def augment_sample_with_num_hoi_targets(sample, target_actions):
-    sample_s_actions = extract_actions_for_sample(sample)
+        # Call the real LLM-based annotator
+        return LLM_annotate(gpt_model, sample_name, target_actions)
 
-    COUNT = 0
-    for target_action in target_actions:
-        if target_action in sample_s_actions:
-            COUNT += 1
-    sample["NUM_TARGET_HOI"] = COUNT
-    return sample
 
-NUM_SAMPLES_TO_EVALUATE = 100
-# Evaluate predictions
-def evaluate_predictions(samples, target_actions):
-    results = []
+    # Filter samples with at least one target HOI
+    def augment_sample_with_num_hoi_targets(sample, target_actions):
+        sample_s_actions = extract_actions_for_sample(sample)
 
-    idx_to_do = list(map(int, np.random.choice(np.arange(len(samples)), NUM_SAMPLES_TO_EVALUATE)))
-    for sample_idx_todo in idx_to_do:
+        COUNT = 0
+        for target_action in target_actions:
+            if target_action in sample_s_actions:
+                COUNT += 1
+        sample["NUM_TARGET_HOI"] = COUNT
+        return sample
 
-        sample = samples[sample_idx_todo]
+    NUM_SAMPLES_TO_EVALUATE = 5
+    # Evaluate predictions
+    def evaluate_predictions(samples, target_actions):
+        results = []
 
-        all_possible_actions = loadit(sample["positive_captions"]) + loadit(sample["negative_captions"]) + loadit(sample["ambiguous_captions"])
-        sample_object_name = loadit(sample["positive_captions"])[0][0] # only consider the first object in the thing, the rest are treated as confounders
-        gt_hois = [act for objname, act in all_possible_actions if objname == sample_object_name]
-        gt_hois = list(filter(lambda x: x in target_actions, gt_hois))
+        idx_to_do = list(map(int, np.random.choice(np.arange(len(samples)), len(samples))))
+        NUM_DONE = 0
+        for sample_idx_todo in idx_to_do:
+            if NUM_DONE > NUM_SAMPLES_TO_EVALUATE:
+                break
+            NUM_DONE += 1
 
-        #gt_hois = set([hoi["category_id"] for hoi in sample["hoi_annotation"] if hoi["category_id"] in target_action_ids])
-        pred_hois = llm_annotate(sample_object_name, target_actions)
+            sample = samples[sample_idx_todo]
 
-        CORRECT = 0
-        assert len(gt_hois) >= 1
-        for pred_act in pred_hois:
-            if pred_act in gt_hois:
-                CORRECT += 1
-        acc = float(CORRECT) / len(gt_hois)
-        results.append((CORRECT, len(pred_hois), len(gt_hois)))
+            all_possible_actions = loadit(sample["positive_captions"]) + loadit(sample["negative_captions"]) + loadit(sample["ambiguous_captions"])
+            sample_object_name = loadit(sample["positive_captions"])[0][0] # only consider the first object in the thing, the rest are treated as confounders
+            gt_hois = [act for objname, act in all_possible_actions if objname == sample_object_name]
+            gt_hois = list(filter(lambda x: x in target_actions, gt_hois))
 
-    total_correct = sum(x[0] for x in results)
-    total_pred = sum(x[1] for x in results)
-    total_gt = sum(x[2] for x in results)
+            if len(gt_hois) == 0:
+                continue
 
-    precision = total_correct / total_pred if total_pred else 0
-    recall = total_correct / total_gt if total_gt else 0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0
+            #gt_hois = set([hoi["category_id"] for hoi in sample["hoi_annotation"] if hoi["category_id"] in target_action_ids])
+            pred_hois = llm_annotate(sample_object_name, target_actions)
 
-    return precision, recall, f1, len(samples)
+            CORRECT = 0
+            assert len(gt_hois) >= 1
+            for pred_act in pred_hois:
+                if pred_act in gt_hois:
+                    CORRECT += 1
+            acc = float(CORRECT) / len(gt_hois)
+            results.append((CORRECT, len(pred_hois), len(gt_hois)))
 
-# Run the experiment N times
-N = 10
-all_metrics = {split: {"precision": [], "recall": [], "f1": [], "n_samples": []} for split in splits}
+        total_correct = sum(x[0] for x in results)
+        total_pred = sum(x[1] for x in results)
+        total_gt = sum(x[2] for x in results)
 
-for run in range(N):
-    print(f"\n🔁 Run {run + 1}/{N}")
+        precision = total_correct / total_pred if total_pred else 0
+        recall = total_correct / total_gt if total_gt else 0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0
 
-    # Random target actions
-    #target_action_ids = random.sample(range(NUM_HOI_CLASSES), 10)
-    target_actions = random.sample(HOI_CLASSES, 10)
-    print("🎯 Target HOI IDs:", target_actions)
+        return precision, recall, f1, len(samples)
 
-    for split_name in splits:
-        split_data = dataset[split_name]
+    # Run the experiment N times
+    N = 10
+    all_metrics = {split: {"precision": [], "recall": [], "f1": [], "n_samples": []} for split in splits}
+    all_metrics["anysplit"] = {"precision": [], "recall": [], "f1": [], "n_samples": []}
 
-        # Filter retained samples
-        retained = split_data.map(lambda s: augment_sample_with_num_hoi_targets(s, target_actions), num_proc=8)
-        retained = retained.filter(lambda s: s["NUM_TARGET_HOI"] >= 1, num_proc=8)
-        print(len(retained))
-        if len(retained) == 0:
-            print(f"⚠️  No samples with target actions in split: {split_name}")
-            continue
+    for run in range(N):
+        print(f"\n🔁 Run {run + 1}/{N}")
 
-        # Evaluate
-        precision, recall, f1, n_samples = evaluate_predictions(retained, target_actions)
+        # Random target actions
+        #target_action_ids = random.sample(range(NUM_HOI_CLASSES), 10)
+        target_actions = random.sample(HOI_CLASSES, 10)
+        print("🎯 Target HOI IDs:", target_actions)
 
-        all_metrics[split_name]["precision"].append(precision)
-        all_metrics[split_name]["recall"].append(recall)
-        all_metrics[split_name]["f1"].append(f1)
-        all_metrics[split_name]["n_samples"].append(n_samples)
+        for split_name in splits:
+            split_data = dataset[split_name]
 
-# Report average and std deviation
-print("\n📊 === Summary Across 10 Repeats ===")
-for split in splits:
-    if not all_metrics[split]["precision"]:
-        continue
+            # Filter retained samples
+            retained = split_data.map(lambda s: augment_sample_with_num_hoi_targets(s, target_actions))#, num_proc=8)
+            retained = retained.filter(lambda s: s["NUM_TARGET_HOI"] >= 1)#, num_proc=8)
+            print(len(retained))
+            if len(retained) == 0:
+                print(f"⚠️  No samples with target actions in split: {split_name}")
+                continue
 
-    print(f"\n📂 Split: {split}")
-    for metric in ["precision", "recall", "f1"]:
-        values = all_metrics[split][metric]
-        mean = np.mean(values)
-        std = np.std(values)
-        print(f"   {metric.capitalize():<10}: {mean:.3f} ± {std:.3f}")
+            # Evaluate
+            precision, recall, f1, n_samples = evaluate_predictions(retained, target_actions)
+
+            all_metrics[split_name]["precision"].append(precision)
+            all_metrics[split_name]["recall"].append(recall)
+            all_metrics[split_name]["f1"].append(f1)
+            all_metrics[split_name]["n_samples"].append(n_samples)
+            all_metrics["anysplit"]["precision"].append(precision)
+            all_metrics["anysplit"]["recall"].append(recall)
+            all_metrics["anysplit"]["f1"].append(f1)
+            all_metrics["anysplit"]["n_samples"].append(n_samples)
+
+
+        shutil.rmtree("/tmp/llmannotationexperiment")   # HF eats so much disk its insane
+
+
+    report = """
+📊 === Summary Across 10 Repeats ===
+""".strip()
+    # Report average and std deviation
+    #print("\n📊 === Summary Across 10 Repeats ===")
+    for k, stats in all_metrics.items():
+        report += (f"\n📂 Split: {k}")
+        for metric in ["precision", "recall", "f1"]:
+            values = stats[metric]
+            mean = np.mean(values)
+            std = np.std(values)
+            report += (f"   {metric.capitalize():<10}: {mean:.3f} ± {std:.3f}")
+
+    with open(f"./json_for_{gpt_model}", "w") as f:
+        json.dump(all_metrics, f)
+
+    with open(f"./report_for_{gpt_model}", "w") as f:
+        f.write(report)
+
+    print(report)
+
+
+if __name__ == "__main__":
+
+    """
+    gpt-3.5-turbo
+        "gpt-4.1-nano-2025-04-14": 200000,
+    "gpt-4.1-mini-2025-04-14": 200000,
+    "gpt-4.1-2025-04-14": 10000,
+    """
+    run_exp("gpt-3.5-turbo")
+    run_exp("gpt-4.1-nano-2025-04-14")
+    run_exp("gpt-4.1-mini-2025-04-14")
+    run_exp("gpt-4.1-2025-04-14")

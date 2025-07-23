@@ -11,7 +11,7 @@ def get_prompt(object_name, possible_actions):
 
     PROMPT = f"""
     
-You are helping out with robotic experiments. The robot is a Locobot.
+You are helping out with robotic experiments. The robot is a LoCoBot, a low-cost mobile manipulator suitable for both navigation and manipulation.
 
 Please assign labels to the object <{object_name}>. 
 
@@ -28,33 +28,36 @@ We need to parse your response using python, so make sure to respect the followi
     return PROMPT
 
 def parse_response(response):
-    if "```" in response:
-        splitted = response.split("```")[-2].strip()
+    try:
+        if "```" in response:
+            splitted = response.split("```")[-2].strip()
 
-        if splitted.count("[") != splitted.count("]"):
-            return None
-
-
-        if splitted.count("[") == 1:
-            try:
-                return json.loads(splitted)
-            except:
-                return ast.literal_eval(splitted)
-
-
-        splitted = splitted.split("\n")
-        ret = []
-        for s in splitted:
-            if "," in s:
+            if splitted.count("[") != splitted.count("]"):
                 return None
-            try:
-                s = json.loads(s)
-            except:
-                s = ast.literal_eval(s)
-            if len(s) > 1:
-                return None
-            ret.append(s[0])
-        return ret
+
+
+            if splitted.count("[") == 1:
+                try:
+                    return json.loads(splitted)
+                except:
+                    return ast.literal_eval(splitted)
+
+
+            splitted = splitted.split("\n")
+            ret = []
+            for s in splitted:
+                if "," in s:
+                    return None
+                try:
+                    s = json.loads(s)
+                except:
+                    s = ast.literal_eval(s)
+                if len(s) > 1:
+                    return None
+                ret.append(s[0])
+            return ret
+    except:
+        return None
 
     return None
 
