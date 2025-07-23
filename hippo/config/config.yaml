@@ -5,6 +5,6 @@ defaults:
   - skillprediction: none
   - paths: default
   - secrets: secrets
-  - assetfitting: rot_and_axisscale
+  - assetfitting: rot_and_aspect_weighted
   - scene: all_replica_scenes
   - parallelism: default

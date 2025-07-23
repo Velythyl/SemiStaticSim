@@ -104,11 +104,13 @@ def gen_tasks(llm_id, start_index=-1, num_todo=10, num_tasks=10):
 
 if __name__ == "__main__":
     set_api_key("./api_key")
-    gen_tasks("gpt-3.5-turbo")
-    exit()
 
     d = get_procthor10k()
     get_objects_list_p10k(d)
+
+    gen_tasks("gpt-3.5-turbo")
+    exit()
+
 
     exit()
 

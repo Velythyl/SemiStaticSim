@@ -1,3 +1,3 @@
-rotate: true
+rotate: false
 scaling: axis
-round_rot: 1
+round_rot: 90

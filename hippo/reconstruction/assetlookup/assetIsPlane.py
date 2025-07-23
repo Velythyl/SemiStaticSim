@@ -65,7 +65,7 @@ def is_single_plane(points, noise_threshold=0.05, min_points=10):
     d = -jnp.dot(normal, centroid)
     plane_params = jnp.concatenate([normal, jnp.array([d])])
 
-    return is_plane, plane_params
+    return is_plane, plane_params, ratio
 
 
 # JIT compile for better performance
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     points = jnp.column_stack([plane_points, z_noise])
 
     # Check if it's a plane
-    is_plane, plane_eq = is_single_plane(points)
+    is_plane, plane_eq, _ = is_single_plane(points)
     print(f"Is plane: {is_plane}")
     print(f"Plane equation: {plane_eq}")
 

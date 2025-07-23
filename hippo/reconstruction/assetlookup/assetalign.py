@@ -8,18 +8,47 @@ import jax
 
 
 
+def add_axis_rot_to_trans_mat(transmat, theta, axis='y'):
+    """
+    Add rotation to a transformation matrix around a specified axis.
 
-def add_yrot_to_trans_mat(transmat, theta):
-    def y_trans_mat_from_theta(theta):
+    Parameters:
+    transmat (np.array): 4x4 transformation matrix
+    theta (float): rotation angle in radians
+    axis (str): rotation axis ('x', 'y', or 'z')
+
+    Returns:
+    np.array: new transformation matrix with rotation applied
+    """
+
+    def rot_mat_from_theta(theta, axis):
         c = np.cos(theta)
         s = np.sin(theta)
-        return np.array([
-            [c, 0, s, 0],
-            [0, 1, 0, 0],
-            [-s, 0, c, 0],
-            [0, 0, 0, 1]
-        ])
-    return transmat @ y_trans_mat_from_theta(theta)
+        if axis == 'x':
+            return np.array([
+                [1, 0, 0, 0],
+                [0, c, -s, 0],
+                [0, s, c, 0],
+                [0, 0, 0, 1]
+            ])
+        elif axis == 'y':
+            return np.array([
+                [c, 0, s, 0],
+                [0, 1, 0, 0],
+                [-s, 0, c, 0],
+                [0, 0, 0, 1]
+            ])
+        elif axis == 'z':
+            return np.array([
+                [c, -s, 0, 0],
+                [s, c, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1]
+            ])
+        else:
+            raise ValueError("Axis must be 'x', 'y', or 'z'")
+
+    return transmat @ rot_mat_from_theta(theta, axis)
 
 def add_scaling_to_transmat(transmat, sx, sy=None, sz=None):
     def mk_scaling(sx, sy, sz):
@@ -133,7 +162,7 @@ def get_mindist_for_p1(target_pcd, p1):
     ret = get_dists_for_p1(p1, target_pcd)#.min()
     return -jax.lax.top_k(-ret, 3)[0]
 
-def get_score(pcd_to_rotate, pcd_to_match, rad):
+def get_loss(pcd_to_rotate, pcd_to_match, rad):
     pcd_to_rotate = rotate_point_cloud_y_axis(pcd_to_rotate, rad)
 
     # Distance from rotated to target
@@ -213,7 +242,7 @@ def global_align(pcd_to_rotate: np.array, pcd_to_match: np.array, get_best_score
 
     scores = []
     for b_trials in tqdm(trials.reshape(-1 ,BATCH_SIZE)):
-        scores.append(jax.vmap(functools.partial(get_score, pcd_to_rotate, pcd_to_match))(b_trials))
+        scores.append(jax.vmap(functools.partial(get_loss, pcd_to_rotate, pcd_to_match))(b_trials))
         #scores.append(get_score(pcd_to_rotate, pcd_to_match, trial))
     scores = jnp.concatenate(scores)
     #scores = jax.vmap(functools.partial(get_score, pcd_to_rotate, pcd_to_match))(trials)
@@ -431,7 +460,7 @@ def draw_registration_result(source, target, transformation=np.identity(4)):
                                       #lookat=[1.9892, 2.0208, 1.8945],
                                       #up=[-0.2779, -0.9482, 0.1556])
 
-def execute_global_registration(pcd_to_align, pcd_to_match, voxel_size=0.05, init_yrot=False):
+def execute_global_registration(pcd_to_align, pcd_to_match, voxel_size=0.05, init_rots=False):
     def preprocess_point_cloud(pcd, voxel_size):
         print(":: Downsample with a voxel size %.3f." % voxel_size)
         pcd_down = pcd.voxel_down_sample(voxel_size)
@@ -497,8 +526,8 @@ def execute_global_registration(pcd_to_align, pcd_to_match, voxel_size=0.05, ini
     print(":: Apply fast global registration with distance threshold %.3f" \
             % distance_threshold)
 
-    if init_yrot:
-        pcd_to_align = np_to_pcd(rotate_point_cloud_y_axis(pcd_or_mesh_to_np(pcd_to_align), init_yrot))
+    if isinstance(init_rots, np.ndarray) or isinstance(init_rots, list) or isinstance(init_rots, tuple):  # noqa
+        pcd_to_align = np_to_pcd(transform_point_cloud(pcd_or_mesh_to_np(pcd_to_align), euler_to_matrix_4x4(*init_rots, degrees=True)))
 
     _, _, source_down, target_down, source_fpfh, target_fpfh = prepare_dataset(pcd_to_align, pcd_to_match, voxel_size)
 
@@ -709,6 +738,8 @@ def remove_translation_from_transmat(matrix):
 
     return result
 
+
+
 def try_rescue_planes(pcd_to_align, target_pcd):
     # rescues cases where a plane is generated flat on the ground, yet should be standing
 
@@ -737,7 +768,7 @@ def try_rescue_planes(pcd_to_align, target_pcd):
 #CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
 #cache = Cache(CACHEPATH)
 #@cache.memoize()
-def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=200, do_global_tune=False, round_rot=None, is_planar_according_to_llm=None):
+def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rough_scaling=True, downscale_using_voxel_divisions=25, do_global_tune=False, round_rot=None, is_planar_according_to_llm=None):
     if target_pcd is None:
         target_pcd = pcd_to_align
         assert spoof_rad is not None
@@ -774,7 +805,7 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
             draw_registration_result(pcd_to_align, target_pcd)
 
     if is_planar_according_to_llm:
-        pcd_to_align, rescue_rots = try_rescue_planes(pcd_to_align, target_pcd)
+        pcd_to_align, rescue_rots = try_rescue_planes(pcd_to_align, target_pcd) # these are degrees
     else:
         rescue_rots = np.zeros(3)
     found_rot = global_align(pcd_to_align, target_pcd)
@@ -787,13 +818,25 @@ def align(pcd_to_align, spoof_rad=None, target_pcd=None, do_fine_tune=False, rou
             return N * round(angle / N)
         if round_rot is not None:
             found_rot = math.radians(round_angle(math.degrees(found_rot), round_rot))
-        return (np.array([rescue_rots[0], rescue_rots[1] + math.degrees(found_rot), rescue_rots[2]]),
-                euler_to_matrix_4x4(math.radians(rescue_rots[0]), math.radians(rescue_rots[1]) + found_rot, math.radians(rescue_rots[2]) + 0, degrees=False))
 
-    raise NotImplementedError("Need to handle rescue rots")
+        #offset = target_pcd.min(axis=0)[1] - rotate_point_cloud_y_axis(pcd_to_align, found_rot).min(axis=0)[1]
+        transmat = euler_to_matrix_4x4(math.radians(rescue_rots[0]), math.radians(rescue_rots[1]) + found_rot, math.radians(rescue_rots[2]), degrees=False)
+        #transmat[1,3] = offset
+
+        if not DISABLE_VIS:
+            print("Fix offset")
+            draw_registration_result(transform_point_cloud(pcd_to_align, transmat), target_pcd)
+        return (np.array([rescue_rots[0], rescue_rots[1] + math.degrees(found_rot), rescue_rots[2]]),
+                transmat)
+
+    init_rots = np.array([rescue_rots[0], rescue_rots[1] + math.degrees(found_rot), rescue_rots[2]]) # degrees
+    #raise NotImplementedError("Need to handle rescue rots")
+
+
     if do_global_tune:
-        transmat = execute_global_registration(pcd_to_align, target_pcd, voxel_size=0.05, init_yrot=found_rot)
-        transmat = add_yrot_to_trans_mat(transmat, found_rot)
+        transmat = execute_global_registration(pcd_to_align, target_pcd, voxel_size=0.05, init_rots=init_rots)
+        init_rots = list(map(np.radians, init_rots))
+        transmat = add_axis_rot_to_trans_mat(add_axis_rot_to_trans_mat(add_axis_rot_to_trans_mat(transmat, init_rots[0], axis='x'), init_rots[1], axis='y'), init_rots[2], axis='z')
         transmat = remove_translation_from_transmat(transmat)
 
         if not DISABLE_VIS:

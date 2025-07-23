@@ -131,3 +131,4 @@ def assert_names_are_valid(list_of_skill_metadata):
 
 if __name__ == "__main__":
     print(get_enabled_2_llm_name())#, indent=2))
+    print(len(get_enabledname_2_skills()))

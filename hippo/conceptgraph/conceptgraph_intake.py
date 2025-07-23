@@ -192,7 +192,30 @@ def load_conceptgraph(path):
     for grp in segments_anno["segGroups"]:
         grp["label"] = grp["label"].replace(": ", "").lower()
 
-    segments_anno = make_pcd_axis_aligned(segments_anno)    # align before filtering pcds because we will need the background pcds such as walls, doors, etc
+    def vis_id2obj():
+        pcds = []
+        for v in segments_anno["segGroups"]:
+            #pcd = o3d.geometry.PointCloud()
+            #pcd.points = o3d.utility.Vector3dVector(np.array(v._cg_pcd_points))
+            #pcd.colors = o3d.utility.Vector3dVector(np.array(v._cg_pcd_colours))
+            pcds.append(v["pcd"])
+        return vis_cg(pcds)
+
+
+    """"""
+    #vis_id2obj()
+    segments_anno = make_pcd_axis_aligned(segments_anno,
+                                          0)  # align before filtering pcds because we will need the background pcds such as walls, doors, etc
+
+    #vis_id2obj()
+    segments_anno = make_pcd_axis_aligned(segments_anno,
+                                          1)  # align before filtering pcds because we will need the background pcds such as walls, doors, etc
+
+    #vis_id2obj()
+    segments_anno = make_pcd_axis_aligned(segments_anno,2)    # align before filtering pcds because we will need the background pcds such as walls, doors, etc
+
+    #vis_id2obj()
+
 
     for i, grp in enumerate(copy.deepcopy(segments_anno["segGroups"])):
         for to_remove in ["ceiling", "window", "window blinds", "blinds", "wall", "window blinds", "blinds", "water droplet", "carpet", "rug", "floor rug", "floor carpet", "background"]:#, "wooden sideboard"]: #, "door"]:
@@ -214,20 +237,13 @@ def load_conceptgraph(path):
     print([x["label"] for x in segments_anno["segGroups"]])
 
 
-    def vis_id2obj():
-        pcds = []
-        for v in segments_anno["segGroups"]:
-            #pcd = o3d.geometry.PointCloud()
-            #pcd.points = o3d.utility.Vector3dVector(np.array(v._cg_pcd_points))
-            #pcd.colors = o3d.utility.Vector3dVector(np.array(v._cg_pcd_colours))
-            pcds.append(v["pcd"])
-        return vis_cg(pcds)
+
     #vis_id2obj()
 
     return segments_anno
 
 
-def make_pcd_axis_aligned(segments_anno):
+def make_pcd_axis_aligned(segments_anno, axis_id):
     from hippo.reconstruction.assetlookup.assetIsPlane import is_single_plane
     from scipy.optimize import minimize
     from scipy.spatial.transform._rotation import Rotation
@@ -243,13 +259,17 @@ def make_pcd_axis_aligned(segments_anno):
         pcds.append(v["pcd"])
 
         try:
-            is_plane, plane_params = is_single_plane(pcds[-1])
+            is_plane, plane_params, ratio = is_single_plane(pcds[-1])
+
 
             if is_plane:
-                from hippo.reconstruction.assetlookup.assetIsPlane import ask_llm_if_plane
-                llm_says_is_plane = ask_llm_if_plane(pcd_labels[-1])
-                if not llm_says_is_plane:
-                    is_plane = False
+                if ratio < 0.02:
+                    pass
+                else:
+                    from hippo.reconstruction.assetlookup.assetIsPlane import ask_llm_if_plane
+                    llm_says_is_plane = ask_llm_if_plane(pcd_labels[-1])
+                    if not llm_says_is_plane:
+                        is_plane = False
         except:
             is_plane = False
 
@@ -285,7 +305,10 @@ def make_pcd_axis_aligned(segments_anno):
         angle_rad = np.radians(angle_deg)
 
         # Create rotation matrix around vertical axis
-        rot = Rotation.from_rotvec([0, 0, angle_rad[0]]).as_matrix()
+
+        rot = [0,0,0]
+        rot[axis_id] = angle_rad[0]
+        rot = Rotation.from_rotvec(rot).as_matrix()
 
         rotated_pcds = []
         for normal, pcd in zip(plane_normals, plane_pcds):
@@ -331,7 +354,9 @@ def make_pcd_axis_aligned(segments_anno):
     #print("Refined angle:", optimal_angle)
 
     # Apply the rotation to all point clouds
-    rot = Rotation.from_rotvec([0, 0, np.radians(optimal_angle)]).as_matrix()
+    rot = [0,0,0]
+    rot[axis_id] = np.radians(optimal_angle)
+    rot = Rotation.from_rotvec(rot).as_matrix()
 
     # Rotate all point clouds in the segments
     for segment in segments_anno["segGroups"]:

@@ -1,4 +1,4 @@
-scene_id: replica_room2_cg-detector_2025-06-10-20-21-16.981182 #replica_room0_cg-detector_2025-06-10-20-16-50.243828 # "replica_room0_banner"
+scene_id: replica_office1 #replica_room0_cg-detector_2025-06-10-20-16-50.243828 # "replica_room0_banner"
 
 
 conceptgraphs_dir: "./datasets/allreplica"

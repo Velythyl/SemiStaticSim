@@ -20,6 +20,7 @@ TOKENS_PER_MINUTE_DICT = {
     "gpt-3.5-turbo-16k": 30000,
     "gpt-4.1-nano-2025-04-14": 200000,
     "gpt-4.1-mini-2025-04-14": 200000,
+    "gpt-4.1-2025-04-14": 10000,
     "bbllm": np.inf
 }
 WINDOW_SIZE = 65  # Time window in seconds for rate limit tracking

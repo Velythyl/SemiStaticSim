@@ -137,8 +137,8 @@ def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASS
         #import os
        # import json
 
-        with open(f"/home/mila/c/charlie.gauthier/Holodeck/hippo/env{'_NO' if 'YERP' in os.environ else ''}_works.json", "w") as f:
-            json.dump(dict(os.environ), f, indent=2)
+        #with open(f"/home/mila/c/charlie.gauthier/Holodeck/hippo/env{'_NO' if 'YERP' in os.environ else ''}_works.json", "w") as f:
+        #    json.dump(dict(os.environ), f, indent=2)
 
 
 
