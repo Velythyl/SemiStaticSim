@@ -348,6 +348,9 @@ def make_pcd_axis_aligned(segments_anno, axis_id):
     options={'ftol': 10, 'xtol': 1.0})
     optimal_angle = result.x[0]
     print("Powell angle:", optimal_angle)
+
+    if abs(optimal_angle) < 5:
+        return segments_anno
     #result = minimize(alignment_error, x0=optimal_angle, bounds=[(-45, 45)],method='Powell',  # Doesn't use gradient information
     #options={'ftol': 1, 'xtol': 1.0, 'maxiter': 10})
     #optimal_angle = result.x[0]

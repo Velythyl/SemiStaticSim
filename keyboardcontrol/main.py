@@ -259,7 +259,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
         ## select room, 1-30，201-230，301-330，401-430 are ithor's room
         house = scene_name
 
-    from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
+    #from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
 
     #floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/9/scene.json"
     #scene = resolve_scene_id(floor_no)
@@ -337,7 +337,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
 
 
 if __name__ == "__main__":
-    main(scene_name="/home/charlie/Downloads/tema/blo/random_0",  # FloorPlan19_physics ## room
+    main(scene_name="/home/velythyl/Desktop/Holodeck/hippo/sampled_scenes/all_replica_scenes/replica_room0/CLIP_True-aspect weighted-90_2025-07-24-13-49-45/in_order_0/scene.json",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree
