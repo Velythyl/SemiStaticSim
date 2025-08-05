@@ -1,13 +1,15 @@
 import json
 import os
+import sys
 
+import numpy as np
 from ai2thor.controller import Controller
 from ai2thor.hooks.procedural_asset_hook import ProceduralAssetHookRunner
 from tqdm import tqdm
 
 from ai2holodeck.constants import THOR_COMMIT_ID, OBJATHOR_ASSETS_DIR
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
-from hippo.reconstruction.scenedata import HippoObject
+from hippo.reconstruction.scenedata import HippoObject, dict2xyztuple
 from hippo.utils.file_utils import get_tmp_folder
 
 def _get_self_install_dir():
@@ -144,9 +146,9 @@ def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASS
 
         controller = Controller(
             #commid_id=THOR_COMMIT_ID, #'1dfe13e4926bb2e0be475e28405e98514c4035dc', #commit_id=THOR_COMMIT_ID, #'1dfe13e4926bb2e0be475e28405e98514c4035dc', # THOR_COMMIT_ID,
-            local_executable_path=f"{_get_ai2thor_install_build_dir()}/thor-Linux64-local/thor-Linux64-local",
+            local_executable_path=f"{_get_ai2thor_install_build_dir()}/thor-Linux64-local/thor-Linux64-local" if sys.platform != "darwin" else None,
             port=ai2thor_port,
-            local_build=True,
+            local_build=True  if sys.platform != "darwin" else False,
             agentMode="default",
             makeAgentsVisible=False,
             scene=scene,
@@ -329,33 +331,62 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     #                                      rotateStepDegrees=20)
     no_robot = 1  # len(robots)
 
-    DEFAULT_ROBOT_HEIGHT = 0.95
-    DEFAULT_ROBOT_ROT = 90
-    DEFAULT_ROBOT_X = c.last_event.metadata["cameraPosition"]["x"]
-    DEFAULT_ROBOT_Z = c.last_event.metadata["cameraPosition"]["z"]
-    CEILING_HEIGHT = c.last_event.metadata["sceneBounds"]['size']["y"]
+    convert = lambda x: np.array([np.array(dict2xyztuple(x))[0], np.array(dict2xyztuple(x))[2]])
 
-    #temp = c.step(action="GetReachablePositions").metadata["actionReturn"]
+    scene_bound_min = convert(c.last_event.metadata['sceneBounds']["center"]) - convert(c.last_event.metadata['sceneBounds']["center"])
+    scene_bound_max = convert(c.last_event.metadata['sceneBounds']["center"]) + convert(c.last_event.metadata['sceneBounds']["center"])
 
-    c.step(
-        action="TeleportFull",
-        position={
-            "x": DEFAULT_ROBOT_X,
-            "y": DEFAULT_ROBOT_HEIGHT, #scene["metadata"]["agent"]["position"]["y"],
-            "z": DEFAULT_ROBOT_Z,
-        },
-        rotation=DEFAULT_ROBOT_ROT, #scene["metadata"]["agent"]["rotation"],
-        standing=True,
-        horizon=30,
-        forceAction=True,
-    )
+    NUM_TRY_INIT_SCENE = 10
+    SUCCESS = False
+    random_poses = np.random.uniform(low=scene_bound_min, high=scene_bound_max, size=(NUM_TRY_INIT_SCENE, 2))
+    for TRY in range(NUM_TRY_INIT_SCENE):
+        try:
+            DEFAULT_ROBOT_HEIGHT = 0.95
+            DEFAULT_ROBOT_ROT = 90
+            #DEFAULT_ROBOT_X = c.last_event.metadata["cameraPosition"]["x"]
+            #DEFAULT_ROBOT_Z = c.last_event.metadata["cameraPosition"]["z"]
+            CEILING_HEIGHT = c.last_event.metadata["sceneBounds"]['size']["y"]
 
+            #temp = c.step(action="GetReachablePositions").metadata["actionReturn"]
 
+            c.step(
+                action="TeleportFull",
+                position={
+                    "x": random_poses[TRY][0],
+                    "y": DEFAULT_ROBOT_HEIGHT, #scene["metadata"]["agent"]["position"]["y"],
+                    "z": random_poses[TRY][1],
+                },
+                rotation=DEFAULT_ROBOT_ROT, #scene["metadata"]["agent"]["rotation"],
+                standing=True,
+                horizon=30,
+                forceAction=True,
+            )
 
+            #gridsize = 1  # step size between points
 
-    reachable_positions_ = c.step(action="GetReachablePositions").metadata["actionReturn"]
-    reachable_positions = positions_tuple = [(p["x"], p["y"], p["z"]) for p in reachable_positions_]
-    full_reachability_graph = build_grid_graph(reachable_positions, GRID_SIZE)
+            # Generate 1D arrays for x and y
+            x = np.arange(scene_bound_min[0], scene_bound_max[0] + GRID_SIZE, GRID_SIZE)
+            y = np.arange(scene_bound_min[1], scene_bound_max[1] + GRID_SIZE, GRID_SIZE)
+
+            # Create 2D grid
+            xx, yy = np.meshgrid(x, y)
+            grid_points = np.stack([xx.ravel(), yy.ravel()], axis=-1)
+            grid_points = [(x, DEFAULT_ROBOT_HEIGHT, z) for x, z in grid_points]
+            reachable_positions = grid_points
+
+            #c.step(action="GetReachablePositions")
+            #print(c.last_event.metadata['errorMessage'])
+            #reachable_positions = c.last_event.metadata["actionReturn"]
+            #reachable_positions = [(p["x"], p["y"], p["z"]) for p in reachable_positions]
+
+            full_reachability_graph = build_grid_graph(reachable_positions, GRID_SIZE)
+            SUCCESS = True
+        except:
+            pass
+        if SUCCESS:
+            break
+    if not SUCCESS:
+        raise Exception("Failed to get reachable positions")
     #draw_grid_graph_2d(full_reachability_graph)
 
     #draw_grid_graph_2d(reachable_positions)

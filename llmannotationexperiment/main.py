@@ -91,16 +91,29 @@ def run_exp(gpt_model):
 
     # Filter samples with at least one target HOI
     def augment_sample_with_num_hoi_targets(sample, target_actions):
-        sample_s_actions = extract_actions_for_sample(sample)
+        try:
+            sample_s_actions = extract_actions_for_sample(sample)
 
-        COUNT = 0
-        for target_action in target_actions:
-            if target_action in sample_s_actions:
-                COUNT += 1
-        sample["NUM_TARGET_HOI"] = COUNT
-        return sample
+            COUNT = 0
+            for target_action in target_actions:
+                if target_action in sample_s_actions:
+                    COUNT += 1
+            sample["NUM_TARGET_HOI"] = COUNT
+            return sample
+        except:
+            sample["NUM_TARGET_HOI"] = 0
+            return sample
+
+
+
+    # Run the experiment N times
+    N = 100
+    all_metrics = {split: {"precision": [], "recall": [], "f1": [], "n_samples": []} for split in splits}
+    all_metrics["anysplit"] = {"precision": [], "recall": [], "f1": [], "n_samples": []}
+    tups = []
 
     NUM_SAMPLES_TO_EVALUATE = 5
+
     # Evaluate predictions
     def evaluate_predictions(samples, target_actions):
         results = []
@@ -114,15 +127,17 @@ def run_exp(gpt_model):
 
             sample = samples[sample_idx_todo]
 
-            all_possible_actions = loadit(sample["positive_captions"]) + loadit(sample["negative_captions"]) + loadit(sample["ambiguous_captions"])
-            sample_object_name = loadit(sample["positive_captions"])[0][0] # only consider the first object in the thing, the rest are treated as confounders
+            all_possible_actions = loadit(sample["positive_captions"]) + loadit(sample["negative_captions"]) + loadit(
+                sample["ambiguous_captions"])
+            sample_object_name = loadit(sample["positive_captions"])[0][
+                0]  # only consider the first object in the thing, the rest are treated as confounders
             gt_hois = [act for objname, act in all_possible_actions if objname == sample_object_name]
             gt_hois = list(filter(lambda x: x in target_actions, gt_hois))
 
             if len(gt_hois) == 0:
                 continue
 
-            #gt_hois = set([hoi["category_id"] for hoi in sample["hoi_annotation"] if hoi["category_id"] in target_action_ids])
+            # gt_hois = set([hoi["category_id"] for hoi in sample["hoi_annotation"] if hoi["category_id"] in target_action_ids])
             pred_hois = llm_annotate(sample_object_name, target_actions)
 
             CORRECT = 0
@@ -132,6 +147,7 @@ def run_exp(gpt_model):
                     CORRECT += 1
             acc = float(CORRECT) / len(gt_hois)
             results.append((CORRECT, len(pred_hois), len(gt_hois)))
+            tups.append((sample_object_name, gt_hois, pred_hois, CORRECT, len(gt_hois), target_actions))
 
         total_correct = sum(x[0] for x in results)
         total_pred = sum(x[1] for x in results)
@@ -142,11 +158,6 @@ def run_exp(gpt_model):
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0
 
         return precision, recall, f1, len(samples)
-
-    # Run the experiment N times
-    N = 10
-    all_metrics = {split: {"precision": [], "recall": [], "f1": [], "n_samples": []} for split in splits}
-    all_metrics["anysplit"] = {"precision": [], "recall": [], "f1": [], "n_samples": []}
 
     for run in range(N):
         print(f"\n🔁 Run {run + 1}/{N}")
@@ -204,6 +215,8 @@ def run_exp(gpt_model):
 
     print(report)
 
+    with open(f"./tups_{gpt_model}.json", "w") as f:
+        json.dump(tups, f)
 
 if __name__ == "__main__":
 
@@ -213,7 +226,16 @@ if __name__ == "__main__":
     "gpt-4.1-mini-2025-04-14": 200000,
     "gpt-4.1-2025-04-14": 10000,
     """
+    def reset_seeds(seed):
+        np.random.seed(seed)
+        random.seed(seed)
+    reset_seeds(0)
+    run_exp("gpt-4")
+    reset_seeds(0)
     run_exp("gpt-3.5-turbo")
+    reset_seeds(0)
     run_exp("gpt-4.1-nano-2025-04-14")
+    reset_seeds(0)
     run_exp("gpt-4.1-mini-2025-04-14")
+    reset_seeds(0)
     run_exp("gpt-4.1-2025-04-14")
