@@ -9,7 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 from llmqueries.llm import set_api_key
 
-set_api_key(Path("/home/charlie/Desktop/Holodeck/hippo/secrets/openai_api_key.txt").read_text())
+set_api_key(Path("/home/velythyl/Desktop/Holodeck/hippo/secrets/openai_api_key.txt").read_text())
 # Load the HICO-DET dataset
 dataset = load_dataset("zhimeng/hico_det", cache_dir="/tmp/llmannotationexperiment")
 splits = dataset.keys()
@@ -72,13 +72,56 @@ def process_dataset(dataset_split, desc, max_workers=4):
 def run_exp(gpt_model):
     # Process datasets
     train_actions = process_dataset(dataset["train"], "Processing train set")
-    test_actions = process_dataset(dataset["test"], "Processing test set")
+    #test_actions = process_dataset(dataset["test"], "Processing test set")
 
     # Combine results
-    HOI_CLASSES = set(train_actions + test_actions)#.difference(set("'no_interaction'"))
+    HOI_CLASSES = set(train_actions)# + test_actions)#.difference(set("'no_interaction'"))
     TO_REMOVE = ["no_interaction", "move"]  # too common
-    HOI_CLASSES.remove("no_interaction")
+    for to_remove in TO_REMOVE:
+        if to_remove in HOI_CLASSES:
+            HOI_CLASSES.remove(to_remove)
     NUM_HOI_CLASSES = len(HOI_CLASSES)
+
+    import re
+
+    def human_labeler(object_name, actions):
+        """Prompt a human user to label an object with available actions."""
+        # Create the actions table with aligned numbers
+        num_actions = len(actions)
+        col_width = max(len(action) for action in actions) + 2  # Add padding for spacing
+
+        print(f"\nLabel: {object_name}")
+
+        # Print numbers centered over each action
+        number_row = " | ".join(str(i + 1).center(col_width) for i in range(num_actions))
+        action_row = " | ".join(action.ljust(col_width) for action in actions)
+
+        print(number_row)
+        print(action_row)
+
+        HUMAN_SELECTED = None
+        while True:
+            user_input = input("Your answer: ").strip()
+
+            # Parse the input (accept comma or any whitespace-separated values)
+            if ',' in user_input:
+                selected = [s.strip() for s in user_input.split(',')]
+            else:
+                selected = re.split(r'\s+', user_input)
+
+            # Validate the input
+            try:
+                selected_indices = [int(s) for s in selected]
+                if all(1 <= idx <= num_actions for idx in selected_indices):
+                    HUMAN_SELECTED = [actions[idx - 1] for idx in selected_indices]
+                    break
+                else:
+                    print(f"Please enter numbers between 1 and {num_actions}")
+            except ValueError:
+                print("Please enter numbers only, separated by commas or whitespace")
+        print(f"Human selected: {HUMAN_SELECTED}")
+        return HUMAN_SELECTED
+
 
 
     def llm_annotate(sample_name, target_actions):
@@ -107,6 +150,7 @@ def run_exp(gpt_model):
 
 
     # Run the experiment N times
+<<<<<<< HEAD
     N = 100
     all_metrics = {split: {"precision": [], "recall": [], "f1": [], "n_samples": []} for split in splits}
     all_metrics["anysplit"] = {"precision": [], "recall": [], "f1": [], "n_samples": []}
@@ -114,6 +158,15 @@ def run_exp(gpt_model):
 
     NUM_SAMPLES_TO_EVALUATE = 5
 
+=======
+    N = 20
+    all_metrics = {"train": {"precision": [], "recall": [], "f1": [], "n_samples": []}}
+    all_metrics["anysplit"] = {"precision": [], "recall": [], "f1": [], "n_samples": []}
+    tups = []
+
+    NUM_SAMPLES_TO_EVALUATE = 10
+
+>>>>>>> 3f1aea55b63e00cb822fcfbd70a90e8a91cfd73f
     # Evaluate predictions
     def evaluate_predictions(samples, target_actions):
         results = []
@@ -138,7 +191,11 @@ def run_exp(gpt_model):
                 continue
 
             # gt_hois = set([hoi["category_id"] for hoi in sample["hoi_annotation"] if hoi["category_id"] in target_action_ids])
+<<<<<<< HEAD
             pred_hois = llm_annotate(sample_object_name, target_actions)
+=======
+            pred_hois = llm_annotate(sample_object_name, target_actions) if gpt_model != "human" else human_labeler(sample_object_name, target_actions)
+>>>>>>> 3f1aea55b63e00cb822fcfbd70a90e8a91cfd73f
 
             CORRECT = 0
             assert len(gt_hois) >= 1
@@ -168,6 +225,8 @@ def run_exp(gpt_model):
         print("🎯 Target HOI IDs:", target_actions)
 
         for split_name in splits:
+            split_name = "train"
+
             split_data = dataset[split_name]
 
             # Filter retained samples
@@ -189,6 +248,8 @@ def run_exp(gpt_model):
             all_metrics["anysplit"]["recall"].append(recall)
             all_metrics["anysplit"]["f1"].append(f1)
             all_metrics["anysplit"]["n_samples"].append(n_samples)
+
+            break
 
 
         shutil.rmtree("/tmp/llmannotationexperiment")   # HF eats so much disk its insane
@@ -230,6 +291,12 @@ if __name__ == "__main__":
         np.random.seed(seed)
         random.seed(seed)
     reset_seeds(0)
+<<<<<<< HEAD
+=======
+    run_exp("human")
+    exit(0)
+    reset_seeds(0)
+>>>>>>> 3f1aea55b63e00cb822fcfbd70a90e8a91cfd73f
     run_exp("gpt-4")
     reset_seeds(0)
     run_exp("gpt-3.5-turbo")

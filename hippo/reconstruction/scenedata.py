@@ -8,10 +8,12 @@ from typing import Tuple, List, Union, Dict, Any
 
 import numpy as np
 import open3d as o3d
+from typing_extensions import Self
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from hippo.reconstruction.assetlookup.assetIsPlane import ask_llm_if_plane
 from hippo.utils.dict_utils import recursive_map
+from hippo.utils.o3d_np_v3v import v3v
 from hippo.utils.selfdataclass import SelfDataclass
 from hippo.utils.spatial_utils import transform_ai2thor_object
 
@@ -98,8 +100,8 @@ class HippoObject(_Hippo):
     def get_pcd(self):
         assert len(self._cg_pcd_points) > 0
         pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(np.array(self._cg_pcd_points))
-        pcd.colors = o3d.utility.Vector3dVector(np.array(self._cg_pcd_colours))
+        pcd.points = v3v(np.array(self._cg_pcd_points))
+        pcd.colors = v3v(np.array(self._cg_pcd_colours))
         return pcd
 
     def add_asset_info_(self, found_assets, found_sizes, found_scores, assets_dir):

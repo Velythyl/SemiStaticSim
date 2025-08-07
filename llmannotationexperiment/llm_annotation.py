@@ -13,7 +13,8 @@ def get_prompt(object_name, possible_actions):
     
 You are helping out with robotic experiments. The robot is a LoCoBot, a low-cost mobile manipulator suitable for both navigation and manipulation.
 
-Please assign labels to the object <{object_name}>. 
+Please assign action labels to the object <{object_name}>. 
+These labels will be used to determine if the robot can apply the action to the object.
 
 Think logically before assigning. Detail your reasoning. 
 Furthermore, do not be creative with your labels, use common sense, otherwise the robot will explode.

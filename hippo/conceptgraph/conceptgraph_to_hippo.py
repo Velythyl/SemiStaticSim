@@ -4,6 +4,7 @@ from typing import Callable
 
 from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph, vis_cg
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
+from hippo.utils.o3d_np_v3v import v3v
 from hippo.utils.spatial_utils import get_size, disambiguate, disambiguate2, disambiguate3, get_bounding_box, filter_points_by_y_quartile
 from hippo.utils.string_utils import get_uuid
 from omegaconf import ListConfig
@@ -228,26 +229,44 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
         hippo_object = hippo_object.replace(_position=position, _desired_size=size)
         hippo_object = hippo_object.set_pcd_(pcd, pcd_color)
 
-        names_to_add = [hippo_object.object_name] + hippo_object.object_name.split(" ")
+        names_to_add = [hippo_object.object_name] #+ hippo_object.object_name.split(" ")
         for name_to_add in names_to_add:
             if name_to_add not in name2objs:
                 name2objs[name_to_add] = []
             name2objs[name_to_add].append((hippo_object, get_bounding_box(original_pcd), len(original_pcd), original_pcd))
         id2objs[hippo_object.object_name_id] = hippo_object
 
-    def keep_delete(keep, id):
+    def keep_delete(keep, id, other_id):
         if not keep:
             if id in id2objs:
+
+                if other_id in id2objs:
+                    # we are keeping other_id
+                    # merging...
+
+                    points = tuple(list(id2objs[other_id]._cg_pcd_points) + list(id2objs[id]._cg_pcd_points))
+                    colors = tuple(list(id2objs[other_id]._cg_pcd_colours) + list(id2objs[id]._cg_pcd_colours))
+                    position = weighted_centroid(np.array(points))
+                    size = get_size(np.array(points), as_dict=False)
+
+                    cg_paths = {'mask': tuple(list(id2objs[other_id]._cg_paths['mask']) + list(id2objs[id]._cg_paths['mask'])), "rgb": list(tuple(id2objs[other_id]._cg_paths['rgb']) + tuple(id2objs[id]._cg_paths['rgb']))}
+
+                    id2objs[other_id] = id2objs[other_id].replace(_position=position, _desired_size=size, _cg_pcd_colours=colors, _cg_pcd_points=points, _cg_paths=cg_paths)
+
                 del id2objs[id]
+
+                #vis_id2obj()
 
     def vis_id2obj():
         pcds = []
         for k, v in id2objs.items():
             pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(np.array(v._cg_pcd_points))
-            pcd.colors = o3d.utility.Vector3dVector(np.array(v._cg_pcd_colours))
+            pcd.points = v3v(np.array(v._cg_pcd_points))
+            pcd.colors = v3v(np.array(v._cg_pcd_colours))
             pcds.append(pcd)
         return vis_cg(pcds)
+
+    #vis_id2obj()
 
     # disambiguation step
     for name, hippo_objects in name2objs.items():
@@ -273,8 +292,8 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
                 print("Vis prior")
                 vis_id2obj()
 
-            keep_delete(keep1, obj1.object_name_id)
-            keep_delete(keep2, obj2.object_name_id)
+            keep_delete(keep1, obj1.object_name_id, obj2.object_name_id)
+            keep_delete(keep2, obj2.object_name_id, obj1.object_name_id)
 
             if False: #sum((keep1, keep2)) <= 1:
                 vis_id2obj()
@@ -303,8 +322,8 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
         pcds = []
         for ho in hippo_objects:
             pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(np.array(ho._cg_pcd_points))
-            pcd.colors = o3d.utility.Vector3dVector(np.array(ho._cg_pcd_colours))
+            pcd.points = v3v(np.array(ho._cg_pcd_points))
+            pcd.colors = v3v(np.array(ho._cg_pcd_colours))
             pcds.append(pcd)
         return vis_cg(pcds)
     if False:

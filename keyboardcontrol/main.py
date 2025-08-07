@@ -153,6 +153,9 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
             pose = compute_rotate_camera_pose(env.last_event.metadata["sceneBounds"]["center"],
                                               env.last_event.metadata["thirdPartyCameras"][0], rotate_per_frame)
 
+            del pose["agentPositionRelativeThirdPartyCameraPosition"]
+            del pose["agentPositionRelativeThirdPartyCameraRotation"]
+
             env.step(
                 action="UpdateThirdPartyCamera",
                 **pose
@@ -337,7 +340,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
 
 
 if __name__ == "__main__":
-    main(scene_name="/home/velythyl/Desktop/Holodeck/hippo/sampled_scenes/all_replica_scenes/replica_room0/CLIP_True-aspect weighted-90_2025-07-24-13-49-45/in_order_0/scene.json",  # FloorPlan19_physics ## room
+    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/all_replica_scenes/replica_room0/CLIP_True-aspect weighted-90_2025-07-24-13-49-45/in_order_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree

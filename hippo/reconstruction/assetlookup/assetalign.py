@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import jax
 
+from hippo.utils.o3d_np_v3v import v3v
 
 
 def add_axis_rot_to_trans_mat(transmat, theta, axis='y'):
@@ -262,7 +263,7 @@ def vis(xyz, disable=DISABLE_VIS):
         return
 
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(xyz)
+    pcd.points = v3v(xyz)
     o3d.visualization.draw_geometries([pcd])
 
 
@@ -331,11 +332,11 @@ def fine_tune(pcd_to_align, target_pcd, initial_zrot):
 
     pcd_to_align = transform_point_cloud(pcd_to_align, trans_init)
     _pcd_to_align = o3d.geometry.PointCloud()
-    _pcd_to_align.points = o3d.utility.Vector3dVector(pcd_to_align)
+    _pcd_to_align.points = v3v(pcd_to_align)
     pcd_to_align = _pcd_to_align
 
     _target_pcd = o3d.geometry.PointCloud()
-    _target_pcd.points = o3d.utility.Vector3dVector(target_pcd)
+    _target_pcd.points = v3v(target_pcd)
     target_pcd = _target_pcd
 
     fine_tuned = o3d.pipelines.registration.registration_icp(
@@ -426,7 +427,7 @@ def np_to_pcd(nppcd, source_OR_target=None):
         return nppcd
 
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(nppcd)
+    pcd.points = v3v(nppcd)
 
     if source_OR_target is not None:
         if source_OR_target is True:
