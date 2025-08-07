@@ -52,11 +52,6 @@ class TRELLISLookup:
                 # Construct paths
                 rgb_path = os.path.join(image_dir, rgb_file)
                 
-                # Check if mask exists
-                #if not os.path.exists(mask_path):
-                #    print(f"Warning: Mask not found for {rgb_file}, skipping...")
-                #    continue
-
                 # Load images
                 rgb_img = Image.open(rgb_path)
 
@@ -71,17 +66,18 @@ class TRELLISLookup:
                 rgb_array = np.array(rgb_img)
                 mask_array = np.array(mask_img)
 
-                # Ensure RGB image has 3 channels (remove alpha if present)
+                # Create RGBA image
                 if rgb_array.shape[2] == 4:
-                    rgb_array = rgb_array[:, :, :3]
-
-                # Create RGBA image by adding alpha channel
-                rgba_array = np.zeros((rgb_array.shape[0], rgb_array.shape[1], 4), dtype=np.uint8)
-                rgba_array[:, :, :3] = rgb_array  # Copy RGB channels
-
-                # Set alpha channel: 255 where mask is white, 0 where black
-                # Assuming white in mask is > 127 (adjust threshold if needed)
-                rgba_array[:, :, 3] = (mask_array > 127) * 255
+                    # If original has alpha channel, preserve it and combine with mask
+                    rgba_array = rgb_array.copy()
+                    # Apply mask to alpha channel (logical AND between original alpha and mask)
+                    rgba_array[:, :, 3] = np.minimum(rgba_array[:, :, 3], (mask_array > 127) * 255)
+                else:
+                    # If no alpha channel, create new RGBA array
+                    rgba_array = np.zeros((rgb_array.shape[0], rgb_array.shape[1], 4), dtype=np.uint8)
+                    rgba_array[:, :, :3] = rgb_array  # Copy RGB channels
+                    # Set alpha channel from mask
+                    rgba_array[:, :, 3] = (mask_array > 127) * 255
 
                 # Set RGB values to 0 where mask is black (optional for cleaner transparency)
                 rgba_array[mask_array <= 127] = [0, 0, 0, 0]

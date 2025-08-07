@@ -20,6 +20,8 @@ def process_images(path, radius, NUM_CIRCLES):
                         img = img.convert("RGBA")
                         pixels = img.load()  # Create pixel access object
                         
+                        radius = int(min([img.width, img.height]) * 0.15)
+
                         # Draw 3 random circles
                         for _ in range(NUM_CIRCLES):
                             # Random position ensuring circle stays within image bounds
@@ -48,9 +50,9 @@ def process_images(path, radius, NUM_CIRCLES):
 
 if __name__ == "__main__":
     # Configuration - change these values as needed
-    PATH = "/home/velythyl/Desktop/Holodeck/hippo/datasets/badseg/replica_room0_badsegspoof/segments"
+    PATH = "/home/mila/c/charlie.gauthier/Holodeck/hippo/datasets/badseg/replica_room0_banner/segments"
     RADIUS = 25        # Radius of circles in pixels
-    NUM_CIRCLES = 9    # Number of circles to draw per image
+    NUM_CIRCLES = 10    # Number of circles to draw per image
     
     # Run the processing
     process_images(PATH, RADIUS, NUM_CIRCLES)

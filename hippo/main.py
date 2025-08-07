@@ -34,7 +34,7 @@ def main(cfg):
         print(overrides)
         return run_subproc(f'cd /home/mila/c/charlie.gauthier/Holodeck/hippo && source ../venv/bin/activate && CUDA_VISIBLE_DEVICES=-1 HYDRA_SPOOF="bottomlevel" PYTHONPATH=..:$PYTHONPATH python3 main.py {" ".join(overrides)}', shell=True)
 
-
+    
     print("Running HIPPO scene composition...")
     print("Loading CG...")
     set_api_key(cfg.secrets.openai_key)
@@ -53,7 +53,7 @@ def main(cfg):
             HIPPO = CLIPLookup(cfg, OBJATHOR_ASSETS_DIR, do_weighted_random_selection=True, consider_size=True)
         elif cfg.assetlookup.method == "TRELLIS":
 
-            if False: # "pop-os" not in socket.gethostname():
+            if  "pop-os" not in socket.gethostname():
                 print("Finding free port for TRELLIS server...")
                 def find_free_port_in_range(start=1024, end=65535):
                     for port in range(start, end):
@@ -140,9 +140,10 @@ if __name__ == '__main__':
 
     if True: #True:# and "pop-os" in socket.gethostname():
 #>>>>>>> 65a6c915d8db8271e7200ea220dd14a74d135e1d
+        print("Running in Xvfb...")
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
         os.environ["DISPLAY"] = f":99"
-
+    print("launching main...")
     main()
 
 
@@ -169,5 +170,10 @@ PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hyd
 
 
 PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=120  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main  secrets=secrets_cluster  assetfitting=rot_and_axisscale  paths.scene_id='replica_office2_cg-detector_2025-06-10-20-34-08.445148,replica_room0_cg-detector_2025-06-10-20-16-50.243828,replica_office0_cg-detector_2025-06-10-20-25-14.795112,replica_office3_cg-detector_2025-06-10-20-40-27.070705,replica_room1_cg-detector_2025-06-10-20-04-54.511655,replica_office1_cg-detector_2025-06-10-20-29-28.683537,replica_office4_cg-detector_2025-06-10-20-45-18.828598,replica_room2_cg-detector_2025-06-10-20-21-16.981182' assetlookup=trellis,trellis_nomask,clip  paths.out_dir="./sampled_scenes/allreplicagrid"
+
+
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py assetfitting=roundrot_and_axisscale paths.conceptgraphs_dir="./datasets/badseg" paths.scene_id=replica_room0_banner  assetlookup=trellis paths.out_subdi
+r=badseg
 
 """
