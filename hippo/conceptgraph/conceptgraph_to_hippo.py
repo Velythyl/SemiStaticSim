@@ -4,6 +4,7 @@ from typing import Callable
 
 from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph, vis_cg
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
+from hippo.utils.o3d_np_v3v import v3v
 from hippo.utils.spatial_utils import get_size, disambiguate, disambiguate2, disambiguate3, get_bounding_box, filter_points_by_y_quartile
 from hippo.utils.string_utils import get_uuid
 from omegaconf import ListConfig
@@ -235,17 +236,21 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
             name2objs[name_to_add].append((hippo_object, get_bounding_box(original_pcd), len(original_pcd), original_pcd))
         id2objs[hippo_object.object_name_id] = hippo_object
 
-    def keep_delete(keep, id):
+    def keep_delete(keep, id, other_id):
         if not keep:
             if id in id2objs:
+
+                if other_id in id2objs:
+                    x=0
+
                 del id2objs[id]
 
     def vis_id2obj():
         pcds = []
         for k, v in id2objs.items():
             pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(np.array(v._cg_pcd_points))
-            pcd.colors = o3d.utility.Vector3dVector(np.array(v._cg_pcd_colours))
+            pcd.points = v3v(np.array(v._cg_pcd_points))
+            pcd.colors = v3v(np.array(v._cg_pcd_colours))
             pcds.append(pcd)
         return vis_cg(pcds)
 
@@ -273,8 +278,8 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
                 print("Vis prior")
                 vis_id2obj()
 
-            keep_delete(keep1, obj1.object_name_id)
-            keep_delete(keep2, obj2.object_name_id)
+            keep_delete(keep1, obj1.object_name_id, obj2.object_name_id)
+            keep_delete(keep2, obj2.object_name_id, obj1.object_name_id)
 
             if False: #sum((keep1, keep2)) <= 1:
                 vis_id2obj()
@@ -303,8 +308,8 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
         pcds = []
         for ho in hippo_objects:
             pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(np.array(ho._cg_pcd_points))
-            pcd.colors = o3d.utility.Vector3dVector(np.array(ho._cg_pcd_colours))
+            pcd.points = v3v(np.array(ho._cg_pcd_points))
+            pcd.colors = v3v(np.array(ho._cg_pcd_colours))
             pcds.append(pcd)
         return vis_cg(pcds)
     if False:

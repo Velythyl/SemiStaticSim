@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 import numpy as np
 import open_clip
+import torch.mps
 from sentence_transformers import SentenceTransformer
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
@@ -33,7 +34,7 @@ class CLIPLookup:
             _,
             self.clip_preprocess,
         ) = open_clip.create_model_and_transforms(
-            "ViT-L-14", pretrained="laion2b_s32b_b82k"
+            "ViT-L-14", pretrained="laion2b_s32b_b82k", device="cpu" #"mps" if torch.mps.is_available() else "cpu"
         )
         self.clip_tokenizer = open_clip.get_tokenizer("ViT-L-14")
 

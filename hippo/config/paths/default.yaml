@@ -1,7 +1,7 @@
-scene_id: replica_room0 #replica_room0_cg-detector_2025-06-10-20-16-50.243828 # "replica_room0_banner"
+scene_id: lateral_kitchen #replica_room0_cg-detector_2025-06-10-20-16-50.243828 # "replica_room0_banner"
 
 
-conceptgraphs_dir: "./datasets/allreplica"
+conceptgraphs_dir: "./datasets/tunedparams"
 scene_dir: "${paths.conceptgraphs_dir}/${paths.scene_id}"
 
 out_subdir: "all_replica_scenes"

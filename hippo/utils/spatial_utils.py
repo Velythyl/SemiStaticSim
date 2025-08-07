@@ -6,6 +6,7 @@ import numpy as np
 from ai2thor.util.runtime_assets import load_existing_thor_asset_file, save_thor_asset_file
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
+from hippo.utils.o3d_np_v3v import v3v, v3iv
 
 
 def get_bounding_box(points):
@@ -183,7 +184,7 @@ cache = Cache(CACHEPATH)
 @cache.memoize()
 def pcd2mesh(cloud1):
     pcd1 = o3d.geometry.PointCloud()
-    pcd1.points = o3d.utility.Vector3dVector(cloud1)
+    pcd1.points = v3v(cloud1)
 
 
     # Create mesh from point clouds using ball pivoting
@@ -437,9 +438,9 @@ def ai2thor_to_mesh(ai2thor_obj):
 
     # Create the TriangleMesh object
     mesh = o3d.geometry.TriangleMesh()
-    mesh.vertices = o3d.utility.Vector3dVector(vertices)
-    mesh.triangles = o3d.utility.Vector3iVector(triangles)
-    mesh.vertex_normals = o3d.utility.Vector3dVector(normals)
+    mesh.vertices = v3v(vertices)
+    mesh.triangles = v3iv(triangles)
+    mesh.vertex_normals = v3v(normals)
     return mesh
 
 def mesh_bbox(mesh):
@@ -458,8 +459,8 @@ def vis_ai2thor_object(obj):
 
         # Create a mesh for this collider
         mesh = o3d.geometry.TriangleMesh()
-        mesh.vertices = o3d.utility.Vector3dVector(vertices)
-        mesh.triangles = o3d.utility.Vector3iVector(triangles)
+        mesh.vertices = v3v(vertices)
+        mesh.triangles = v3iv(triangles)
 
         # Merge with combined mesh
         combined_mesh += mesh

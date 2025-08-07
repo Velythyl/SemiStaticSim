@@ -7,6 +7,8 @@ import open3d as o3d
 
 import numpy as np
 
+from hippo.utils.o3d_np_v3v import v3v
+
 
 def sample_prism_surface(center, dims, N):
     """
@@ -129,12 +131,12 @@ def load_point_cloud(path):
         points = np.asarray(pcd.points)
         # Mirror along X axis
         points[:, 0] *= -1  # Assign back
-        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.points = v3v(points)
 
         points = np.asarray(pcd.points)
         prism = sample_prism_surface([0,0,0], [1,1,1], 1000)
         points = np.concatenate([points, prism])
-        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.points = v3v(points)
 
     segments_anno = load_segments_anno(path)
 
@@ -153,7 +155,7 @@ def vis_cg(cg_pcds):
         np.random.seed(int(np.sum(np.asarray(objpcd.points))) % (2**32 - 1))
         color_for_obj = np.random.choice(range(256), size=3)
         color_for_obj = np.repeat(color_for_obj[None], len(objpcd.points), axis=0)
-        objpcd.colors = o3d.utility.Vector3dVector(color_for_obj / 255)
+        objpcd.colors = v3v(color_for_obj / 255)
 
     combined = cg_pcds[0]
     for other in cg_pcds[1:]:
@@ -195,9 +197,6 @@ def load_conceptgraph(path):
     def vis_id2obj():
         pcds = []
         for v in segments_anno["segGroups"]:
-            #pcd = o3d.geometry.PointCloud()
-            #pcd.points = o3d.utility.Vector3dVector(np.array(v._cg_pcd_points))
-            #pcd.colors = o3d.utility.Vector3dVector(np.array(v._cg_pcd_colours))
             pcds.append(v["pcd"])
         return vis_cg(pcds)
 
@@ -334,8 +333,9 @@ def make_pcd_axis_aligned(segments_anno, axis_id):
             colors = pcd.colors
             pcd = np.array(pcd.points)
             rotated_pcd = (rot @ pcd.T).T  # Transpose to handle (N,3) shape
+            #rotated_pcd = np.ascontiguousarray(rotated_pcd, dtype=np.float64)
             pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(rotated_pcd)
+            pcd.points = v3v(rotated_pcd)
             pcd.colors = colors
             rotated_pcds.append(pcd)
 
@@ -344,31 +344,35 @@ def make_pcd_axis_aligned(segments_anno, axis_id):
 
     # Find the rotation angle that minimizes the alignment error
 
-    result = minimize(alignment_error, x0=0, bounds=[(-45, 45)],method='Powell',  # Doesn't use gradient information
-    options={'ftol': 10, 'xtol': 1.0})
-    optimal_angle = result.x[0]
-    print("Powell angle:", optimal_angle)
+    try:
+        result = minimize(alignment_error, x0=0, bounds=[(-45, 45)],method='Powell',  # Doesn't use gradient information
+        options={'ftol': 10, 'xtol': 1.0})
+        optimal_angle = result.x[0]
+        print("Powell angle:", optimal_angle)
 
-    if abs(optimal_angle) < 5:
-        return segments_anno
-    #result = minimize(alignment_error, x0=optimal_angle, bounds=[(-45, 45)],method='Powell',  # Doesn't use gradient information
-    #options={'ftol': 1, 'xtol': 1.0, 'maxiter': 10})
-    #optimal_angle = result.x[0]
-    #print("Refined angle:", optimal_angle)
+        if abs(optimal_angle) < 5:
+            return segments_anno
+        #result = minimize(alignment_error, x0=optimal_angle, bounds=[(-45, 45)],method='Powell',  # Doesn't use gradient information
+        #options={'ftol': 1, 'xtol': 1.0, 'maxiter': 10})
+        #optimal_angle = result.x[0]
+        #print("Refined angle:", optimal_angle)
 
-    # Apply the rotation to all point clouds
-    rot = [0,0,0]
-    rot[axis_id] = np.radians(optimal_angle)
-    rot = Rotation.from_rotvec(rot).as_matrix()
+        # Apply the rotation to all point clouds
+        rot = [0,0,0]
+        rot[axis_id] = np.radians(optimal_angle)
+        rot = Rotation.from_rotvec(rot).as_matrix()
 
-    # Rotate all point clouds in the segments
-    for segment in segments_anno["segGroups"]:
-        pcd = segment["pcd"]
+        # Rotate all point clouds in the segments
+        for segment in segments_anno["segGroups"]:
+            pcd = segment["pcd"]
 
-        points = np.array(pcd.points)
-        points = (rot @ points.T).T
+            points = np.array(pcd.points)
+            points = (rot @ points.T).T
 
-        pcd.points = o3d.utility.Vector3dVector(points)
+            pcd.points = v3v(points)
+    except Exception as e:
+        print("Plane alignment error:", e)
+        print(f"Skipping plane alignment for axis {axis_id}")
 
     return segments_anno#, optimal_angle
 
