@@ -8,6 +8,7 @@ from typing import Tuple, List, Union, Dict, Any
 
 import numpy as np
 import open3d as o3d
+from typing_extensions import Self
 
 from ai2holodeck.constants import OBJATHOR_ASSETS_DIR
 from hippo.reconstruction.assetlookup.assetIsPlane import ask_llm_if_plane

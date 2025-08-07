@@ -42,6 +42,38 @@ class TRELLISLookup:
         image_dir = obj._cg_paths["rgb"]
         masks_dir = obj._cg_paths["mask"]
 
+        if not isinstance(image_dir, str):
+            assert not isinstance(masks_dir, str)
+            assert isinstance(image_dir, list) or isinstance(image_dir, tuple)
+
+            import hashlib
+
+            def hash_string(s):
+                return hashlib.sha1(s.encode()).hexdigest()
+
+            hashed_image_dirs = (list(map(hash_string, image_dir)))
+            hashed_masks_dirs = (list(map(hash_string, masks_dir)))
+
+            composed_image_dir = "/tmp/" + "".join(hashed_image_dirs)
+            composed_masks_dir = "/tmp/" + "".join(hashed_masks_dirs)
+
+            os.makedirs(composed_image_dir, exist_ok=True)
+            os.makedirs(composed_masks_dir, exist_ok=True)
+
+            for (im_dir, hash_im_dir), (ma_dir, hash_ma_dir) in zip(zip(image_dir, hashed_image_dirs), zip(hashed_masks_dirs,masks_dir)):
+                for f in os.listdir(im_dir):
+                    src_path = os.path.join(im_dir, f)
+                    dst_path = os.path.join(composed_image_dir, hash_im_dir+ f)
+                    shutil.move(src_path, dst_path)
+
+                for f in os.listdir(ma_dir):
+                    src_path = os.path.join(ma_dir, f)
+                    dst_path = os.path.join(composed_masks_dir, hash_ma_dir + f)
+                    shutil.move(src_path, dst_path)
+
+            image_dir = composed_image_dir
+            masks_dir = composed_masks_dir
+
         if self.cfg.assetlookup.use_masks:
             masked_dir = image_dir.replace("rgb", "masked")
             os.makedirs(masked_dir, exist_ok=True)

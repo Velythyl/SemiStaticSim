@@ -187,8 +187,8 @@ def load_conceptgraph(path):
     from pathlib import Path
     for grp in segments_anno["segGroups"]:
         grp["paths"] = {
-            "mask": str(Path(f"{path}/segments/{grp['id']}/mask").resolve()),
-            "rgb": str(Path(f"{path}/segments/{grp['id']}/rgb").resolve())
+            "mask": [str(Path(f"{path}/segments/{grp['id']}/mask").resolve())],
+            "rgb": [str(Path(f"{path}/segments/{grp['id']}/rgb").resolve())]
         }
 
     for grp in segments_anno["segGroups"]:

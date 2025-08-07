@@ -241,9 +241,21 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
             if id in id2objs:
 
                 if other_id in id2objs:
-                    x=0
+                    # we are keeping other_id
+                    # merging...
+
+                    points = tuple(list(id2objs[other_id]._cg_pcd_points) + list(id2objs[id]._cg_pcd_points))
+                    colors = tuple(list(id2objs[other_id]._cg_pcd_colours) + list(id2objs[id]._cg_pcd_colours))
+                    position = weighted_centroid(np.array(points))
+                    size = get_size(np.array(points), as_dict=False)
+
+                    cg_paths = {'mask': tuple(list(id2objs[other_id]._cg_paths['mask']) + list(id2objs[id]._cg_paths['mask'])), "rgb": list(tuple(id2objs[other_id]._cg_paths['rgb']) + tuple(id2objs[id]._cg_paths['rgb']))}
+
+                    id2objs[other_id] = id2objs[other_id].replace(_position=position, _desired_size=size, _cg_pcd_colours=colors, _cg_pcd_points=points, _cg_paths=cg_paths)
 
                 del id2objs[id]
+
+                #vis_id2obj()
 
     def vis_id2obj():
         pcds = []
@@ -253,6 +265,8 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
             pcd.colors = v3v(np.array(v._cg_pcd_colours))
             pcds.append(pcd)
         return vis_cg(pcds)
+
+    #vis_id2obj()
 
     # disambiguation step
     for name, hippo_objects in name2objs.items():
