@@ -184,6 +184,18 @@ def load_conceptgraph(path):
         return grp
     segments_anno["segGroups"] = [setclip(grp,clip,pcd) for grp, clip, pcd in zip(segments_anno["segGroups"], clip_features, pcd_dict)]
 
+    SWAP_YZ = True
+    if SWAP_YZ:
+        def swap_yz_func(pcd):
+            points = pcd.points
+            points = np.array(points)
+            points[:, [1, 2]] = points[:, [2, 1]]
+            pcd.points = v3v(points)
+            return pcd
+
+        for v in segments_anno["segGroups"]:
+            v["pcd"] = swap_yz_func(v["pcd"])
+
     from pathlib import Path
     for grp in segments_anno["segGroups"]:
         grp["paths"] = {
