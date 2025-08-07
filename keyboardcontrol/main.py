@@ -262,7 +262,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
         ## select room, 1-30，201-230，301-330，401-430 are ithor's room
         house = scene_name
 
-    from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
+    #from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
 
     #floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/9/scene.json"
     #scene = resolve_scene_id(floor_no)

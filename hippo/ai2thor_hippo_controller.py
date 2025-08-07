@@ -59,8 +59,8 @@ def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASS
             runtime_container = None
 
     try:
-        os.unlink(_get_ai2thor_install_build_dir())
-    except:
+        os.unlink( _get_ai2thor_install_build_dir())
+    except Exception as e:
         pass
     assert not os.path.exists(_get_ai2thor_install_build_dir())
     os.symlink(_get_ai2thorbuilds_dir(), _get_ai2thor_install_build_dir(), target_is_directory=True)
@@ -106,24 +106,24 @@ def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASS
         ai2thor_port = find_free_port_in_range()
         print("Free port found for AI2Thor controller:", ai2thor_port)
 
-        os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/home/mila/c/charlie.gauthier/Holodeck/venv/lib/python3.10/site-packages/cv2/qt/plugins"
-        os.environ["QT_QPA_PLATFORM"] = "/home/mila/c/charlie.gauthier/Holodeck/venv/lib/python3.10/site-packages/cv2/qt/fonts"  # use offscreen rendering to avoid X11 issues
-        os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
-        os.environ["TCM_ENABLE"] = "1"
-        os.environ["KMP_INIT_AT_FORK"] = "FALSE"
-        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"  # suppress TensorFlow warnings
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        #os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/home/mila/c/charlie.gauthier/Holodeck/venv/lib/python3.10/site-packages/cv2/qt/plugins"
+        #os.environ["QT_QPA_PLATFORM"] = "/home/mila/c/charlie.gauthier/Holodeck/venv/lib/python3.10/site-packages/cv2/qt/fonts"  # use offscreen rendering to avoid X11 issues
+        #os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+        #os.environ["TCM_ENABLE"] = "1"
+        #os.environ["KMP_INIT_AT_FORK"] = "FALSE"
+        #os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"  # suppress TensorFlow warnings
+        #os.environ["TOKENIZERS_PARALLELISM"] = "false"
         os.environ["XDF_RUNTIME_DIR"] = "/tmp"  # fix for X11 issues in some environments
         
-        if "ENVIRONMENT" in os.environ:
-            os.environ.pop("ENVIRONMENT")
-        print("Unsetting slurm variables...")
+        #if "ENVIRONMENT" in os.environ:
+        #    os.environ.pop("ENVIRONMENT")
+        #print("Unsetting slurm variables...")
         # yay jank :)
         #UNSET_SLURM = []
-        for k, v in os.environ.items():
-            if k.startswith("SLURM"):
-                os.environ.pop(k)
-                #UNSET_SLURM.append(f"{k}")
+        #for k, v in os.environ.items():
+        #    if k.startswith("SLURM"):
+        #        os.environ.pop(k)
+        #        #UNSET_SLURM.append(f"{k}")
         #if len(UNSET_SLURM) > 0:
         #    UNSET_SLURM = "env -u " + " -u ".join(UNSET_SLURM)
         #else:
