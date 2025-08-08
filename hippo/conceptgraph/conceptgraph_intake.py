@@ -184,7 +184,7 @@ def load_conceptgraph(path):
         return grp
     segments_anno["segGroups"] = [setclip(grp,clip,pcd) for grp, clip, pcd in zip(segments_anno["segGroups"], clip_features, pcd_dict)]
 
-    SWAP_YZ = True
+    SWAP_YZ = False
     if SWAP_YZ:
         def swap_yz_func(pcd):
             points = pcd.points
