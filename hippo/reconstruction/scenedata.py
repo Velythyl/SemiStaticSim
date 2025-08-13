@@ -300,7 +300,7 @@ class HippoObject(_Hippo):
                     "primaryProperty": "CanPickup" if "can be picked up" in self._skill_metadata else "Static",
                     "secondaryProperties": [
                         "Receptacle"
-                    ] if "objects can be put down on this" in self._skill_metadata else []
+                    ]# if "objects can be put down on this" in self._skill_metadata else []
                 }}, f, indent=4)
 
             return

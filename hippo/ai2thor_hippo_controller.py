@@ -1,10 +1,16 @@
+import dataclasses
 import json
 import os
+import re
 import sys
+from typing import Union
+
+import cv2
 
 import numpy as np
 from ai2thor.controller import Controller
 from ai2thor.hooks.procedural_asset_hook import ProceduralAssetHookRunner
+from langchain.llms import Anyscale
 from tqdm import tqdm
 
 from ai2holodeck.constants import THOR_COMMIT_ID, OBJATHOR_ASSETS_DIR
@@ -240,7 +246,7 @@ def get_hippo_controller_OLDNOW(scene, target_dir=None, objathor_asset_dir=OBJAT
 import os
 
 import ai2thor.controller
-from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller
+from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_controller, get_robot_inventory
 from hippo.simulation.skill_simulator import Simulator
 
 from hippo.simulation.spatialutils.filter_positions import build_grid_graph, filter_reachable_positions
@@ -336,66 +342,42 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     scene_bound_min = convert(c.last_event.metadata['sceneBounds']["center"]) - convert(c.last_event.metadata['sceneBounds']["center"])
     scene_bound_max = convert(c.last_event.metadata['sceneBounds']["center"]) + convert(c.last_event.metadata['sceneBounds']["center"])
 
-    NUM_TRY_INIT_SCENE = 10
-    SUCCESS = False
-    random_poses = np.random.uniform(low=scene_bound_min, high=scene_bound_max, size=(NUM_TRY_INIT_SCENE, 2))
-    for TRY in range(NUM_TRY_INIT_SCENE):
-        try:
-            DEFAULT_ROBOT_HEIGHT = 0.95
-            DEFAULT_ROBOT_ROT = 90
-            #DEFAULT_ROBOT_X = c.last_event.metadata["cameraPosition"]["x"]
-            #DEFAULT_ROBOT_Z = c.last_event.metadata["cameraPosition"]["z"]
-            CEILING_HEIGHT = c.last_event.metadata["sceneBounds"]['size']["y"]
+    DEFAULT_ROBOT_HEIGHT = 0.95
+    DEFAULT_ROBOT_ROT = 90
+    CEILING_HEIGHT = c.last_event.metadata["sceneBounds"]['size']["y"]
 
-            #temp = c.step(action="GetReachablePositions").metadata["actionReturn"]
+    random_pose = np.random.uniform(low=scene_bound_min, high=scene_bound_max, size=(1, 2))
+    c.step(
+        action="TeleportFull",
+        position={
+            "x": random_pose[0][0],
+            "y": DEFAULT_ROBOT_HEIGHT, #scene["metadata"]["agent"]["position"]["y"],
+            "z": random_pose[0][1],
+        },
+        rotation=DEFAULT_ROBOT_ROT, #scene["metadata"]["agent"]["rotation"],
+        standing=True,
+        horizon=30,
+        forceAction=True,
+    )
 
-            c.step(
-                action="TeleportFull",
-                position={
-                    "x": random_poses[TRY][0],
-                    "y": DEFAULT_ROBOT_HEIGHT, #scene["metadata"]["agent"]["position"]["y"],
-                    "z": random_poses[TRY][1],
-                },
-                rotation=DEFAULT_ROBOT_ROT, #scene["metadata"]["agent"]["rotation"],
-                standing=True,
-                horizon=30,
-                forceAction=True,
-            )
+    #gridsize = 1  # step size between points
 
-            #gridsize = 1  # step size between points
+    # Generate 1D arrays for x and y
+    x = np.arange(scene_bound_min[0], scene_bound_max[0] + GRID_SIZE, GRID_SIZE)
+    y = np.arange(scene_bound_min[1], scene_bound_max[1] + GRID_SIZE, GRID_SIZE)
 
-            # Generate 1D arrays for x and y
-            x = np.arange(scene_bound_min[0], scene_bound_max[0] + GRID_SIZE, GRID_SIZE)
-            y = np.arange(scene_bound_min[1], scene_bound_max[1] + GRID_SIZE, GRID_SIZE)
+    # Create 2D grid
+    xx, yy = np.meshgrid(x, y)
+    grid_points = np.stack([xx.ravel(), yy.ravel()], axis=-1)
+    grid_points = [(x, DEFAULT_ROBOT_HEIGHT, z) for x, z in grid_points]
+    reachable_positions = grid_points
 
-            # Create 2D grid
-            xx, yy = np.meshgrid(x, y)
-            grid_points = np.stack([xx.ravel(), yy.ravel()], axis=-1)
-            grid_points = [(x, DEFAULT_ROBOT_HEIGHT, z) for x, z in grid_points]
-            reachable_positions = grid_points
+    #c.step(action="GetReachablePositions")
+    #print(c.last_event.metadata['errorMessage'])
+    #reachable_positions = c.last_event.metadata["actionReturn"]
+    #reachable_positions = [(p["x"], p["y"], p["z"]) for p in reachable_positions]
 
-            #c.step(action="GetReachablePositions")
-            #print(c.last_event.metadata['errorMessage'])
-            #reachable_positions = c.last_event.metadata["actionReturn"]
-            #reachable_positions = [(p["x"], p["y"], p["z"]) for p in reachable_positions]
-
-            full_reachability_graph = build_grid_graph(reachable_positions, GRID_SIZE)
-            SUCCESS = True
-        except:
-            pass
-        if SUCCESS:
-            break
-    if not SUCCESS:
-        raise Exception("Failed to get reachable positions")
-    #draw_grid_graph_2d(full_reachability_graph)
-
-    #draw_grid_graph_2d(reachable_positions)
-
-    #from matplotlib import pyplot as plt
-    #x = [_x[0] for _x in reachable_positions]
-    #y = [_x[2] for _x in reachable_positions]
-    #plt.scatter(x=x, y=y, s=5)
-    #plt.show()
+    full_reachability_graph = build_grid_graph(reachable_positions, GRID_SIZE)
 
     # initialize n agents into the scene
     c.step(
@@ -483,6 +465,12 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     runtime_container = runtime_container.set_robots(get_object_list_from_controller(c))
     runtime_container = runtime_container.update_from_ai2thor(get_object_list_from_controller(c))
 
+    simulator = None
+
+
+    # setting up tools for human viewing
+    c.humanviewing = HumanViewing(c,runtime_container,None)
+
     if just_controller:
         return c
     if just_runtime_container:
@@ -492,5 +480,100 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     simulator = Simulator(controller=c, no_robots=no_robot, objects=runtime_container,
                           full_reachability_graph=full_reachability_graph)
     simulator.start_action_listener()
+
+    hu = HumanViewing(c, runtime_container, simulator)
+    c.humanviewing = hu
+    simulator.humanviewing = hu
+
     return simulator
     #return c, runtime_container, no_robot, reachable_positions
+
+
+@dataclasses.dataclass
+class HumanViewing:
+    c: Controller
+    r: RuntimeObjectContainer
+    s: Union[Simulator, None]
+
+    def get_latest_robot_frame(self):
+        first_view_frame = self.c.last_event.frame
+        return first_view_frame
+
+    def get_augmented_robot_frame(self, frame, message=None, held_item=None, hud_scale=2):
+        if held_item is None:
+            inventory = get_robot_inventory(self.c, 0)
+            assert len(inventory) <= 1
+            if len(inventory) == 0:
+                held_item = None
+            else:
+                raw_item = inventory[0]
+                held_item = re.match(r"^([^-]+)", raw_item).group(1)
+
+
+        if message is None:
+            if self.s is not None:
+                message_queue = self.s.exception_queue
+                if len(message_queue) > 0:
+                    message = None
+                else:
+                    message = message_queue[-1]
+
+        import cv2
+        hud_frame = frame.copy()
+        h, w = hud_frame.shape[:2]
+
+        def draw_box(img, top_left, bottom_right, color=(0, 0, 0), alpha=0.5):
+            overlay = img.copy()
+            cv2.rectangle(overlay, top_left, bottom_right, color, -1)
+            return cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0)
+
+        pad = int(10 * hud_scale)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6 * hud_scale
+        title_font_scale = 0.5 * hud_scale
+        thickness = max(1, int(1 * hud_scale))
+
+        # Titles
+        title_msg = "System message:"
+        title_item = "Held item:"
+        title_msg_size = cv2.getTextSize(title_msg, font, title_font_scale, thickness)[0]
+        title_item_size = cv2.getTextSize(title_item, font, title_font_scale, thickness)[0]
+
+        # ---------------- Message Box ----------------
+        msg_size = cv2.getTextSize(message, font, font_scale, thickness)[0]
+        msg_box_tl = (pad, pad + title_msg_size[1] + pad // 2)
+        msg_box_br = (msg_box_tl[0] + msg_size[0] + 2 * pad,
+                      msg_box_tl[1] + msg_size[1] + 2 * pad)
+
+        cv2.putText(hud_frame, title_msg,
+                    (pad, pad + title_msg_size[1]),
+                    font, title_font_scale, (200, 200, 200), thickness, cv2.LINE_AA)
+        hud_frame = draw_box(hud_frame, msg_box_tl, msg_box_br, (0, 0, 50), 0.7)
+        cv2.putText(hud_frame, message,
+                    (msg_box_tl[0] + pad, msg_box_tl[1] + msg_size[1] + pad // 2),
+                    font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+
+        # ---------------- Held Item Box ----------------
+        item_text = f"[{held_item}]" if held_item else "[Empty Gripper]"
+        item_size = cv2.getTextSize(item_text, font, font_scale, thickness)[0]
+        item_box_tl = (w - item_size[0] - 3 * pad, pad + title_item_size[1] + pad // 2)
+        item_box_br = (item_box_tl[0] + item_size[0] + 2 * pad,
+                       item_box_tl[1] + item_size[1] + 2 * pad)
+
+        cv2.putText(hud_frame, title_item,
+                    (w - item_size[0] - 3 * pad, pad + title_item_size[1]),
+                    font, title_font_scale, (200, 200, 200), thickness, cv2.LINE_AA)
+        hud_frame = draw_box(hud_frame, item_box_tl, item_box_br, (50, 0, 0), 0.7)
+        cv2.putText(hud_frame, item_text,
+                    (item_box_tl[0] + pad, item_box_tl[1] + item_size[1] + pad // 2),
+                    font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+
+        return hud_frame
+
+    def display_frame(self, frame):
+        if frame is None:
+            frame = self.get_latest_robot_frame()
+        cv2.imshow("first_view", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
+    def display_augmented_frame(self):
+        return self.display_frame(self.get_augmented_robot_frame(self.get_latest_robot_frame()))

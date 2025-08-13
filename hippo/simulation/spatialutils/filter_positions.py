@@ -115,17 +115,21 @@ def draw_grid_graph_2d(G, path=None, node_size=100, node_color='lightblue', edge
 
 from jax import numpy as jnp
 
+import copy
+import networkx as nx
+import numpy as np
+import jax.numpy as jnp
+
 def filter_reachable_positions(reachable_positions, runtime_container):
     if isinstance(reachable_positions, list):
         todo_positions = reachable_positions
-    elif isinstance(reachable_positions, networkx.Graph):
+    elif isinstance(reachable_positions, nx.Graph):
         todo_positions = reachable_positions.nodes
         original_reachable_positions = reachable_positions
         reachable_positions = copy.deepcopy(reachable_positions)
 
-
-    centers = [obj.position for obj in  runtime_container.objects_map.values()]
-    sizes = [obj.size for obj in  runtime_container.objects_map.values()]
+    centers = [obj.position for obj in runtime_container.objects_map.values()]
+    sizes = [obj.size for obj in runtime_container.objects_map.values()]
 
     todo_positions = jnp.array(todo_positions)
     centers = jnp.array(centers)
@@ -138,14 +142,18 @@ def filter_reachable_positions(reachable_positions, runtime_container):
 
     if isinstance(reachable_positions, list):
         return filtered_reachable_positions
-    elif isinstance(reachable_positions, networkx.Graph):
+
+    elif isinstance(reachable_positions, nx.Graph):
+        # Step 1: Remove unreachable nodes
         filtered_reachable_positions = [tuple(x.tolist()) for x in filtered_reachable_positions]
         todo_positions = [tuple(x.tolist()) for x in todo_positions]
-
         to_remove = list(set(todo_positions) - set(filtered_reachable_positions))
         reachable_positions.remove_nodes_from(to_remove)
 
-        #draw_grid_graph_2d(original_reachable_positions)
-        #draw_grid_graph_2d(reachable_positions)
+        # Step 2: Keep only the largest connected component
+        if reachable_positions.number_of_nodes() > 0:
+            largest_cc_nodes = max(nx.connected_components(reachable_positions), key=len)
+            reachable_positions = reachable_positions.subgraph(largest_cc_nodes).copy()
 
         return reachable_positions
+

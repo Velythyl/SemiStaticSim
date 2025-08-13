@@ -63,7 +63,8 @@ def get_interact_object(env, action, pickup=None):
 
 def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per_frame):
     first_view_frame = env.last_event.frame
-    cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
+    #cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
+    env.humanviewing.display_augmented_frame()
 
     # remove the ceiling
     env.step(action="ToggleMapView")
@@ -162,7 +163,8 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
             )
 
         first_view_frame = env.last_event.frame
-        cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
+        #cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
+        env.humanviewing.display_augmented_frame()
 
         # remove the ceiling
         env.step(action="ToggleMapView")
@@ -340,7 +342,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
 
 
 if __name__ == "__main__":
-    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/all_replica_scenes/replica_room0/CLIP_True-aspect weighted-90_2025-07-24-13-49-45/in_order_0",  # FloorPlan19_physics ## room
+    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/tunedparams/TRELLIS-yes-mask_True-axis-90_2025-08-08-12-55-40/random_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree

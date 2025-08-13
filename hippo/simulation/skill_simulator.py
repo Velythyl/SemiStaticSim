@@ -12,7 +12,7 @@ from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_contro
     get_object_aabb_from_controller, get_object_from_controller
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
 from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff, UnsafeAction, \
-    LLM_verify_final_state, _LLMSemanticVerification, UnsafeFinalState
+    LLM_verify_final_state, _LLMSemanticVerification, UnsafeFinalState, IncorrectTaskDescription
 from hippo.simulation.singlefilelog import log_scenedict_to_file
 from hippo.simulation.skillsandconditions.conditions import get_slicing_implement_from_inventory, eval_conditions, \
     maybe_raise_llmcondition_exception, ConditionFailure, LLMVerificationFailure, Condition
@@ -28,7 +28,7 @@ from hippo.utils.git_diff import git_diff
 
 
 class Simulator:
-    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP"):    # STEP or HISTORY
+    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP", raise_exception_on_condition_failure: bool = True):    # STEP or HISTORY
         self.controller = controller
         self.object_containers = [objects]
 
@@ -51,6 +51,9 @@ class Simulator:
         self.llmverifstyle = llmverifstyle
         self.full_reachability_graph = full_reachability_graph
 
+        self.raise_exception_on_condition_failure = raise_exception_on_condition_failure
+
+        self.exception_queue = []
         self.roblock = {}
 
     @property
@@ -489,10 +492,14 @@ DIFF OF LAST ACTION:
                         print("Done!")
                         raise Exception("Done!")
                 except ConditionFailure as e:
-                    print("Condition Failure! Aborting!")
-                    self.controller.stop()
-                    os._exit(0)
-                    raise e
+                    print("Condition Failure!")
+
+                    if self.raise_exception_on_condition_failure:
+                        self.controller.stop()
+                        os._exit(0)
+                        raise e
+                    else:
+                        self.exception_queue.append(e)
 
                 except Exception as e:
                     os._exit(0)
