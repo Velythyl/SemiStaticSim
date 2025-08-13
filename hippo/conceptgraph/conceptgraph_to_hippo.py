@@ -240,7 +240,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
         if not keep:
             if id in id2objs:
 
-                if other_id in id2objs:
+                if False:# other_id in id2objs:
                     # we are keeping other_id
                     # merging...
 
