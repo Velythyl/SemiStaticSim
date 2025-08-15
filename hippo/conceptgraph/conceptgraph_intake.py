@@ -173,7 +173,7 @@ def load_segments_anno(path):
     with open(path / "segments_anno.json", "r") as f:
         return json.load(f)
 
-def load_conceptgraph(path):
+def load_conceptgraph(path,):
     pcd_dict = load_point_cloud(path)
     clip_features = load_clip_features(path)
     segments_anno = load_segments_anno(path)
@@ -184,17 +184,7 @@ def load_conceptgraph(path):
         return grp
     segments_anno["segGroups"] = [setclip(grp,clip,pcd) for grp, clip, pcd in zip(segments_anno["segGroups"], clip_features, pcd_dict)]
 
-    SWAP_YZ = False
-    if SWAP_YZ:
-        def swap_yz_func(pcd):
-            points = pcd.points
-            points = np.array(points)
-            points[:, [1, 2]] = points[:, [2, 1]]
-            pcd.points = v3v(points)
-            return pcd
-
-        for v in segments_anno["segGroups"]:
-            v["pcd"] = swap_yz_func(v["pcd"])
+    
 
     from pathlib import Path
     for grp in segments_anno["segGroups"]:
@@ -305,7 +295,7 @@ def make_pcd_axis_aligned(segments_anno, axis_id):
     #vis_cg(plane_pcds)
 
     if not plane_normals:
-        return None #raise ValueError("No planes found in the point cloud segments")
+        return segments_anno #raise ValueError("No planes found in the point cloud segments")
 
     # We'll find the rotation around the vertical (Z) axis that best aligns all planes
     # with either X or Y axes (for vertical planes) or with Z axis (for horizontal planes)

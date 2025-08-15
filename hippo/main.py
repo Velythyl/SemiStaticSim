@@ -176,4 +176,20 @@ PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hyd
 PYTHONPATH=..:$PYTHONPATH python3 main.py assetfitting=roundrot_and_axisscale paths.conceptgraphs_dir="./datasets/badseg" paths.scene_id=replica_room0_banner  assetlookup=trellis paths.out_subdi
 r=badseg
 
+
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=120  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main  secrets=secrets_cluster  assetfitting=rot_and_axisscale  paths=realscenes paths.scene_id='i_2_cars,i_2_cones_1_truck_2_bins,i_4_bins_2_ac,i_big_kitchen,i_bomb,i_cube_stacked,i_kitchen,i_tables_bench' assetlookup=trellis,trellis_nomask,clip
+
+# outside scenes:
+
+secrets=secrets_cluster assetfitting=rot_and_aspect_weighted paths=realscenes paths.scene_id=i_2_cars assetlookup=trellis scene=strayscanner_outside
+
+# inside scenes:
+
+secrets=secrets_cluster assetfitting=rot_and_aspect_weighted paths=realscenes paths.scene_id=i_2_cars assetlookup=trellis scene=strayscanner
+
+#
+
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=300  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=6 hydra.launcher.mem_gb=32 hydra.launcher.array_parallelism=60 hydra.launcher.partition=long  secrets=secrets_cluster  assetfitting=rot_and_aspect_weighted  paths=realscenes paths.scene_id='i_2_cars,i_2_cones_1_truck_2_bins,i_4_bins_2_ac,i_big_kitchen,i_bomb,i_cube_stacked,i_kitchen,i_tables_bench' assetlookup=trellis,trellis_nomask,clip scene=strayscanner_outside
 """

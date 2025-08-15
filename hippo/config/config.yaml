@@ -2,7 +2,7 @@
 defaults:
   - meta: meta
   - assetlookup: trellis
-  - skillprediction: none
+  - skillprediction: gpt4
   - paths: default
   - secrets: secrets
   - assetfitting: rot_and_aspect_weighted

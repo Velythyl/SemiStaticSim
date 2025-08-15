@@ -6,3 +6,8 @@ clip_similarity_thresh: 28 # 28 is holodeck. 1 is more than 28, 20
 clip_keep_top_k: 100
 clear_TRELLIS_cache_for_this_scene: False
 method_human_readable_name: "TRELLIS-no-mask"
+
+image_sequence_stride: 1
+image_sequence_start: 0
+image_sequence_end: 5
+use_largest_mask_instead: False

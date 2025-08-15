@@ -139,6 +139,30 @@ class TRELLISLookup:
 
         # cache lookup
         IS_FOUND_IN_CACHE = cache.is_in_cache(image_dir)
+        try:
+            if IS_FOUND_IN_CACHE:
+                metadata_folder = cache.path_in_cache_for_metadata(image_dir)
+                with open(f"{metadata_folder}/bbox.json", "r") as f:
+                    meta = json.load(f)
+
+                    image_sequence_stride = meta["image_sequence_stride"]
+                    image_sequence_start = meta["image_sequence_start"]
+                    image_sequence_end = meta["image_sequence_end"]
+                    use_largest_mask_instead = meta["use_largest_mask_instead"]
+                    
+                    if image_sequence_stride != self.cfg.assetlookup.image_sequence_stride or \
+                       image_sequence_start != self.cfg.assetlookup.image_sequence_start or \
+                       image_sequence_end != self.cfg.assetlookup.image_sequence_end or \
+                       use_largest_mask_instead != self.cfg.assetlookup.use_largest_mask_instead:
+                        raise ValueError(
+                            f"Image sequence settings does not match config ({self.cfg.assetlookup.num_images_to_use})."
+                        )
+        except:
+            cache.clear_cache(image_dir)
+            IS_FOUND_IN_CACHE = False
+
+        
+
         def mark_as_infeasible(reason):
             print(f"Marking as infeasible: <{image_dir}>")
 
@@ -158,9 +182,41 @@ class TRELLISLookup:
             raw_folder = cache.path_in_cache_for_raw(image_dir)
             os.makedirs(raw_folder, exist_ok=True)
 
+            temp_image_dir = f"/tmp/{image_dir}".replace("//", "/")
+            os.makedirs(temp_image_dir, exist_ok=True)
+
+            if self.cfg.assetlookup.image_sequence_end == -1:
+                image_sequence_end = len([f for f in os.listdir(image_dir) if f.endswith(".png")]) 
+            else:
+                image_sequence_end = min(self.cfg.assetlookup.image_sequence_end, len([f for f in os.listdir(image_dir) if f.endswith(".png")]))
+
+            if self.cfg.assetlookup.use_largest_mask_instead:
+                # Use the largest mask in the sequence
+                masks = [os.path.join(masks_dir, f"{idx:03d}.png") for idx in range(self.cfg.assetlookup.image_sequence_start, image_sequence_end + 1, self.cfg.assetlookup.image_sequence_stride)]
+                largest_mask = max(masks, key=lambda x: (np.array(Image.open(x)) > 0).sum())
+                largest_mask_name = os.path.basename(largest_mask)
+                #shutil.copy2(largest_mask, os.path.join(temp_image_dir, "000.png"))
+
+            # Loop over selected indices
+            NUM_IMAGES_TO_USE = 0
+            for idx in range(self.cfg.assetlookup.image_sequence_start, image_sequence_end, self.cfg.assetlookup.image_sequence_stride):
+                if self.cfg.assetlookup.use_largest_mask_instead and f"{idx:03d}.png" != largest_mask_name:
+                    continue
+
+                src = os.path.join(image_dir, f"{idx:03d}.png")
+                dst = os.path.join(temp_image_dir, f"{idx:03d}.png")
+                if os.path.exists(src):
+                    shutil.copy2(src, dst)
+                    NUM_IMAGES_TO_USE += 1
+                else:
+                    print(f"Warning: {src} not found")
+
             try:
+                if NUM_IMAGES_TO_USE == 1:
+                    raise Exception("Using single image mode, not multiimage mode.")
+                print("USING MULTI IMAGE TRELLIS")
                 self.TRELLIS_client.generate_and_download_from_multiple_images(
-                    image_dir,
+                    temp_image_dir,
                     target_dir=raw_folder,
                     params={
                         'multiimage_algo': 'stochastic',
@@ -170,8 +226,9 @@ class TRELLISLookup:
                 )
             except Exception as e:
                 try:
+                    print("USING SINGLE IMAGE TRELLIS")
                     self.TRELLIS_client.generate_and_download_from_single_image(
-                        image_dir + "/000.png",
+                        temp_image_dir + "/000.png",
                         target_dir=raw_folder,
                         params={
                             'multiimage_algo': 'stochastic',
@@ -200,6 +257,12 @@ class TRELLISLookup:
 
             with open(f"{metadata_folder}/bbox.json", "w") as f:
                 bbox = {k: float(v) for k, v in bbox.items()}
+
+                bbox["image_sequence_stride"] = self.cfg.assetlookup.image_sequence_stride
+                bbox["image_sequence_start"] = self.cfg.assetlookup.image_sequence_start
+                bbox["image_sequence_end"] = self.cfg.assetlookup.image_sequence_end
+                bbox["use_largest_mask_instead"] = self.cfg.assetlookup.use_largest_mask_instead
+
                 json.dump(bbox, f, indent=2)
 
             with open(f"{metadata_folder}/uuid.txt", "w") as f:
