@@ -269,8 +269,9 @@ def make_pcd_axis_aligned(segments_anno, axis_id):
         pcd_labels.append(v["label"])
         pcds.append(v["pcd"])
 
+        plane_params = None
         try:
-            is_plane, plane_params, ratio = is_single_plane(pcds[-1])
+            is_plane, plane_params, ratio, normal_spread = is_single_plane(pcds[-1])
 
 
             if is_plane:
@@ -305,7 +306,7 @@ def make_pcd_axis_aligned(segments_anno, axis_id):
     #vis_cg(plane_pcds)
 
     if not plane_normals:
-        return None #raise ValueError("No planes found in the point cloud segments")
+        return segments_anno #raise ValueError("No planes found in the point cloud segments")
 
     # We'll find the rotation around the vertical (Z) axis that best aligns all planes
     # with either X or Y axes (for vertical planes) or with Z axis (for horizontal planes)

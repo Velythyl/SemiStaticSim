@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
-import open3d
+import open3d as o3d
 
 def ask_llm_if_plane(label):
     from llmqueries.llm import LLM
@@ -11,7 +11,7 @@ def ask_llm_if_plane(label):
     Keep your answers brief.
 
     Examples of planar objects: door, photograph, window, ceiling, etc.
-    Examples of non-planar objects: sofa, armchair, table. etc.
+    Examples of non-planar objects: sofa, armchair, table, cylindrical objects, etc.
 
     ---
 
@@ -22,25 +22,32 @@ def ask_llm_if_plane(label):
     is_planar = "OBJECT_IS_PLANAR" in resp
     return is_planar
 
-def is_single_plane(points, noise_threshold=0.05, min_points=10):
+def is_single_plane(points, noise_threshold=0.05, normal_spread_threshold=0.1, min_points=10, k_normals=20):
     """
-    Check if a point cloud is approximately a single plane with noise tolerance.
+    Check if a point cloud is approximately a single plane, with curvature rejection.
 
     Args:
-        points: (N, 3) array of 3D points
-        noise_threshold: Ratio of smallest eigenvalue to sum of eigenvalues that
-                         defines the noise tolerance (lower = more tolerant)
+        points: (N, 3) array of 3D points or Open3D point cloud
+        noise_threshold: PCA eigenvalue ratio threshold (lower = more tolerant)
+        normal_spread_threshold: Std deviation of normals magnitude to reject curved surfaces
         min_points: Minimum number of points required for plane detection
+        k_normals: Nearest neighbors for normal estimation
 
     Returns:
-        bool: True if the points form a single plane within noise tolerance
-        plane_params: (4,) array containing plane equation coefficients (a,b,c,d) for ax+by+cz+d=0
+        is_plane: bool
+        plane_params: (4,) array of plane equation coefficients
+        ratio: smallest eigenvalue ratio
+        normal_spread: std deviation of normals
     """
-    if isinstance(points, open3d.geometry.PointCloud):
-        points = np.array(points.points)
+    if isinstance(points, o3d.geometry.PointCloud):
+        o3d_pc = points
+        points = np.asarray(points.points)
+    else:
+        o3d_pc = o3d.geometry.PointCloud()
+        o3d_pc.points = o3d.utility.Vector3dVector(np.asarray(points))
 
     if len(points) < min_points:
-        return False, jnp.array([0., 0., 0., 0.])
+        return False, jnp.array([0., 0., 0., 0.]), None, None
 
     # Center the points
     centroid = jnp.mean(points, axis=0)
@@ -49,23 +56,39 @@ def is_single_plane(points, noise_threshold=0.05, min_points=10):
     # Compute covariance matrix
     cov = jnp.cov(centered, rowvar=False)
 
-    # Compute eigenvalues (using SVD for stability)
+    # PCA via SVD
     with jax.default_device(jax.devices('cpu')[0]):
         _, s, vh = jnp.linalg.svd(cov)
     eigenvalues = s
     eigenvectors = vh.T
 
-    # Check if the smallest eigenvalue is small compared to the others
-    ratio = eigenvalues[2] / (eigenvalues.sum() + 1e-10)
+    # Smallest eigenvalue ratio
+    ratio = float(eigenvalues[2] / (eigenvalues.sum() + 1e-10))
+    is_plane_pca = ratio < noise_threshold
 
-    is_plane = ratio < noise_threshold
-
-    # Get plane equation (normal is eigenvector for smallest eigenvalue)
+    # Plane equation from PCA
     normal = eigenvectors[:, 2]
     d = -jnp.dot(normal, centroid)
     plane_params = jnp.concatenate([normal, jnp.array([d])])
 
-    return is_plane, plane_params, ratio
+    # --- NEW: normal vector consistency check ---
+    o3d_pc.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamKNN(knn=min(k_normals, len(points)-1))
+    )
+    normals = np.asarray(o3d_pc.normals)
+    normals /= np.linalg.norm(normals, axis=1, keepdims=True)  # normalize
+    # Mean angle deviation from average normal
+    mean_normal = normals.mean(axis=0)
+    mean_normal /= np.linalg.norm(mean_normal)
+    deviations = np.linalg.norm(normals - mean_normal, axis=1)
+    normal_spread = float(np.std(deviations))
+
+    is_plane_normals = normal_spread < normal_spread_threshold
+
+    # Final decision: must pass both tests
+    is_plane = is_plane_pca and is_plane_normals
+
+    return is_plane, plane_params, ratio, normal_spread
 
 
 # JIT compile for better performance
