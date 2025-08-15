@@ -91,6 +91,17 @@ import open3d as o3d
 def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
     cg = load_conceptgraph(path)
 
+    if hasattr(cfg.scene, "intake_swap_yz") and cfg.scene.intake_swap_yz:
+        def swap_yz_func(pcd):
+            points = pcd.points
+            points = np.array(points)
+            points[:, [1, 2]] = points[:, [2, 1]]
+            pcd.points = v3v(points)
+            return pcd
+
+        for v in cg["segGroups"]:
+            v["pcd"] = swap_yz_func(v["pcd"])
+
     #vis_cg([o["pcd"] for o in cg["segGroups"]])
 
     #cg = filter_segGroups(cg)

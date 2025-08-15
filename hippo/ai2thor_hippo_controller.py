@@ -363,8 +363,8 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     #gridsize = 1  # step size between points
 
     # Generate 1D arrays for x and y
-    x = np.arange(scene_bound_min[0], scene_bound_max[0] + GRID_SIZE, GRID_SIZE)
-    y = np.arange(scene_bound_min[1], scene_bound_max[1] + GRID_SIZE, GRID_SIZE)
+    x = np.arange(scene_bound_min[0]+ GRID_SIZE*2, scene_bound_max[0] - GRID_SIZE, GRID_SIZE)
+    y = np.arange(scene_bound_min[1]+ GRID_SIZE*2, scene_bound_max[1] - GRID_SIZE , GRID_SIZE)
 
     # Create 2D grid
     xx, yy = np.meshgrid(x, y)

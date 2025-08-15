@@ -11,7 +11,10 @@ def get_prompt(ho: HippoObject):
 
     PROMPT = f"""
     
-You are helping out with robotic experiments. The robot is a Locobot.
+You are helping out with robotic experiments.
+The robot is a single-arm robot with a gripper.
+It is slightly shorter than a human, and not very strong.
+All skills in the list below can be performed by the robot, but not on all objects.
 
 Please assign labels to the object <{ho.object_name}> of description <{ho.object_description}>. 
 
@@ -90,7 +93,7 @@ But we could not parse your response correctly. Please try again.
     raise AssertionError("Could not parse LLM response")
 
 def LLM_annotate(cfg, ho: HippoObject) -> HippoObject:
-    parsed = LLM_query(ho)
+    parsed = LLM_query(cfg, ho)
 
     from hippo.simulation.skillsandconditions.skill_names import assert_names_are_valid
     if len(assert_names_are_valid(parsed)) > 0:
