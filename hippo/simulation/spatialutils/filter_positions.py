@@ -39,6 +39,8 @@ def _filter_agent_positions(agent_positions, object_positions, object_sizes, mar
 
 
 def build_grid_graph(points, GRID_SIZE, diagonal=False):
+    points = [(float(p[0]), float(p[1]), float(p[2])) for p in points]
+
     G = nx.Graph()
     points_set = set(points)
     dim = len(points[0])  # infer dimensionality
@@ -134,26 +136,42 @@ def filter_reachable_positions(reachable_positions, runtime_container):
     todo_positions = jnp.array(todo_positions)
     centers = jnp.array(centers)
     sizes = jnp.array(sizes)
-    mask = _filter_agent_positions(todo_positions, centers, sizes, margin=0.01)
+
+    mask = _filter_agent_positions(todo_positions.at[:,1].set(0.95),  centers.at[:,1].set(0.95), sizes, margin=0)
+
+    print("Num positions to remove", jnp.sum(jnp.logical_not(mask)))
 
     mask = np.array(mask)
     todo_positions = np.array(todo_positions)
     filtered_reachable_positions = todo_positions[mask]
 
-    if isinstance(reachable_positions, list):
-        return filtered_reachable_positions
+    if isinstance(reachable_positions, nx.Graph):
 
-    elif isinstance(reachable_positions, nx.Graph):
+        for position in todo_positions[jnp.logical_not(mask)]:
+            #position = (float(position[0]), float(position[1]), float(position[2]))
+            #position = round_position(position)
+            for node in nx.nodes(reachable_positions):
+                if np.all(np.allclose(node, position)):
+                    reachable_positions.remove_node(node)
+                    break
+
+            #x= 0
+
+
         # Step 1: Remove unreachable nodes
-        filtered_reachable_positions = [tuple(x.tolist()) for x in filtered_reachable_positions]
-        todo_positions = [tuple(x.tolist()) for x in todo_positions]
-        to_remove = list(set(todo_positions) - set(filtered_reachable_positions))
-        reachable_positions.remove_nodes_from(to_remove)
+       # def round_position(pos):
+       #     base = min(min(pos) for pos in todo_positions)
+       #     return tuple(round(coord / base) * base for coord in pos)
+       # filtered_reachable_positions = list(map(round_position, [tuple(x.tolist()) for x in filtered_reachable_positions]))
+       # todo_positions = list(map(round_position,[tuple(x.tolist()) for x in todo_positions]))
+       # to_remove = list(set(todo_positions) - set(filtered_reachable_positions))
+       # reachable_positions.remove_nodes_from(to_remove)
 
         # Step 2: Keep only the largest connected component
         if reachable_positions.number_of_nodes() > 0:
             largest_cc_nodes = max(nx.connected_components(reachable_positions), key=len)
             reachable_positions = reachable_positions.subgraph(largest_cc_nodes).copy()
+        #draw_grid_graph_2d(reachable_positions, show_labels=False)
 
         return reachable_positions
 

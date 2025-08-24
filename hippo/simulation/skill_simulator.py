@@ -253,6 +253,7 @@ DIFF OF LAST ACTION:
         img_counter = 0
 
         while not self.kill_thread:
+            time.sleep(0.1)
             if len(self.action_queue) > 0:
                 try:
                     act = self.action_queue[0]
@@ -317,6 +318,7 @@ DIFF OF LAST ACTION:
                             #    self.success_exec += 1
                         self.apply_skill('PickupObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=PickupObjectCallback)
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                     elif act['action'] == 'PutObject':
                         def PutObjectCallback():
@@ -329,6 +331,7 @@ DIFF OF LAST ACTION:
                             #    self.success_exec += 1
                         self.apply_skill('PutObject', agent_id=act['agent_id'], target_object_id=act['objectId'], auxiliary_object_id=act["auxiliaryObjectId"], callback=PutObjectCallback)
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                     elif act['action'] == 'ToggleObjectOn':
                         #self.total_exec += 1
@@ -507,20 +510,22 @@ DIFF OF LAST ACTION:
                     print(e)
 
 #                print(self.get_object_container_diff())
+                try:
+                    for i, e in enumerate(self.controller.last_event.events):
+                        cv2.imshow('agent%s' % i, e.cv2img)
+                        f_name = os.path.dirname(__file__) + "/agent_" + str(i + 1) + "/img_" + str(img_counter).zfill(
+                            5) + ".png"
+                        cv2.imwrite(f_name, e.cv2img)
+                    top_view_rgb = cv2.cvtColor(self.controller.last_event.events[0].third_party_camera_frames[-1], cv2.COLOR_BGR2RGB)
+                    cv2.imshow('Top View', top_view_rgb)
+                    f_name = os.path.dirname(__file__) + "/top_view/img_" + str(img_counter).zfill(5) + ".png"
+                    cv2.imwrite(f_name, top_view_rgb)
+                    if cv2.waitKey(25) & 0xFF == ord('q'):
+                        break
 
-                for i, e in enumerate(self.controller.last_event.events):
-                    cv2.imshow('agent%s' % i, e.cv2img)
-                    f_name = os.path.dirname(__file__) + "/agent_" + str(i + 1) + "/img_" + str(img_counter).zfill(
-                        5) + ".png"
-                    cv2.imwrite(f_name, e.cv2img)
-                top_view_rgb = cv2.cvtColor(self.controller.last_event.events[0].third_party_camera_frames[-1], cv2.COLOR_BGR2RGB)
-                cv2.imshow('Top View', top_view_rgb)
-                f_name = os.path.dirname(__file__) + "/top_view/img_" + str(img_counter).zfill(5) + ".png"
-                cv2.imwrite(f_name, top_view_rgb)
-                if cv2.waitKey(25) & 0xFF == ord('q'):
-                    break
-
-                img_counter += 1
+                    img_counter += 1
+                except:
+                    pass
                 self.action_queue.pop(0)
 
     def start_action_listener(self):
@@ -782,12 +787,17 @@ DIFF OF LAST ACTION:
         print("Reached: ", dest_obj)
 
     def PickupObject(self, robot, pick_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'PickupObject', 'objectId': self._get_object_id(pick_obj), 'agent_id': self._get_robot_id(robot)})
+        self._await_robot(robot)
 
     def PutObject(self, robot, put_obj, recp):
-        return self.push_action(
+        self._lock_robot(robot)
+        ret = self.push_action(
             {'action': 'PutObject', 'objectId': self._get_object_id(recp), 'agent_id': self._get_robot_id(robot),
              'auxiliaryObjectId': self._get_object_id(put_obj)})
+        self._await_robot(robot)
+        return ret
 
     def SwitchOn(self, robot, sw_obj):
         self.push_action({'action': 'ToggleObjectOn', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})

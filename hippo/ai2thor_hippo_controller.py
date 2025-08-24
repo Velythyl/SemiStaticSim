@@ -6,6 +6,25 @@ import sys
 from typing import Union
 
 import cv2
+import dataclasses
+import json
+import os
+import re
+import sys
+from typing import Union
+
+import cv2
+
+import numpy as np
+from ai2thor.controller import Controller
+from ai2thor.hooks.procedural_asset_hook import ProceduralAssetHookRunner
+from langchain.llms import Anyscale
+from tqdm import tqdm
+
+from ai2holodeck.constants import THOR_COMMIT_ID, OBJATHOR_ASSETS_DIR
+from hippo.simulation.runtimeobjects import RuntimeObjectContainer
+from hippo.reconstruction.scenedata import HippoObject, dict2xyztuple
+from hippo.utils.file_utils import get_tmp_folder
 
 import numpy as np
 from ai2thor.controller import Controller
@@ -469,6 +488,7 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
 
 
     # setting up tools for human viewing
+    from hippo.simulation.humanviewing import HumanViewing
     c.humanviewing = HumanViewing(c,runtime_container,None)
 
     if just_controller:
@@ -489,91 +509,3 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     #return c, runtime_container, no_robot, reachable_positions
 
 
-@dataclasses.dataclass
-class HumanViewing:
-    c: Controller
-    r: RuntimeObjectContainer
-    s: Union[Simulator, None]
-
-    def get_latest_robot_frame(self):
-        first_view_frame = self.c.last_event.frame
-        return first_view_frame
-
-    def get_augmented_robot_frame(self, frame, message=None, held_item=None, hud_scale=2):
-        if held_item is None:
-            inventory = get_robot_inventory(self.c, 0)
-            assert len(inventory) <= 1
-            if len(inventory) == 0:
-                held_item = None
-            else:
-                raw_item = inventory[0]
-                held_item = re.match(r"^([^-]+)", raw_item).group(1)
-
-
-        if message is None:
-            if self.s is not None:
-                message_queue = self.s.exception_queue
-                if len(message_queue) > 0:
-                    message = None
-                else:
-                    message = message_queue[-1]
-
-        import cv2
-        hud_frame = frame.copy()
-        h, w = hud_frame.shape[:2]
-
-        def draw_box(img, top_left, bottom_right, color=(0, 0, 0), alpha=0.5):
-            overlay = img.copy()
-            cv2.rectangle(overlay, top_left, bottom_right, color, -1)
-            return cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0)
-
-        pad = int(10 * hud_scale)
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.6 * hud_scale
-        title_font_scale = 0.5 * hud_scale
-        thickness = max(1, int(1 * hud_scale))
-
-        # Titles
-        title_msg = "System message:"
-        title_item = "Held item:"
-        title_msg_size = cv2.getTextSize(title_msg, font, title_font_scale, thickness)[0]
-        title_item_size = cv2.getTextSize(title_item, font, title_font_scale, thickness)[0]
-
-        # ---------------- Message Box ----------------
-        msg_size = cv2.getTextSize(message, font, font_scale, thickness)[0]
-        msg_box_tl = (pad, pad + title_msg_size[1] + pad // 2)
-        msg_box_br = (msg_box_tl[0] + msg_size[0] + 2 * pad,
-                      msg_box_tl[1] + msg_size[1] + 2 * pad)
-
-        cv2.putText(hud_frame, title_msg,
-                    (pad, pad + title_msg_size[1]),
-                    font, title_font_scale, (200, 200, 200), thickness, cv2.LINE_AA)
-        hud_frame = draw_box(hud_frame, msg_box_tl, msg_box_br, (0, 0, 50), 0.7)
-        cv2.putText(hud_frame, message,
-                    (msg_box_tl[0] + pad, msg_box_tl[1] + msg_size[1] + pad // 2),
-                    font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
-
-        # ---------------- Held Item Box ----------------
-        item_text = f"[{held_item}]" if held_item else "[Empty Gripper]"
-        item_size = cv2.getTextSize(item_text, font, font_scale, thickness)[0]
-        item_box_tl = (w - item_size[0] - 3 * pad, pad + title_item_size[1] + pad // 2)
-        item_box_br = (item_box_tl[0] + item_size[0] + 2 * pad,
-                       item_box_tl[1] + item_size[1] + 2 * pad)
-
-        cv2.putText(hud_frame, title_item,
-                    (w - item_size[0] - 3 * pad, pad + title_item_size[1]),
-                    font, title_font_scale, (200, 200, 200), thickness, cv2.LINE_AA)
-        hud_frame = draw_box(hud_frame, item_box_tl, item_box_br, (50, 0, 0), 0.7)
-        cv2.putText(hud_frame, item_text,
-                    (item_box_tl[0] + pad, item_box_tl[1] + item_size[1] + pad // 2),
-                    font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
-
-        return hud_frame
-
-    def display_frame(self, frame):
-        if frame is None:
-            frame = self.get_latest_robot_frame()
-        cv2.imshow("first_view", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-
-    def display_augmented_frame(self):
-        return self.display_frame(self.get_augmented_robot_frame(self.get_latest_robot_frame()))

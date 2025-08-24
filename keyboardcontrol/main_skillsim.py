@@ -1,3 +1,5 @@
+import time
+
 import cv2
 import gzip
 import json
@@ -115,12 +117,15 @@ def get_interact_object(env):
 
         return objectId
 
-def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN=[]):
+def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN=[], sim=None):
     first_view_frame = env.last_event.frame
     #cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
     env.humanviewing.set_plan(HU_PLAN)
     env.humanviewing.incr_action_idx()
     env.humanviewing.display_augmented_frame()
+
+    if sim is None:
+        raise NotImplementedError()
 
 
     # remove the ceiling
@@ -130,7 +135,6 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
     env.step(action="ToggleMapView")
 
     step = 0
-
     while True:
         keystroke = cv2.waitKey(0)
         step += 1
@@ -140,6 +144,15 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
             cv2.destroyAllWindows()
             print("action: STOP")
             break
+
+        robots = [{'name': 'robot1',
+                   'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn',
+                              'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject',
+                              'PullObject']},
+                  {'name': 'robot2',
+                   'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn',
+                              'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject',
+                              'PullObject']}]
 
         if keystroke == ord(actionList["MoveAhead"]):
             action = "MoveAhead"
@@ -168,35 +181,40 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
 
         elif keystroke == ord(actionList["PickupObject"]):
             action = "PickupObject"
-            objectId = get_interact_object(env)
-            pickup = objectId.split('|')[0]
-            print('holding', pickup)
             print("action: PickupObject")
+            objectId = get_interact_object(env)
+            pickedupobj = objectId
+            sim.PickupObject(robots[0], objectId)
         elif keystroke == ord(actionList["PutObject"]):
             action = "PutObject"
-            objectId = get_interact_object(env)
-            print('putting on:', objectId)
             print("action: PutObject")
+            objectId = get_interact_object(env)
+            sim.PutObject(robots[0], pickedupobj, objectId)
         elif keystroke == ord(actionList["OpenObject"]):
             action = "OpenObject"
-            objectId = get_interact_object(env)
             print("action: OpenObject")
+            objectId = get_interact_object(env)
+            sim.OpenObject(robots[0], objectId)
         elif keystroke == ord(actionList["CloseObject"]):
             action = "CloseObject"
-            objectId = get_interact_object(env)
             print("action: CloseObject")
+            objectId = get_interact_object(env)
+            sim.CloseObject(robots[0], objectId)
         elif keystroke == ord(actionList["ToggleObjectOn"]):
             action = "ToggleObjectOn"
-            objectId = get_interact_object(env)
             print("action: ToggleObjectOn")
+            objectId = get_interact_object(env)
+            sim.ToggleObjectOn(robots[0], objectId)
         elif keystroke == ord(actionList["ToggleObjectOff"]):
             action = "ToggleObjectOff"
-            objectId = get_interact_object(env)
             print("action: ToggleObjectOff")
+            objectId = get_interact_object(env)
+            sim.ToggleObjectOff(robots[0], objectId)
         elif keystroke == ord(actionList["SliceObject"]):
             action = "SliceObject"
-            objectId = get_interact_object(env)
             print("action: SliceObject")
+            objectId = get_interact_object(env)
+            sim.SliceObject(robots[0], objectId)
         else:
             print("INVALID KEY", keystroke)
             continue
@@ -208,15 +226,20 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
             pass
 
         if action.startswith("Move"):
+            env.step(action=action)
             pass
         else:
             env.humanviewing.incr_action_idx()
+        #time.sleep()
 
         # agent step
-        if "Object" in action:
-            env.step(action=action, objectId=objectId, forceAction=True)
-        else:
-            env.step(action=action)
+        #if "Object" in action:
+        #    pass #env.step(action=action, objectId=objectId, forceAction=True)
+        #else:
+
+
+        #if action == "PutObject" and env.last_event.metadata["error"]:
+        print("Waiting for sim to reply")
         print(env.last_action)
 
         if is_rotate:
@@ -233,8 +256,8 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
             )
 
         first_view_frame = env.last_event.frame
-        #cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
-        env.humanviewing.display_augmented_frame()
+        cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
+        #env.humanviewing.display_augmented_frame()
 
         # remove the ceiling
         env.step(action="ToggleMapView")
@@ -343,7 +366,8 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
     #                                      visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
 
     from hippo.ai2thor_hippo_controller import get_sim
-    controller = get_sim(scene_name, just_controller=True)
+    sim = get_sim(scene_name)
+    controller = sim.controller
     """
     _ = Controller(
         agentMode="default",
@@ -388,7 +412,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
     third_view_frames = []
 
     ## use keyboard control agent
-    keyboard_play(controller, third_view_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN)
+    keyboard_play(controller, third_view_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN, sim)
 
     ## use frames generate video
     if generate_video:
