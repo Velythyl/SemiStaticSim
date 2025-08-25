@@ -256,8 +256,8 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
             )
 
         first_view_frame = env.last_event.frame
-        cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
-        #env.humanviewing.display_augmented_frame()
+        #cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
+        env.humanviewing.display_augmented_frame()
 
         # remove the ceiling
         env.step(action="ToggleMapView")

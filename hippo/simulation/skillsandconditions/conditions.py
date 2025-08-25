@@ -105,6 +105,16 @@ class CONDITION_ObjectExists(Condition):
         return True
 
 @dataclass
+class CONDITION_NotUnderAnotherObject(Condition):
+    name: str = "NotUnderAnotherObject"
+
+    def _error_message(self):
+        return f"Object {self.sas.target_object_id} is under another object."
+
+    def call(self, sas: SimulationActionState) -> bool:
+        return sas.pre_container.is_obj_surface_free(sas.target_object_id)
+
+@dataclass
 class CONDITION_IsInteractable(Condition):
     name: str = "IsInteractable"
     prev: _Condition = CONDITION_ObjectExists()

@@ -308,7 +308,7 @@ DIFF OF LAST ACTION:
                         self._release_robot(act['agent_id'])
 
                     elif act['action'] == 'PickupObject':
-                        def PickupObjectCallback():
+                        def PickupObjectCallback(sas):
                             #self.total_exec += 1
                             multi_agent_event = self.controller.step(action="PickupObject", objectId=act['objectId'],
                                                        agentId=act['agent_id'], forceAction=True)
@@ -321,10 +321,36 @@ DIFF OF LAST ACTION:
                         self._release_robot(robot=act['agent_id'])
 
                     elif act['action'] == 'PutObject':
-                        def PutObjectCallback():
+                        def PutObjectCallback(sas):
                             #self.total_exec += 1
                             multi_agent_event = self.controller.step(action="PutObject", objectId=act['objectId'],
                                                        agentId=act['agent_id'], forceAction=True)
+                            if multi_agent_event.metadata['errorMessage'] == "No valid positions to place object found":
+                                if self.current_object_container.is_obj_surface_free(act['objectId']):
+                                    target_receptacle = self.current_object_container.get_object_by_id(act['objectId'])
+                                    pos = target_receptacle.position
+                                    size = target_receptacle.size
+
+                                    # Compute a point above the object (centered on x,z, slightly above y)
+                                    epsilon = 0.01  # small offset to avoid collision
+                                    above_point = {
+                                        "x": pos[0],
+                                        "y": pos[1] + (size[1] / 2) + epsilon,
+                                        "z": pos[2]
+                                    }
+
+                                    clean = lambda x : float(x)
+                                    above_point = {k:clean(v) for k,v in above_point.items()}
+
+                                    # Example: try placing another object there
+                                    multi_agent_event = self.controller.step(
+                                        action="PlaceObjectAtPoint",
+                                        objectId=sas.auxiliary_object_id,  # the object to put on top
+                                        position=above_point,
+                                        agentId=act['agent_id']
+                                    )
+                                    x=0
+
                             if multi_agent_event.metadata['errorMessage'] != "":
                                 raise Exception(multi_agent_event.metadata['errorMessage'])
                             #else:
@@ -335,7 +361,7 @@ DIFF OF LAST ACTION:
 
                     elif act['action'] == 'ToggleObjectOn':
                         #self.total_exec += 1
-                        def ToggleObjectOn():
+                        def ToggleObjectOn(sas):
                             multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
                                                                     agentId=act['agent_id'], forceAction=True)
 
@@ -350,7 +376,7 @@ DIFF OF LAST ACTION:
                         self.llm_verify_diff_alignment()
 
                     elif act['action'] == 'ToggleObjectOff':
-                        def ToggleObjectOff():
+                        def ToggleObjectOff(sas):
                             multi_agent_event = self.controller.step(action="ToggleObjectOff", objectId=act['objectId'],
                                                                                                 agentId=act['agent_id'], forceAction=True)
 
@@ -369,7 +395,7 @@ DIFF OF LAST ACTION:
                         #    self.success_exec += 1
 
                     elif act['action'] == 'OpenObject':
-                        def OpenObject():
+                        def OpenObject(sas):
                             multi_agent_event = self.controller.step(action="OpenObject", objectId=act['objectId'],
                                                                                                agentId=act['agent_id'], forceAction=True)
 
@@ -389,7 +415,7 @@ DIFF OF LAST ACTION:
 
 
                     elif act['action'] == 'CloseObject':
-                        def CloseObject():
+                        def CloseObject(sas):
                             multi_agent_event = self.controller.step(action="CloseObject", objectId=act['objectId'],
                                                                                                 agentId=act['agent_id'], forceAction=True)
 
@@ -414,7 +440,7 @@ DIFF OF LAST ACTION:
                         #    self.success_exec += 1
                         #self.total_exec += 1
 
-                        def SliceObject():
+                        def SliceObject(sas):
                             self.controller.step(action="SliceObject", objectId=act['objectId'],
                                                                             agentId=act['agent_id'], forceAction=True)
 
@@ -449,7 +475,7 @@ DIFF OF LAST ACTION:
                         #else:
                         #    self.success_exec += 1
 
-                        def ThrowObjectCallback():
+                        def ThrowObjectCallback(sas):
                             # self.total_exec += 1
                             multi_agent_event = self.controller.step(action="ThrowObject", moveMagnitude=7,
                                                                      agentId=act['agent_id'],
@@ -464,7 +490,7 @@ DIFF OF LAST ACTION:
                         self.llm_verify_diff_alignment()
 
                     elif act['action'] == 'BreakObject':
-                        def BreakObject():
+                        def BreakObject(sas):
                             multi_agent_event = self.controller.step(action="BreakObject", objectId=act['objectId'],
                                                                                                 agentId=act['agent_id'], forceAction=True)
 
@@ -505,6 +531,7 @@ DIFF OF LAST ACTION:
                         self.exception_queue.append(e)
 
                 except Exception as e:
+                    print(e)
                     os._exit(0)
                     raise e
                     print(e)

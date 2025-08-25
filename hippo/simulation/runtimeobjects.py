@@ -280,6 +280,9 @@ class RuntimeObjectContainer(_Hippo):
         obj1_index = self.object_names.index(obj1_id)
         return self.obj_isInsideOf[obj1_index].any()
 
+    def is_obj_surface_free(self, obj1_id):
+        return not self.obj_hasOnTopOf[self.object_names.index(obj1_id)].any()
+
     @classmethod
     def coerce_ai2thor_metadata_objects(cls, metadata_objects):
         ret = []
@@ -537,6 +540,11 @@ class RuntimeObjectContainer(_Hippo):
                 del v["hasOnTopOf"]
 
         return ret
+
+    def get_held_object(self):
+        for name, object in self.objects_map.items():
+            if object.heldBy:
+                return object
 
     def get_object_list_with_children_as_string(self):
         ret = self.get_object_list_with_children()

@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
 from hippo.simulation.skillsandconditions.conditions import CONDITION_IsInteractable, \
-    CONDITION_ObjectExists, CONDITION_SkillEnabled, CONDITION_AuxiliaryObjectIsInInventory, CONDITION_SlicingImplementInInventory, \
-    get_slicing_implement_from_inventory
+    CONDITION_ObjectExists, CONDITION_SkillEnabled, CONDITION_AuxiliaryObjectIsInInventory, \
+    CONDITION_SlicingImplementInInventory, \
+    get_slicing_implement_from_inventory, CONDITION_NotUnderAnotherObject
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.simulation.skillsandconditions.skills_abstract import _Skill
 
@@ -26,12 +27,12 @@ class ToggleObjectOnAndOff(_ToggleObject):
 
     def ToggleObjectOn(self, sas: SimulationActionState):
         ret = self.replace(state_value=True)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
     def ToggleObjectOff(self, sas: SimulationActionState):
         ret = self.replace(state_value=False)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
 @dataclass
@@ -40,7 +41,7 @@ class ToggleObjectOn(_ToggleObject):
 
     def ToggleObjectOn(self, sas: SimulationActionState):
         ret = self.replace(state_value=True)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
 @dataclass
@@ -49,7 +50,7 @@ class ToggleObjectOff(_ToggleObject):
 
     def ToggleObjectOff_(self, sas: SimulationActionState):
         ret = self.replace(state_value=True)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
 @dataclass
@@ -67,7 +68,7 @@ class GoToObject(_Ai2ThorSkill):
     llm_name: str = None    # LLM cant turn on/off
 
     def GoToObject(self, sas: SimulationActionState):
-        sas.action_callback()
+        sas.action_callback(sas)
         return None
 
     @property
@@ -85,10 +86,10 @@ class PickupObject(_Ai2ThorSkill):
 
     @property
     def pre_conditions(self):
-        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled(), CONDITION_NotUnderAnotherObject()]
 
     def PickupObject(self, sas: SimulationActionState):
-        sas.action_callback()
+        sas.action_callback(sas)
         return None
 
     def specific_post_conditions(self):
@@ -106,7 +107,7 @@ class ThrowObject(_Ai2ThorSkill):
                 CONDITION_SkillEnabled()]
 
     def ThrowObject(self, sas: SimulationActionState):
-        sas.action_callback()
+        sas.action_callback(sas)
         return None
 
 @dataclass
@@ -116,7 +117,7 @@ class PutObject(_Ai2ThorSkill):
     anti_llm_name: str = "objects can't or shouldn't be put down on this"
 
     def PutObject(self, sas: SimulationActionState):
-        sas.action_callback()
+        sas.action_callback(sas)
         return None
 
 
@@ -149,12 +150,12 @@ class OpenAndCloseObject(_OpenableObject):
 
     def OpenObject(self, sas: SimulationActionState):
         ret = self.replace(state_value=True)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
     def CloseObject(self, sas: SimulationActionState):
         ret = self.replace(state_value=False)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
 @dataclass
@@ -163,7 +164,7 @@ class OpenObject(_OpenableObject):
 
     def OpenObject(self, sas: SimulationActionState):
         ret = self.replace(state_value=True)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
 @dataclass
@@ -172,7 +173,7 @@ class CloseObject(_OpenableObject):
 
     def CloseObject(self, sas: SimulationActionState):
         ret = self.replace(state_value=False)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
 @dataclass
@@ -197,7 +198,7 @@ class SliceObject(_Skill):
         #toolskill
 
         ret = self.replace(state_value=True)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
     @property
@@ -238,7 +239,7 @@ class BreakObject(_Skill):
 
     def BreakObject(self, sas: SimulationActionState):
         ret = self.replace(state_value=True)
-        sas.action_callback()
+        sas.action_callback(sas)
         return ret
 
 @dataclass
