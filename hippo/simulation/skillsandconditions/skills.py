@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from hippo.simulation.skillsandconditions.conditions import CONDITION_IsInteractable, \
     CONDITION_ObjectExists, CONDITION_SkillEnabled, CONDITION_AuxiliaryObjectIsInInventory, \
     CONDITION_SlicingImplementInInventory, \
-    get_slicing_implement_from_inventory, CONDITION_NotUnderAnotherObject
+    get_slicing_implement_from_inventory, CONDITION_NotUnderAnotherObject, CONDITION_InventoryIsEmpty
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.simulation.skillsandconditions.skills_abstract import _Skill
 
@@ -86,7 +86,7 @@ class PickupObject(_Ai2ThorSkill):
 
     @property
     def pre_conditions(self):
-        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled(), CONDITION_NotUnderAnotherObject()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled(), CONDITION_NotUnderAnotherObject(), CONDITION_InventoryIsEmpty()]
 
     def PickupObject(self, sas: SimulationActionState):
         sas.action_callback(sas)

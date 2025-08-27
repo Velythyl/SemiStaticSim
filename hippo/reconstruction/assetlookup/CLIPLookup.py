@@ -1,6 +1,7 @@
 import itertools
 import json
 import random
+import sys
 from typing import Any, Callable
 
 import numpy as np
@@ -37,6 +38,7 @@ class CLIPLookup:
             "ViT-L-14", pretrained="laion2b_s32b_b82k", device="cpu" #"mps" if torch.mps.is_available() else "cpu"
         )
         self.clip_tokenizer = open_clip.get_tokenizer("ViT-L-14")
+        print("Done loading CLIP!")
 
         # initialize sentence transformer
         self.sbert_model = SentenceTransformer("all-mpnet-base-v2", device="cpu")

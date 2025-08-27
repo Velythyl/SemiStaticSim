@@ -118,21 +118,17 @@ def get_interact_object(env):
         return objectId
 
 def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN=[], sim=None):
-    first_view_frame = env.last_event.frame
-    #cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
+    sim.kill_sim_on_condition_failure = False
+    sim.raise_exception_on_condition_failure = False
     env.humanviewing.set_plan(HU_PLAN)
     env.humanviewing.incr_action_idx()
-    env.humanviewing.display_augmented_frame()
+    first_view_frame = env.humanviewing.get_augmented_robot_frame(env.humanviewing.get_latest_robot_frame())
+    env.humanviewing.display_frame(first_view_frame)
 
     if sim is None:
         raise NotImplementedError()
 
-
-    # remove the ceiling
-    env.step(action="ToggleMapView")
-    top_down_frame = env.last_event.third_party_camera_frames[0]
-    cv2.imshow("top_view", cv2.cvtColor(top_down_frame, cv2.COLOR_RGB2BGR))
-    env.step(action="ToggleMapView")
+    cv2.imshow("top_view", cv2.cvtColor(env.humanviewing.get_latest_topdown_frame(), cv2.COLOR_RGB2BGR))
 
     step = 0
     while True:
@@ -183,13 +179,15 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
             action = "PickupObject"
             print("action: PickupObject")
             objectId = get_interact_object(env)
-            pickedupobj = objectId
             sim.PickupObject(robots[0], objectId)
+            if len(sim.exception_queue) <= 0:
+                pickedupobj = objectId
         elif keystroke == ord(actionList["PutObject"]):
             action = "PutObject"
             print("action: PutObject")
             objectId = get_interact_object(env)
-            sim.PutObject(robots[0], pickedupobj, objectId)
+            if len(sim.exception_queue) <= 0:
+                sim.PutObject(robots[0], pickedupobj, objectId)
         elif keystroke == ord(actionList["OpenObject"]):
             action = "OpenObject"
             print("action: OpenObject")
@@ -242,30 +240,13 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
         print("Waiting for sim to reply")
         print(env.last_action)
 
-        if is_rotate:
-            ## rotation third camera
-            pose = compute_rotate_camera_pose(env.last_event.metadata["sceneBounds"]["center"],
-                                              env.last_event.metadata["thirdPartyCameras"][0], rotate_per_frame)
-
-            del pose["agentPositionRelativeThirdPartyCameraPosition"]
-            del pose["agentPositionRelativeThirdPartyCameraRotation"]
-
-            env.step(
-                action="UpdateThirdPartyCamera",
-                **pose
-            )
-
-        first_view_frame = env.last_event.frame
-        #cv2.imshow("first_view", cv2.cvtColor(first_view_frame, cv2.COLOR_RGB2BGR))
-        env.humanviewing.display_augmented_frame()
+        first_view_frame = env.humanviewing.get_augmented_robot_frame(env.humanviewing.get_latest_robot_frame())
+        env.humanviewing.display_frame(first_view_frame)
 
         # remove the ceiling
-        env.step(action="ToggleMapView")
-        top_down_frame = env.last_event.third_party_camera_frames[0]
-        cv2.imshow("top_view", cv2.cvtColor(top_down_frame, cv2.COLOR_RGB2BGR))
-        env.step(action="ToggleMapView")
+        cv2.imshow("top_view", cv2.cvtColor(env.humanviewing.get_latest_topdown_frame(), cv2.COLOR_RGB2BGR))
 
-        top_down_frames.append(top_down_frame)
+        top_down_frames.append(env.humanviewing.get_latest_topdown_frame())
         first_view_frames.append(first_view_frame)
 
 
@@ -386,6 +367,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
     )
     """
 
+    """
     ## add third view camera
     event = controller.step(action="GetMapViewCameraProperties")
     ## third camera's fov
@@ -406,6 +388,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
         fieldOfView=third_fov,
         **pose
     )
+    """
 
     ## collect frame
     first_view_frames = []

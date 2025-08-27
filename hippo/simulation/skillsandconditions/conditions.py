@@ -166,6 +166,16 @@ class CONDITION_IsInInventory(Condition):
         return sas.target_object.heldBy == f"robot{sas.robot+1}"
 
 @dataclass
+class CONDITION_InventoryIsEmpty(Condition):
+    name: str = "InventoryIsEmpty"
+
+    def _error_message(self):
+        return f"Robot hand is not free because robot is holding {self.sas.pre_container.get_held_object().id}."
+
+    def call(self, sas: SimulationActionState) -> bool:
+        return sas.pre_container.get_held_object() is None
+
+@dataclass
 class CONDITION_AttributeEnabled(Condition):
     name: str = "AttributeEnabled"
 

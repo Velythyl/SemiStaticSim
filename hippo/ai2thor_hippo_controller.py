@@ -330,7 +330,7 @@ def resolve_scene_id(floor_name):
         scene = json.load(f)
     return scene
 
-def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False):
+def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False, humanviewing_params={}):
     os.environ["JAX_PLATFORM_NAME"] = "cpu"
     import jax
     jax.config.update('jax_platform_name', "cpu")
@@ -430,9 +430,49 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
         )
     random_teleport()
 
+    THIRD_PARTY_CAMERAS = {
+        "robot": None, # ai2thor primitive
+        "top_down": 0,
+        "altered_first": 1
+    }
     # add a top view camera
     event = c.step(action="GetMapViewCameraProperties")
     event = c.step(action="AddThirdPartyCamera", **event.metadata["actionReturn"])
+
+    def get_altered_cam_position():
+        cam_position = c.last_event.metadata["agent"]["position"]
+        cam_rotation = c.last_event.metadata["agent"]["rotation"]
+        camera_horizon = c.last_event.metadata["agent"]["cameraHorizon"]
+        cam_rotation['x'] = camera_horizon
+        first_person_camera = {
+            'position': cam_position,
+            'rotation': cam_rotation,
+            'orthographic': False,
+            'fieldOfView': 90,
+        }
+        return first_person_camera
+
+    def update_altered_cam_position():
+        cam_params = get_altered_cam_position()
+        c.step(
+            action="UpdateThirdPartyCamera",
+            thirdPartyCameraId=THIRD_PARTY_CAMERAS["altered_first"],
+            position=cam_params["position"],
+            rotation=cam_params["rotation"],
+            fieldOfView=90
+        )
+    c.step(action="AddThirdPartyCamera", **get_altered_cam_position())
+    old_step = c.step
+    def new_step(**kwargs):
+        if kwargs["action"] == "UpdateThirdPartyCamera":
+            print("Third Party Camera Updated")
+            ret = old_step(**kwargs)
+            return ret
+        ret = old_step(**kwargs)
+        if kwargs["action"].startswith("Move"):
+            update_altered_cam_position()
+        return ret
+    c.step = new_step
 
     # maybe need to do this https://github.com/allenai/Holodeck/issues/18#issuecomment-1919531859
 
@@ -489,7 +529,7 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
 
     # setting up tools for human viewing
     from hippo.simulation.humanviewing import HumanViewing
-    c.humanviewing = HumanViewing(c,runtime_container,None)
+    c.humanviewing = HumanViewing(c,runtime_container,None, **humanviewing_params)
 
     if just_controller:
         return c
@@ -501,7 +541,7 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
                           full_reachability_graph=full_reachability_graph)
     simulator.start_action_listener()
 
-    hu = HumanViewing(c, runtime_container, simulator)
+    hu = HumanViewing(c, runtime_container, simulator, **humanviewing_params)
     c.humanviewing = hu
     simulator.humanviewing = hu
 

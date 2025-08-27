@@ -204,7 +204,7 @@ def load_conceptgraph(path,):
 
 
     """"""
-    vis_id2obj()
+    #vis_id2obj()
     segments_anno = make_pcd_axis_aligned(segments_anno,
                                           0)  # align before filtering pcds because we will need the background pcds such as walls, doors, etc
 

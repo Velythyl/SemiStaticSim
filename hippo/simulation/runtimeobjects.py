@@ -545,6 +545,7 @@ class RuntimeObjectContainer(_Hippo):
         for name, object in self.objects_map.items():
             if object.heldBy:
                 return object
+        return None
 
     def get_object_list_with_children_as_string(self):
         ret = self.get_object_list_with_children()
