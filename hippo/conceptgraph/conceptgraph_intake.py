@@ -119,7 +119,7 @@ def pcd_visualize(pcd):
         pass
     visualizer.close()
 
-def remove_outliers(pcd, nb_neighbors=20, std_ratio=1):
+def remove_outliers(pcd, nb_neighbors=500, std_ratio=0.005):
     """
     Remove outliers from a point cloud using statistical outlier removal.
 

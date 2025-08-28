@@ -330,7 +330,7 @@ def resolve_scene_id(floor_name):
         scene = json.load(f)
     return scene
 
-def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False, humanviewing_params={}):
+def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False, humanviewing_params={}, renderInstanceSegmentation=False):
     os.environ["JAX_PLATFORM_NAME"] = "cpu"
     import jax
     jax.config.update('jax_platform_name', "cpu")
@@ -389,6 +389,14 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     xx, yy = np.meshgrid(x, y)
     grid_points = np.stack([xx.ravel(), yy.ravel()], axis=-1)
     grid_points = [(x, DEFAULT_ROBOT_HEIGHT, z) for x, z in grid_points]
+
+    minx = min(np.array(grid_points)[:, 0])
+    maxx = max(np.array(grid_points)[:, 0])
+    minz = min(np.array(grid_points)[:, 2])
+    maxz = max(np.array(grid_points)[:, 2])
+
+    grid_points = list(filter(lambda point: minx < point[0] < maxx and minz < point[2] < maxz, grid_points))
+
     reachable_positions = grid_points
 
     #c.step(action="GetReachablePositions")
@@ -401,7 +409,7 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     # initialize n agents into the scene
     c.step(
         dict(action='Initialize', agentMode="default", snapGrid=False, snapToGrid=False, gridSize=GRID_SIZE,
-             rotateStepDegrees=90, visibilityDistance=1, fieldOfView=90, agentCount=no_robot),
+             rotateStepDegrees=90, visibilityDistance=1, fieldOfView=90, agentCount=no_robot, renderInstanceSegmentation=renderInstanceSegmentation),
         raise_for_failure=True
     )
 
@@ -442,6 +450,7 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     def get_altered_cam_position():
         cam_position = c.last_event.metadata["agent"]["position"]
         cam_rotation = c.last_event.metadata["agent"]["rotation"]
+        print("cam_rotation", cam_rotation)
         camera_horizon = c.last_event.metadata["agent"]["cameraHorizon"]
         cam_rotation['x'] = camera_horizon
         first_person_camera = {
@@ -469,10 +478,56 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
             ret = old_step(**kwargs)
             return ret
         ret = old_step(**kwargs)
-        if kwargs["action"].startswith("Move"):
+        if kwargs["action"].startswith("Move") or kwargs["action"].startswith("Rotate") or kwargs["action"].startswith("Look"):
             update_altered_cam_position()
         return ret
     c.step = new_step
+
+    def get_segmented_held_object():
+        obj = None
+        for obj in c.last_event.metadata['objects']:
+            if obj['isPickedUp']:
+                break
+            obj = None
+        if obj is None:
+            return None
+
+        if c.last_event.instance_segmentation_frame is None:
+            return None
+
+        # Get instance segmentation and frame
+        segmented_first_person_image = c.last_event.instance_segmentation_frame
+        frame = c.last_event.cv2img
+
+        # Get the object's unique color
+        color = tuple(c.last_event.object_id_to_color[obj['name']])  # (r,g,b)
+
+        # 1. Create a mask for the object
+        mask = np.all(segmented_first_person_image == color, axis=-1).astype(np.uint8)
+
+        # 2. Add alpha channel (RGBA)
+        rgba_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
+
+        # 3. Apply transparency: alpha=0 where mask==0
+        rgba_frame[:, :, 3] = mask * 255  # scale 0/1 -> 0/255
+
+        # 4. Find bounding box around the mask to crop
+        ys, xs = np.where(mask > 0)
+        if len(xs) > 0 and len(ys) > 0:
+            x_min, x_max = xs.min(), xs.max()
+            y_min, y_max = ys.min(), ys.max()
+
+            cropped_object = rgba_frame[y_min:y_max + 1, x_min:x_max + 1]
+        else:
+            cropped_object = None  # object not found
+
+        return cropped_object
+
+    c.get_segmented_held_object = get_segmented_held_object
+
+
+
+
 
     # maybe need to do this https://github.com/allenai/Holodeck/issues/18#issuecomment-1919531859
 

@@ -283,6 +283,15 @@ class RuntimeObjectContainer(_Hippo):
     def is_obj_surface_free(self, obj1_id):
         return not self.obj_hasOnTopOf[self.object_names.index(obj1_id)].any()
 
+    def get_objects_that_are_on_obj(self, obj1_id):
+        ret = []
+        for n in self.object_names:
+            if n == obj1_id:
+                continue
+            if self.obj_hasOnTopOf[self.object_names.index(obj1_id)][self.object_names.index(n)]:
+                ret.append(n)
+        return ret
+
     @classmethod
     def coerce_ai2thor_metadata_objects(cls, metadata_objects):
         ret = []

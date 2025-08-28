@@ -223,7 +223,7 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
         except UnboundLocalError:
             pass
 
-        if action.startswith("Move"):
+        if action.startswith("Move") or action.startswith("Rotate") or action.startswith("Look"):
             env.step(action=action)
             pass
         else:
@@ -240,7 +240,7 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
         print("Waiting for sim to reply")
         print(env.last_action)
 
-        first_view_frame = env.humanviewing.get_augmented_robot_frame(env.humanviewing.get_latest_robot_frame())
+        first_view_frame = env.humanviewing.get_augmented_robot_frame(env.humanviewing.get_latest_altered_robot_frame())
         env.humanviewing.display_frame(first_view_frame)
 
         # remove the ceiling
@@ -347,7 +347,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
     #                                      visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
 
     from hippo.ai2thor_hippo_controller import get_sim
-    sim = get_sim(scene_name)
+    sim = get_sim(scene_name, renderInstanceSegmentation=True)
     controller = sim.controller
     """
     _ = Controller(
@@ -425,7 +425,7 @@ if __name__ == "__main__":
     3. PutObjectDown("Yellow cube", "Table")
     """
 
-    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/tunedparams/TRELLIS-yes-mask_True-axis-90_2025-08-08-12-55-40/random_0",  # FloorPlan19_physics ## room
+    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_box2_stacked/TRELLIS-yes-mask_False-aspect weighted-90_2025-08-28-15-35-55/in_order_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree
