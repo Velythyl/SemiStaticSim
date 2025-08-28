@@ -28,7 +28,7 @@ from hippo.utils.git_diff import git_diff
 
 
 class Simulator:
-    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP", raise_exception_on_condition_failure: bool = True):    # STEP or HISTORY
+    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP", kill_sim_on_condition_failure: bool = True, raise_exception_on_condition_failure = True):    # STEP or HISTORY
         self.controller = controller
         self.object_containers = [objects]
 
@@ -51,6 +51,7 @@ class Simulator:
         self.llmverifstyle = llmverifstyle
         self.full_reachability_graph = full_reachability_graph
 
+        self.kill_sim_on_condition_failure = kill_sim_on_condition_failure
         self.raise_exception_on_condition_failure = raise_exception_on_condition_failure
 
         self.exception_queue = []
@@ -253,6 +254,7 @@ DIFF OF LAST ACTION:
         img_counter = 0
 
         while not self.kill_thread:
+            time.sleep(0.1)
             if len(self.action_queue) > 0:
                 try:
                     act = self.action_queue[0]
@@ -307,7 +309,7 @@ DIFF OF LAST ACTION:
                         self._release_robot(act['agent_id'])
 
                     elif act['action'] == 'PickupObject':
-                        def PickupObjectCallback():
+                        def PickupObjectCallback(sas):
                             #self.total_exec += 1
                             multi_agent_event = self.controller.step(action="PickupObject", objectId=act['objectId'],
                                                        agentId=act['agent_id'], forceAction=True)
@@ -317,22 +319,50 @@ DIFF OF LAST ACTION:
                             #    self.success_exec += 1
                         self.apply_skill('PickupObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=PickupObjectCallback)
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                     elif act['action'] == 'PutObject':
-                        def PutObjectCallback():
+                        def PutObjectCallback(sas):
                             #self.total_exec += 1
                             multi_agent_event = self.controller.step(action="PutObject", objectId=act['objectId'],
                                                        agentId=act['agent_id'], forceAction=True)
+                            if multi_agent_event.metadata['errorMessage'] == "No valid positions to place object found":
+                                if self.current_object_container.is_obj_surface_free(act['objectId']):
+                                    target_receptacle = self.current_object_container.get_object_by_id(act['objectId'])
+                                    pos = target_receptacle.position
+                                    size = target_receptacle.size
+
+                                    # Compute a point above the object (centered on x,z, slightly above y)
+                                    epsilon = 0.01  # small offset to avoid collision
+                                    above_point = {
+                                        "x": pos[0],
+                                        "y": pos[1] + (size[1] / 2) + epsilon,
+                                        "z": pos[2]
+                                    }
+
+                                    clean = lambda x : float(x)
+                                    above_point = {k:clean(v) for k,v in above_point.items()}
+
+                                    # Example: try placing another object there
+                                    multi_agent_event = self.controller.step(
+                                        action="PlaceObjectAtPoint",
+                                        objectId=sas.auxiliary_object_id,  # the object to put on top
+                                        position=above_point,
+                                        agentId=act['agent_id']
+                                    )
+                                    x=0
+
                             if multi_agent_event.metadata['errorMessage'] != "":
                                 raise Exception(multi_agent_event.metadata['errorMessage'])
                             #else:
                             #    self.success_exec += 1
                         self.apply_skill('PutObject', agent_id=act['agent_id'], target_object_id=act['objectId'], auxiliary_object_id=act["auxiliaryObjectId"], callback=PutObjectCallback)
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                     elif act['action'] == 'ToggleObjectOn':
                         #self.total_exec += 1
-                        def ToggleObjectOn():
+                        def ToggleObjectOn(sas):
                             multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
                                                                     agentId=act['agent_id'], forceAction=True)
 
@@ -345,14 +375,16 @@ DIFF OF LAST ACTION:
                         # todo check for return of apply_skill
                         #self.success_exec += 1
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                     elif act['action'] == 'ToggleObjectOff':
-                        def ToggleObjectOff():
+                        def ToggleObjectOff(sas):
                             multi_agent_event = self.controller.step(action="ToggleObjectOff", objectId=act['objectId'],
                                                                                                 agentId=act['agent_id'], forceAction=True)
 
                         self.apply_skill('ToggleObjectOff', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=ToggleObjectOff)
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                         #self.total_exec += 1
                         #multi_agent_event = self.controller.step(action="ToggleObjectOff", objectId=act['objectId'],
@@ -366,7 +398,7 @@ DIFF OF LAST ACTION:
                         #    self.success_exec += 1
 
                     elif act['action'] == 'OpenObject':
-                        def OpenObject():
+                        def OpenObject(sas):
                             multi_agent_event = self.controller.step(action="OpenObject", objectId=act['objectId'],
                                                                                                agentId=act['agent_id'], forceAction=True)
 
@@ -386,12 +418,13 @@ DIFF OF LAST ACTION:
 
 
                     elif act['action'] == 'CloseObject':
-                        def CloseObject():
+                        def CloseObject(sas):
                             multi_agent_event = self.controller.step(action="CloseObject", objectId=act['objectId'],
                                                                                                 agentId=act['agent_id'], forceAction=True)
 
                         self.apply_skill('CloseObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=CloseObject)
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                         #self.total_exec += 1
                         #multi_agent_event = self.controller.step(action="CloseObject", objectId=act['objectId'],
@@ -411,7 +444,7 @@ DIFF OF LAST ACTION:
                         #    self.success_exec += 1
                         #self.total_exec += 1
 
-                        def SliceObject():
+                        def SliceObject(sas):
                             self.controller.step(action="SliceObject", objectId=act['objectId'],
                                                                             agentId=act['agent_id'], forceAction=True)
 
@@ -427,6 +460,7 @@ DIFF OF LAST ACTION:
                         self.done_actions.pop() # removes the DirtyObject action
 
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                         # multi_agent_event = self.controller.step(action="ToggleObjectOn", objectId=act['objectId'],
                         #                           agentId=act['agent_id'], forceAction=True)
@@ -446,7 +480,7 @@ DIFF OF LAST ACTION:
                         #else:
                         #    self.success_exec += 1
 
-                        def ThrowObjectCallback():
+                        def ThrowObjectCallback(sas):
                             # self.total_exec += 1
                             multi_agent_event = self.controller.step(action="ThrowObject", moveMagnitude=7,
                                                                      agentId=act['agent_id'],
@@ -459,14 +493,16 @@ DIFF OF LAST ACTION:
                         self.apply_skill('ThrowObject', agent_id=act['agent_id'], target_object_id=act['objectId'],
                                          callback=ThrowObjectCallback)
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                     elif act['action'] == 'BreakObject':
-                        def BreakObject():
+                        def BreakObject(sas):
                             multi_agent_event = self.controller.step(action="BreakObject", objectId=act['objectId'],
                                                                                                 agentId=act['agent_id'], forceAction=True)
 
                         self.apply_skill('BreakObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=BreakObject)
                         self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
 
                         #self.total_exec += 1
                         #multi_agent_event = self.controller.step(action="BreakObject", objectId=act['objectId'],
@@ -494,33 +530,39 @@ DIFF OF LAST ACTION:
                 except ConditionFailure as e:
                     print("Condition Failure!")
 
-                    if self.raise_exception_on_condition_failure:
+                    self.exception_queue.append(e)
+                    if self.kill_sim_on_condition_failure:
                         self.controller.stop()
                         os._exit(0)
+                    if self.raise_exception_on_condition_failure:
                         raise e
                     else:
-                        self.exception_queue.append(e)
+                        print("Condition failure (not raised, added to queue).")
+                    self._release_robot(robot=act['agent_id'])
 
                 except Exception as e:
+                    print(e)
                     os._exit(0)
                     raise e
-                    print(e)
+                    #print(e)
 
 #                print(self.get_object_container_diff())
+                try:
+                    for i, e in enumerate(self.controller.last_event.events):
+                        cv2.imshow('agent%s' % i, e.cv2img)
+                        f_name = os.path.dirname(__file__) + "/agent_" + str(i + 1) + "/img_" + str(img_counter).zfill(
+                            5) + ".png"
+                        cv2.imwrite(f_name, e.cv2img)
+                    top_view_rgb = cv2.cvtColor(self.controller.last_event.events[0].third_party_camera_frames[0], cv2.COLOR_BGR2RGB)
+                    cv2.imshow('Top View', top_view_rgb)
+                    f_name = os.path.dirname(__file__) + "/top_view/img_" + str(img_counter).zfill(5) + ".png"
+                    cv2.imwrite(f_name, top_view_rgb)
+                    if cv2.waitKey(25) & 0xFF == ord('q'):
+                        break
 
-                for i, e in enumerate(self.controller.last_event.events):
-                    cv2.imshow('agent%s' % i, e.cv2img)
-                    f_name = os.path.dirname(__file__) + "/agent_" + str(i + 1) + "/img_" + str(img_counter).zfill(
-                        5) + ".png"
-                    cv2.imwrite(f_name, e.cv2img)
-                top_view_rgb = cv2.cvtColor(self.controller.last_event.events[0].third_party_camera_frames[-1], cv2.COLOR_BGR2RGB)
-                cv2.imshow('Top View', top_view_rgb)
-                f_name = os.path.dirname(__file__) + "/top_view/img_" + str(img_counter).zfill(5) + ".png"
-                cv2.imwrite(f_name, top_view_rgb)
-                if cv2.waitKey(25) & 0xFF == ord('q'):
-                    break
-
-                img_counter += 1
+                    img_counter += 1
+                except:
+                    pass
                 self.action_queue.pop(0)
 
     def start_action_listener(self):
@@ -565,9 +607,11 @@ DIFF OF LAST ACTION:
             robot = self._get_robot_id(robot)
         assert isinstance(robot, int)
 
-        try:
-            self.roblock[robot].release()
-        except RuntimeError as e:
+        lock = self.roblock[robot]
+        if lock.locked():
+            lock.release()
+        else:
+            # no-op
             pass
 
     def _get_object_id(self, target_obj):
@@ -782,18 +826,27 @@ DIFF OF LAST ACTION:
         print("Reached: ", dest_obj)
 
     def PickupObject(self, robot, pick_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'PickupObject', 'objectId': self._get_object_id(pick_obj), 'agent_id': self._get_robot_id(robot)})
+        self._await_robot(robot)
 
     def PutObject(self, robot, put_obj, recp):
-        return self.push_action(
+        self._lock_robot(robot)
+        ret = self.push_action(
             {'action': 'PutObject', 'objectId': self._get_object_id(recp), 'agent_id': self._get_robot_id(robot),
              'auxiliaryObjectId': self._get_object_id(put_obj)})
+        self._await_robot(robot)
+        return ret
 
     def SwitchOn(self, robot, sw_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'ToggleObjectOn', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
+        self._await_robot(robot)
 
     def SwitchOff(self, robot, sw_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'ToggleObjectOff', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
+        self._await_robot(robot)
 
     def OpenObject(self, robot, sw_obj):
         self._lock_robot(robot)
@@ -801,20 +854,30 @@ DIFF OF LAST ACTION:
         self._await_robot(robot)
 
     def CloseObject(self, robot, sw_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'CloseObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
+        self._await_robot(robot)
 
     def BreakObject(self, robot, sw_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'BreakObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
+        self._await_robot(robot)
 
     def SliceObject(self, robot, sw_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'SliceObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
+        self._await_robot(robot)
 
     def CleanObject(self, robot, sw_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'CleanObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
+        self._await_robot(robot)
 
     def ThrowObject(self, robot, sw_obj):
+        self._lock_robot(robot)
         self.push_action({'action': 'ThrowObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         time.sleep(1)
+        self._await_robot(robot)
 
     def Done(self):
         self.push_action({'action': 'Done'})
