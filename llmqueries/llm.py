@@ -104,9 +104,9 @@ def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, lo
 
     return ret
 
-from diskcache import FanoutCache, Cache
+from diskcache import FanoutCache, Cache, Deque
 CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
-cache = FanoutCache(CACHEPATH)
+cache = FanoutCache(CACHEPATH, shards=64)
 
 @cache.memoize()
 def _LLM_cache(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):

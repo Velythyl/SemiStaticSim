@@ -1,7 +1,7 @@
 import copy
 import json
 from pathlib import Path
-
+import os
 import numpy as np
 import open3d as o3d
 
@@ -217,11 +217,25 @@ def load_conceptgraph(path,):
 
     #vis_id2obj()
 
+    rm_indices = path / "rm_indices.json"
+    if rm_indices.exists():
+        with open(rm_indices, "r") as f:
+            rm_indices = json.load(f)
+        print("Removing preprocessing indices:", rm_indices)
+    else:
+        rm_indices = []
+
 
     for i, grp in enumerate(copy.deepcopy(segments_anno["segGroups"])):
+        if i in rm_indices:
+            segments_anno["segGroups"][i] = None
+            continue
+
         for to_remove in ["ceiling", "window", "window blinds", "blinds", "wall", "window blinds", "blinds", "water droplet", "carpet", "rug", "floor rug", "floor carpet", "background"]:#, "wooden sideboard"]: #, "door"]:
             if to_remove in grp["label"]:
                 segments_anno["segGroups"][i] = None
+                break
+                
 
 
         #FOUND_KEEP = False

@@ -42,6 +42,33 @@ class TRELLISLookup:
         image_dir = obj._cg_paths["rgb"]
         masks_dir = obj._cg_paths["mask"]
 
+        def path_contains_symlink(path: str) -> bool:
+            """
+            Check if the given path or any of its components is a symlink.
+
+            Args:
+                path (str): The filesystem path to check.
+
+            Returns:
+                bool: True if the path or any part of it is a symlink, False otherwise.
+            """
+            if isinstance(path, list) or isinstance(path, tuple):
+                return any(path_contains_symlink(p) for p in path)
+
+            # Normalize to absolute path
+            path = os.path.abspath(path)
+
+            # Walk upward through all components
+            while path != os.path.dirname(path):  # until reaching root
+                if os.path.islink(path):
+                    return True
+                path = os.path.dirname(path)
+
+            return False
+        if path_contains_symlink(image_dir) or path_contains_symlink(masks_dir):
+            raise ValueError(f"Path {image_dir} or {masks_dir} contains a symlink, which is not supported by the TRELLIS lookup due to interactions with Singularity containers.")
+
+
         if not isinstance(image_dir, str):
             if len(image_dir) == 1:
                 assert len(masks_dir) == 1
@@ -188,7 +215,7 @@ class TRELLISLookup:
             if self.cfg.assetlookup.image_sequence_end == -1:
                 image_sequence_end = len([f for f in os.listdir(image_dir) if f.endswith(".png")]) 
             else:
-                image_sequence_end = min(self.cfg.assetlookup.image_sequence_end, len([f for f in os.listdir(image_dir) if f.endswith(".png")]))
+                image_sequence_end = min(self.cfg.assetlookup.image_sequence_end, len([f for f in os.listdir(image_dir) if f.endswith(".png")]) - 1)
 
             if self.cfg.assetlookup.use_largest_mask_instead:
                 # Use the largest mask in the sequence

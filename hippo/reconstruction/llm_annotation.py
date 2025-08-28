@@ -89,8 +89,10 @@ But we could not parse your response correctly. Please try again.
     parsed = parse_response(response)
     if parsed is not None:
         return parsed
+    
+    return []
 
-    raise AssertionError("Could not parse LLM response")
+    raise AssertionError(f"Could not parse LLM response: {response}")
 
 def LLM_annotate(cfg, ho: HippoObject) -> HippoObject:
     parsed = LLM_query(cfg, ho)
