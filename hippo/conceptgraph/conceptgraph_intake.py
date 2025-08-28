@@ -119,6 +119,26 @@ def pcd_visualize(pcd):
         pass
     visualizer.close()
 
+def remove_outliers(pcd, nb_neighbors=20, std_ratio=1):
+    """
+    Remove outliers from a point cloud using statistical outlier removal.
+
+    Args:
+        pcd (o3d.geometry.PointCloud): Input point cloud.
+        nb_neighbors (int): Number of neighbors to consider for each point.
+        std_ratio (float): Threshold based on standard deviation.
+                           Lower = stricter filtering.
+
+    Returns:
+        inlier_cloud (o3d.geometry.PointCloud): Point cloud with outliers removed.
+        outlier_cloud (o3d.geometry.PointCloud): The removed outliers.
+    """
+    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=nb_neighbors,
+                                             std_ratio=std_ratio)
+    inlier_cloud = pcd.select_by_index(ind)
+    outlier_cloud = pcd.select_by_index(ind, invert=True)
+    return inlier_cloud#, outlier_cloud
+
 def load_point_cloud(path):
     path = Path(path)
     assert path.exists(), path
@@ -145,6 +165,7 @@ def load_point_cloud(path):
 
     for ann in segments_anno["segGroups"]:
         obj = pcd.select_by_index(ann["segments"])
+        obj = remove_outliers(obj)
         pcd_o3d.append(obj)
 
 
@@ -204,7 +225,7 @@ def load_conceptgraph(path,):
 
 
     """"""
-    vis_id2obj()
+    #vis_id2obj()
     segments_anno = make_pcd_axis_aligned(segments_anno,
                                           0)  # align before filtering pcds because we will need the background pcds such as walls, doors, etc
 
