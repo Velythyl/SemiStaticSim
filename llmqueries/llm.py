@@ -124,7 +124,7 @@ def LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=
     return a, response
 
 def set_api_key(openai_api_key):
-    if os.path.exists(openai_api_key):
+    if os.path.exists(openai_api_key + '.txt'):
         openai.api_key = Path(openai_api_key + '.txt').read_text()
     else:
         openai.api_key = openai_api_key

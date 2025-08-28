@@ -153,7 +153,7 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
 def main(cfg):
     cfg = resolve_cfg(cfg)
 
-    set_api_key("../api_key")
+    set_api_key("../hippo/secrets/openai_api_key")
     for scene_id, tasks_for_scene_id, robots_in_scene_id in zip(cfg.scene.sceneids, cfg.scene.tasks, cfg.scene.robots):
         for task_for_scene_id, robot_for_scene_id in zip(tasks_for_scene_id, robots_in_scene_id):
             scenetask = parse_floorplan(scene_id, task_for_scene_id, robot_for_scene_id)
