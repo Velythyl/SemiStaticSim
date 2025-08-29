@@ -117,13 +117,25 @@ def get_interact_object(env):
 
         return objectId
 
-def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN=[], sim=None):
+def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN=[], sim=None, USE_ALTERED_FIRST_PERSON=True,
+         AUGMENT_FIRST_PERSON=True):
     sim.kill_sim_on_condition_failure = False
     sim.raise_exception_on_condition_failure = False
     env.humanviewing.set_plan(HU_PLAN)
     env.humanviewing.incr_action_idx()
-    first_view_frame = env.humanviewing.get_augmented_robot_frame(env.humanviewing.get_latest_robot_frame())
-    env.humanviewing.display_frame(first_view_frame)
+    def render_first_person():
+        if USE_ALTERED_FIRST_PERSON:
+            frame = env.humanviewing.get_latest_altered_robot_frame()
+        else:
+            frame = env.humanviewing.get_latest_robot_frame()
+        if AUGMENT_FIRST_PERSON:
+            frame = env.humanviewing.get_augmented_robot_frame(frame)
+        env.humanviewing.display_frame(frame)
+        return frame
+
+    #first_view_frame = env.humanviewing.get_augmented_robot_frame(env.humanviewing.get_latest_robot_frame())
+    #env.humanviewing.display_frame(first_view_frame)
+    first_view_frame = render_first_person()
 
     if sim is None:
         raise NotImplementedError()
@@ -223,7 +235,7 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
         except UnboundLocalError:
             pass
 
-        if action.startswith("Move"):
+        if action.startswith("Move") or action.startswith("Rotate") or action.startswith("Look"):
             env.step(action=action)
             pass
         else:
@@ -240,8 +252,9 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
         print("Waiting for sim to reply")
         print(env.last_action)
 
-        first_view_frame = env.humanviewing.get_augmented_robot_frame(env.humanviewing.get_latest_robot_frame())
-        env.humanviewing.display_frame(first_view_frame)
+        #first_view_frame = env.humanviewing.get_augmented_robot_frame(env.humanviewing.get_latest_altered_robot_frame())
+        #env.humanviewing.display_frame(first_view_frame)
+        first_view_frame = render_first_person()
 
         # remove the ceiling
         cv2.imshow("top_view", cv2.cvtColor(env.humanviewing.get_latest_topdown_frame(), cv2.COLOR_RGB2BGR))
@@ -327,7 +340,8 @@ def initialize_side_camera_pose(scene_bound, pose, third_fov=60, slope_degree=45
 
 def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
          BEV=False, slope_degree=45, down_angle=65, use_procthor=False, procthor_scene_file="", procthor_scene_num=100,
-         is_rotate=True, rotate_per_frame=6, generate_video=False, generate_gif=False, HU_PLAN=[]):
+         is_rotate=True, rotate_per_frame=6, generate_video=False, generate_gif=False, HU_PLAN=[],USE_ALTERED_FIRST_PERSON=True,
+         AUGMENT_FIRST_PERSON=True):
     ## procthor room
     if use_procthor:
         with gzip.open(procthor_scene_file, "r") as f:
@@ -347,7 +361,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
     #                                      visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
 
     from hippo.ai2thor_hippo_controller import get_sim
-    sim = get_sim(scene_name)
+    sim = get_sim(scene_name, renderInstanceSegmentation=True)
     controller = sim.controller
     """
     _ = Controller(
@@ -395,7 +409,8 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
     third_view_frames = []
 
     ## use keyboard control agent
-    keyboard_play(controller, third_view_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN, sim)
+    keyboard_play(controller, third_view_frames, first_view_frames, is_rotate, rotate_per_frame, HU_PLAN, sim, USE_ALTERED_FIRST_PERSON=USE_ALTERED_FIRST_PERSON,
+         AUGMENT_FIRST_PERSON=AUGMENT_FIRST_PERSON)
 
     ## use frames generate video
     if generate_video:
@@ -425,7 +440,7 @@ if __name__ == "__main__":
     3. PutObjectDown("Yellow cube", "Table")
     """
 
-    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/tunedparams/TRELLIS-yes-mask_True-axis-90_2025-08-08-12-55-40/random_0",  # FloorPlan19_physics ## room
+    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_box2_stacked_wide/TRELLIS-yes-mask_False-aspect weighted-new-centroid/in_order_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree
@@ -437,5 +452,7 @@ if __name__ == "__main__":
          rotate_per_frame=6,  ## top_view rotate degree
          generate_video=True,  ## use frames generate video
          generate_gif=True,  ## use frames generate gif
-         HU_PLAN=HU_PLAN
+         HU_PLAN=HU_PLAN,
+         USE_ALTERED_FIRST_PERSON=True,
+         AUGMENT_FIRST_PERSON=False
          )

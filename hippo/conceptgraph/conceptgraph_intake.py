@@ -139,7 +139,7 @@ def remove_outliers(pcd, nb_neighbors=500, std_ratio=0.005):
     outlier_cloud = pcd.select_by_index(ind, invert=True)
     return inlier_cloud#, outlier_cloud
 
-def load_point_cloud(path):
+def load_point_cloud(cfg, path):
     path = Path(path)
     assert path.exists(), path
     pcd = o3d.io.read_point_cloud(str(path / "point_cloud.pcd"))
@@ -165,7 +165,7 @@ def load_point_cloud(path):
 
     for ann in segments_anno["segGroups"]:
         obj = pcd.select_by_index(ann["segments"])
-        obj = remove_outliers(obj)
+        obj = remove_outliers(obj, std_ratio=cfg.scene.statistical_pcd_denoise_std) if cfg.scene.statistical_pcd_denoise_std > 0 else obj
         pcd_o3d.append(obj)
 
 
@@ -194,8 +194,8 @@ def load_segments_anno(path):
     with open(path / "segments_anno.json", "r") as f:
         return json.load(f)
 
-def load_conceptgraph(path,):
-    pcd_dict = load_point_cloud(path)
+def load_conceptgraph(cfg, path,):
+    pcd_dict = load_point_cloud(cfg, path)
     clip_features = load_clip_features(path)
     segments_anno = load_segments_anno(path)
 

@@ -89,7 +89,7 @@ Here are my objects:
 import open3d as o3d
 
 def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
-    cg = load_conceptgraph(path)
+    cg = load_conceptgraph(cfg, path)
 
     if hasattr(cfg.scene, "intake_swap_yz") and cfg.scene.intake_swap_yz:
         def swap_yz_func(pcd):

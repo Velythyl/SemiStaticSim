@@ -195,23 +195,77 @@ class HumanViewing:
         item_text = f"[{held_item}]" if held_item else "[Empty Gripper]"
         title_item_size = cv2.getTextSize(title_item, font, title_font_scale, thickness)[0]
 
+        held_object_image = self.c.get_segmented_held_object()
+
+        # Calculate the box dimensions
         item_box_width = section_width - 2 * inner_pad
-        item_lines = wrap_text(item_text, font, font_scale, thickness, item_box_width - inner_pad * 2)
-        item_box_height = title_item_size[1] + (len(item_lines) * int(20 * hud_scale)) + 3 * inner_pad
 
-        item_box_tl = (item_x, item_y + title_item_size[1] + inner_pad)
-        item_box_br = (item_box_tl[0] + item_box_width, item_box_tl[1] + item_box_height)
-        hud_frame = draw_box(hud_frame, item_box_tl, item_box_br, (50, 0, 0), 0.7)
+        # If we have an image, adjust the box height to accommodate it
+        if held_object_image is not None:
+            # Calculate maximum dimensions for the image (80% of box width)
+            max_img_width = int(item_box_width * 0.8)
+            max_img_height = max_img_width  # Keep it square
 
-        cv2.putText(hud_frame, title_item, (item_x, item_y + title_item_size[1]),
-                    font, title_font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
+            # Get original dimensions
+            img_h, img_w = held_object_image.shape[:2]
 
-        line_y = item_box_tl[1] + inner_pad + title_item_size[1]
-        for line in item_lines:
-            cv2.putText(hud_frame, line,
+            # Calculate scaling factor
+            scale = min(max_img_width / img_w, max_img_height / img_h)
+
+            # Resize the image
+            new_width = int(img_w * scale)
+            new_height = int(img_h * scale)
+            resized_image = cv2.resize(held_object_image, (new_width, new_height))
+
+            # Calculate text height needed
+            text_height = title_item_size[1] + (1 * int(20 * hud_scale)) + 2 * inner_pad
+
+            # Total box height = text height + image height + padding
+            item_box_height = text_height + new_height + inner_pad
+
+            # Create the box
+            item_box_tl = (item_x, item_y + title_item_size[1] + inner_pad)
+            item_box_br = (item_box_tl[0] + item_box_width, item_box_tl[1] + item_box_height)
+            hud_frame = draw_box(hud_frame, item_box_tl, item_box_br, (50, 0, 0), 0.7)
+
+            # Draw title and text
+            cv2.putText(hud_frame, title_item, (item_x, item_y + title_item_size[1]),
+                        font, title_font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
+
+            line_y = item_box_tl[1] + inner_pad + title_item_size[1]
+            cv2.putText(hud_frame, item_text,
                         (item_box_tl[0] + inner_pad, line_y),
                         font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
-            line_y += int(20 * hud_scale)
+
+            # Calculate image position (centered horizontally)
+            img_x = item_box_tl[0] + (item_box_width - new_width) // 2
+            img_y = line_y + int(20 * hud_scale) + inner_pad
+
+            # Overlay the image on the HUD frame
+            tmp = np.ones((hud_frame.shape[0], hud_frame.shape[1], 4), dtype=hud_frame.dtype)
+            tmp[:,:,:3] = hud_frame
+            hud_frame = tmp
+            hud_frame[img_y:img_y + new_height, img_x:img_x + new_width] = resized_image
+            hud_frame = hud_frame[:,:,:3]
+
+        else:
+            # No image - just show text as before
+            item_lines = wrap_text(item_text, font, font_scale, thickness, item_box_width - inner_pad * 2)
+            item_box_height = title_item_size[1] + (len(item_lines) * int(20 * hud_scale)) + 3 * inner_pad
+
+            item_box_tl = (item_x, item_y + title_item_size[1] + inner_pad)
+            item_box_br = (item_box_tl[0] + item_box_width, item_box_tl[1] + item_box_height)
+            hud_frame = draw_box(hud_frame, item_box_tl, item_box_br, (50, 0, 0), 0.7)
+
+            cv2.putText(hud_frame, title_item, (item_x, item_y + title_item_size[1]),
+                        font, title_font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
+
+            line_y = item_box_tl[1] + inner_pad + title_item_size[1]
+            for line in item_lines:
+                cv2.putText(hud_frame, line,
+                            (item_box_tl[0] + inner_pad, line_y),
+                            font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+                line_y += int(20 * hud_scale)
 
         return hud_frame
 
