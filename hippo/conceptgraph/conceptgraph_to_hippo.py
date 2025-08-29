@@ -209,7 +209,10 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
                 raise ValueError("pcd must be of shape (N, 3)")
 
             # Step 1: naive centroid
-            naive_centroid = np.mean(pcd, axis=0)
+            bbox_min = np.min(pcd, axis=0)
+            bbox_max = np.max(pcd, axis=0)
+            bbox_center = 0.5 * (bbox_min + bbox_max)
+            naive_centroid = bbox_center
 
             # Step 2: compute distances to naive centroid
             distances = np.linalg.norm(pcd - naive_centroid, axis=1)
@@ -325,7 +328,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
     maxbound = (maxbound[0],maxbound[2])
     roomId = cg["sceneId"] + f"-{get_uuid()}"
     coords = ((minbound[0], minbound[1]), (minbound[0], maxbound[1]), (maxbound[0], maxbound[1]), (maxbound[0], minbound[1]))
-    roomplan = HippoRoomPlan(id=roomId, coords=coords, center=(maxbound[0]-minbound[0], maxbound[1]-minbound[1]), wall_height=cfg.scene.wall_height, floor_type=cfg.scene.floor_material, wall_type=cfg.scene.wall_material)
+    roomplan = HippoRoomPlan(id=roomId, coords=coords, center=((maxbound[0]-minbound[0]) / 2, (maxbound[1]-minbound[1])/2), size=(((maxbound[0]-minbound[0]), (maxbound[1]-minbound[1]))), wall_height=cfg.scene.wall_height, floor_type=cfg.scene.floor_material, wall_type=cfg.scene.wall_material)
 
     hippo_objects = [h.replace(roomId=roomId) for h in hippo_objects]
 

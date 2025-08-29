@@ -192,4 +192,9 @@ secrets=secrets_cluster assetfitting=rot_and_aspect_weighted paths=realscenes pa
 
 
 PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=300  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=6 hydra.launcher.mem_gb=32 hydra.launcher.array_parallelism=60 hydra.launcher.partition=long  secrets=secrets_cluster  assetfitting=rot_and_aspect_weighted  paths=realscenes paths.scene_id='i_2_cars,i_2_cones_1_truck_2_bins,i_4_bins_2_ac,i_big_kitchen,i_bomb,i_cube_stacked,i_kitchen,i_tables_bench' assetlookup=trellis,trellis_nomask,clip scene=strayscanner_outside
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py   secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted  paths=realscenes paths.scene_id='i_box2_stacked' assetlookup=trellis scene=strayscanner assetlookup.image_sequence_end=1
+
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py   secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted  paths=realscenes paths.scene_id='i_box2_stacked' assetlookup=trellis scene=strayscanner_outside assetlookup.image_sequence_end=1
 """

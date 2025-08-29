@@ -92,32 +92,25 @@ class CLIPLookup:
         scene["wall_height"] = hipporoom.wall_height
         scene["walls"] = walls
 
-        PROCEDURAL_LIGHTS = f"""
-        {{
-                "ceilingColor": {{
-                    "b": 1,
-                    "g": 1,
-                    "r": 1
-                }},
-                "ceilingMaterial": {{
-                    "name": "PVCLit"
-                }},
-                "floorColliderThickness": 1.0,
-                "lights": [
-                    {{
-                        "id": "mainlight",
+        INTENSITY = 0.1
+        lights = []
+        for corner in range(4):
+            lights.append(
+                f"""
+{{
+                        "id": "mainlight{corner}",
                         "type": "point",
                         "position": {{
-                            "x": {hipporoom.center[0]},
+                            "x": {hipporoom.center[0] - hipporoom.size[0]/2 + (corner%2)*hipporoom.size[0] + (0.5 if corner%2==0 else -0.5)},
                             "y": {max(hipporoom.wall_height-0.5, 3)},
-                            "z": {hipporoom.center[1]}
+                            "z": {hipporoom.center[1] - hipporoom.size[1]/2 + (corner//2)*hipporoom.size[1] + (0.5 if corner//2==0 else -0.5)}
                         }},
-                        "intensity": 1,
+                        "intensity": {INTENSITY},
                         "range": 100,
                         "rgb": {{
                             "r": 1.0,
-                            "g": 0.9,
-                            "b": 0.8
+                            "g": 1.0,
+                            "b": 1.0
                         }},
                         "shadow": {{
                             "type": "Soft",
@@ -135,6 +128,59 @@ class CLIPLookup:
                             "Procedural3"
                         ]
                     }}
+"""
+            )
+        
+        lights.append(
+            f"""
+{{
+                        "id": "mainlight{corner}",
+                        "type": "point",
+                        "position": {{
+                            "x": {hipporoom.center[0]},
+                            "y": {max(hipporoom.wall_height-0.5, 3)},
+                            "z": {hipporoom.center[1]}
+                        }},
+                        "intensity": {INTENSITY},
+                        "range": 100,
+                        "rgb": {{
+                            "r": 1.0,
+                            "g": 1.0,
+                            "b": 1.0
+                        }},
+                        "shadow": {{
+                            "type": "Soft",
+                            "strength": 1,
+                            "normalBias": 0,
+                            "bias": 0.05,
+                            "nearPlane": 0.2,
+                            "resolution": "FromQualitySettings"
+                        }},
+                        "roomId": "living room",
+                        "layer": "Procedural0",
+                        "cullingMaskOff": [
+                            "Procedural1",
+                            "Procedural2",
+                            "Procedural3"
+                        ]
+                    }}
+"""
+        )
+
+
+        PROCEDURAL_LIGHTS = f"""
+        {{
+                "ceilingColor": {{
+                    "b": 1,
+                    "g": 1,
+                    "r": 1
+                }},
+                "ceilingMaterial": {{
+                    "name": "PVCLit"
+                }},
+                "floorColliderThickness": 1.0,
+                "lights": [
+                    {','.join(lights)}
                 ],
                 "receptacleHeight": 0.7,
                 "reflections": [],
