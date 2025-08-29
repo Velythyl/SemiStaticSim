@@ -2,7 +2,7 @@ wall_height: 0.01
 pad: 0.5
 remove_obj_name_substr: [""]  # removes any CG obj that contains any of the substrings in filter_obs
 remove_obj_desc_substr: [""]
-statistical_pcd_denoise_std: 0.05
+statistical_pcd_denoise_std: -1
 floor_material:  "PVCLit"
 wall_material: "EggshellDrywall"
 
