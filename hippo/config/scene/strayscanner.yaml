@@ -2,6 +2,7 @@ wall_height: 3
 pad: [3,1,0,1] # 0,2, are together, 1,3 are together
 remove_obj_name_substr: ["interlocking mat"]  # removes any CG obj that contains any of the substrings in filter_obs
 remove_obj_desc_substr: [""]
+statistical_pcd_denoise_std: 0.05
 intake_swap_yz: True
 floor_material:  "PVCLit"
 wall_material: "EggshellDrywall"
