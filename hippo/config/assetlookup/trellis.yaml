@@ -7,6 +7,8 @@ clip_keep_top_k: 100
 clear_TRELLIS_cache_for_this_scene: False
 method_human_readable_name: "TRELLIS-yes-mask"
 
+lights_intensity: 0.1
+
 image_sequence_stride: 1
 image_sequence_start: 0
 image_sequence_end: 5

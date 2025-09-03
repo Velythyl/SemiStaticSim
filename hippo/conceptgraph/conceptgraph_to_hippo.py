@@ -229,6 +229,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
             sum_weights = np.sum(weights)
             refined_centroid = weighted_sum / sum_weights
 
+            #refined_centroid[1] = np.min(pcd[:,1])
             return refined_centroid
 
         position = weighted_centroid(pcd) #np.mean(pcd, axis=0)

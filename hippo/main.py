@@ -196,5 +196,25 @@ PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hyd
 PYTHONPATH=..:$PYTHONPATH python3 main.py   secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted  paths=realscenes paths.scene_id='i_box2_stacked' assetlookup=trellis scene=strayscanner assetlookup.image_sequence_end=1
 
 
-PYTHONPATH=..:$PYTHONPATH python3 main.py   secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted  paths=realscenes paths.scene_id='i_box2_stacked' assetlookup=trellis scene=strayscanner_outside assetlookup.image_sequence_end=1
+PYTHONPATH=..:$PYTHONPATH python3 main.py   secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted  paths=realscenes paths.scene_id='i_box2_stacked' assetlookup=trellis scene=strayscanner_outside assetlookup.image_sequence_end=1 scene.statistical_pcd_denoise_std=0.005
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=300  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=6 hydra.launcher.mem_gb=32 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main  secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted  paths=realscenes paths.scene_id='i_box2_stacked' assetlookup=trellis,trellis_nomask,clip scene=strayscanner_outside assetlookup.image_sequence_end=-1 assetlookup.image_sequence_stride=3 scene.statistical_pcd_denoise_std=0.005
+
+
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=300  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main  secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted,rot_and_aspect_weighted  paths=realscenes paths.scene_id='i_feu_3' assetlookup=trellis,trellis_nomask,clip scene=strayscanner_outside assetlookup.image_sequence_end=-1 assetlookup.image_sequence_stride=3 scene.statistical_pcd_denoise_std=1.0
+
+WIP PYTHONPATH=..:$PYTHONPATH python3 main.py  secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted  paths=realscenes paths.scene_id='i_mug_kitchen_5' assetlookup=trellis scene=strayscanner_outside assetlookup.image_sequence_end=4 assetlookup.image_sequence_start=3 assetlookup.clear_TRELLIS_cache_for_this_scene=True
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py  secrets=secrets_cluster  assetfitting=rot_and_axisscale  paths=realscenes paths.scene_id='i_mug_kitchen_5' assetlookup=trellis scene=strayscanner_outside assetlookup.image_sequence_end=9 assetlookup.image_sequence_start=4 assetlookup.image_sequence_stride=2  assetlookup.clear_TRELLIS_cache_for_this_scene=False
+
+
+WORKS PYTHONPATH=..:$PYTHONPATH python3 main.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=300  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main  secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted,rot_and_aspect_weighted  paths=realscenes paths.scene_id='i_2_cones_1_truck_2_bins' assetlookup=trellis,trellis_nomask,clip scene=strayscanner_outside assetlookup.image_sequence_start=0 assetlookup.image_sequence_end=1 assetlookup.lights_intensity=0.5
+
+
+CLOSE TO WORKING  PYTHONPATH=..:$PYTHONPATH python3 main.py  secrets=secrets_cluster  assetfitting=rot_and_aspect_weighted  paths=realscenes paths.scene_id='i_mug_kitchen_5' assetlookup=trellis scene=strayscanner_outside assetlookup.image_sequence_end=9 assetlookup.image_sequence_start=4 assetlookup.image_sequence_stride=2  assetlookup.clear_TRELLIS_cache_for_this_scene=False scene.statistical_pcd_denoise_std=0.05
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=300  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main  secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted,rot_and_aspect_weighted  paths=realscenes paths.scene_id='i_feu_3' assetlookup=trellis,trellis_nomask,clip scene=strayscanner_outside assetlookup.image_sequence_end=3 assetlookup.image_sequence_start=0 assetlookup.image_sequence_stride=1 scene.statistical_pcd_denoise_std=1.0
+
+kinda PYTHONPATH=..:$PYTHONPATH python3 main.py  secrets=secrets_cluster  assetfitting=rot_and_aspect_fit  paths=realscenes paths.scene_id='i_mug_kitchen_surely3' assetlookup=trellis scene=strayscanner_outside assetlookup.image_sequence_start=1 assetlookup.image_sequence_end=1
 """

@@ -92,7 +92,7 @@ class CLIPLookup:
         scene["wall_height"] = hipporoom.wall_height
         scene["walls"] = walls
 
-        INTENSITY = 0.1
+        INTENSITY = self.cfg.assetlookup.lights_intensity
         lights = []
         for corner in range(4):
             lights.append(

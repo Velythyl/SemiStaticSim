@@ -10,15 +10,16 @@ from llmqueries.llm import LLM
 def get_prompt(ho: HippoObject):
 
     PROMPT = f"""
-    
 You are helping out with robotic experiments.
-The robot is a single-arm robot with a gripper.
-It is slightly shorter than a human, and not very strong.
+The robot is a single-arm robot with a gripper (similar to a LoCobot).
+It is slightly shorter than a human.
+It cannot intereact objects that are taller than itself.
+It can open doors and drawers, slice items, etc.
 All skills in the list below can be performed by the robot, but not on all objects.
 
 Please assign labels to the object <{ho.object_name}> of description <{ho.object_description}>. 
 
-Think logically before assigning. Detail your reasoning. 
+Think logically before assigning. Detail your reasoning, including object weight and size. 
 Furthermore, do not be creative with your labels, use common sense.
 Pick ONLY one label for each category, otherwise the robot will explode.
     

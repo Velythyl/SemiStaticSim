@@ -135,23 +135,29 @@ class TRELLISLookup:
                 if rgb_array.shape[2] == 4:
                     # If original has alpha channel, preserve it and combine with mask
                     rgba_array = rgb_array.copy()
-                    # Apply mask to alpha channel (logical AND between original alpha and mask)
                     rgba_array[:, :, 3] = np.minimum(rgba_array[:, :, 3], (mask_array > 127) * 255)
                 else:
                     # If no alpha channel, create new RGBA array
                     rgba_array = np.zeros((rgb_array.shape[0], rgb_array.shape[1], 4), dtype=np.uint8)
                     rgba_array[:, :, :3] = rgb_array  # Copy RGB channels
-                    # Set alpha channel from mask
                     rgba_array[:, :, 3] = (mask_array > 127) * 255
 
-                # Set RGB values to 0 where mask is black (optional for cleaner transparency)
+                # Set fully transparent pixels to (0,0,0,0)
                 rgba_array[mask_array <= 127] = [0, 0, 0, 0]
 
-                # Convert back to PIL Image and save
+                # Convert to PIL Image
                 result_img = Image.fromarray(rgba_array, 'RGBA')
+
+                # --- Crop out transparent border ---
+                bbox = result_img.getbbox()  # finds bounding box of non-zero alpha pixels
+                if bbox:
+                    result_img = result_img.crop(bbox)
+
+                # Save
                 output_path = os.path.join(masked_dir, rgb_file)
                 result_img.save(output_path)
                 print(f"Processed {rgb_file}")
+
 
             image_dir = masked_dir
 
@@ -159,10 +165,6 @@ class TRELLISLookup:
             print(f"Clearing TRELLIS cache for asset <{image_dir}>...")
             cache.clear_cache(image_dir)
             print("Cache cleared.")
-
-        if cache.cache_says_trellis_fails(image_dir):
-            print(f"TRELLIS pipeline can't handle <{image_dir}>, falling back to OBJAVERSE...")
-            return self.clip_lookup.lookup_assets(obj)
 
         # cache lookup
         IS_FOUND_IN_CACHE = cache.is_in_cache(image_dir)
@@ -188,6 +190,12 @@ class TRELLISLookup:
             cache.clear_cache(image_dir)
             IS_FOUND_IN_CACHE = False
 
+        if cache.cache_says_trellis_fails(image_dir):
+            print(f"TRELLIS pipeline can't handle <{image_dir}>, falling back to OBJAVERSE...")
+            return self.clip_lookup.lookup_assets(obj)
+
+        
+
         
 
         def mark_as_infeasible(reason):
@@ -208,8 +216,9 @@ class TRELLISLookup:
 
             raw_folder = cache.path_in_cache_for_raw(image_dir)
             os.makedirs(raw_folder, exist_ok=True)
-
-            temp_image_dir = f"/tmp/{image_dir}".replace("//", "/")
+            
+            uuid_str = str(uuid.uuid4())
+            temp_image_dir = f"/tmp/{uuid_str}/{image_dir}".replace("//", "/")
             os.makedirs(temp_image_dir, exist_ok=True)
 
             if self.cfg.assetlookup.image_sequence_end == -1:
@@ -217,21 +226,30 @@ class TRELLISLookup:
             else:
                 image_sequence_end = min(self.cfg.assetlookup.image_sequence_end, len([f for f in os.listdir(image_dir) if f.endswith(".png")]) - 1)
 
+            image_sequence_start = self.cfg.assetlookup.image_sequence_start
+            if image_sequence_start > len([f for f in os.listdir(image_dir) if f.endswith(".png")]):
+                image_sequence_start = len([f for f in os.listdir(image_dir) if f.endswith(".png")]) - 1
+
+
             if self.cfg.assetlookup.use_largest_mask_instead:
                 # Use the largest mask in the sequence
-                masks = [os.path.join(masks_dir, f"{idx:03d}.png") for idx in range(self.cfg.assetlookup.image_sequence_start, image_sequence_end + 1, self.cfg.assetlookup.image_sequence_stride)]
+                masks = []
+                #masks = []
+                for idx in range(self.cfg.assetlookup.image_sequence_start, image_sequence_end + 1, self.cfg.assetlookup.image_sequence_stride):
+                    if os.path.exists(os.path.join(masks_dir, f"{idx:03d}.png")):
+                        masks.append(os.path.join(masks_dir, f"{idx:03d}.png") )
                 largest_mask = max(masks, key=lambda x: (np.array(Image.open(x)) > 0).sum())
                 largest_mask_name = os.path.basename(largest_mask)
                 #shutil.copy2(largest_mask, os.path.join(temp_image_dir, "000.png"))
 
             # Loop over selected indices
             NUM_IMAGES_TO_USE = 0
-            for idx in range(self.cfg.assetlookup.image_sequence_start, image_sequence_end, self.cfg.assetlookup.image_sequence_stride):
+            for idx in range(image_sequence_start, image_sequence_end+1, self.cfg.assetlookup.image_sequence_stride):
                 if self.cfg.assetlookup.use_largest_mask_instead and f"{idx:03d}.png" != largest_mask_name:
                     continue
 
                 src = os.path.join(image_dir, f"{idx:03d}.png")
-                dst = os.path.join(temp_image_dir, f"{idx:03d}.png")
+                dst = os.path.join(temp_image_dir, f"{NUM_IMAGES_TO_USE:03d}.png")
                 if os.path.exists(src):
                     shutil.copy2(src, dst)
                     NUM_IMAGES_TO_USE += 1

@@ -135,7 +135,12 @@ class HippoObject(_Hippo):
         )
 
     def set_skill_metadata(self, skill_metadata):
-
+        skill_metadata2 = tuple()
+        for s in skill_metadata:
+            if "put down on this" in s:
+                continue
+            skill_metadata2 = (*skill_metadata2, s)
+        skill_metadata = (*skill_metadata, "objects can be put down on this")
         print(f"Object {self.object_name} has the following skills: {skill_metadata}")
 
         return self.replace(_skill_metadata=skill_metadata)
@@ -301,7 +306,7 @@ class HippoObject(_Hippo):
                     "primaryProperty": "CanPickup" if "can be picked up" in self._skill_metadata else "Static",
                     "secondaryProperties": [
                         "Receptacle"
-                    ]# if "objects can be put down on this" in self._skill_metadata else []
+                    ] if "objects can be put down on this" in self._skill_metadata else []
                 }}, f, indent=4)
 
             return

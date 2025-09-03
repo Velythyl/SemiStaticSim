@@ -21,7 +21,11 @@ TOKENS_PER_MINUTE_DICT = {
     "gpt-4.1-nano-2025-04-14": 200000,
     "gpt-4.1-mini-2025-04-14": 200000,
     "gpt-4.1-2025-04-14": 10000,
+    "gpt-5-2025-08-07": 30000,
     "bbllm": np.inf
+}
+MAX_COMPLETION_TOKENS_INSTEAD_OF_MAX_TOKENS = {
+    "gpt-5-2025-08-07": True,
 }
 WINDOW_SIZE = 65  # Time window in seconds for rate limit tracking
 
@@ -79,26 +83,46 @@ def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, lo
         ret = _, text.strip()
 
     elif "gpt" not in gpt_version:
-        response = openai.Completion.create(
+        if MAX_COMPLETION_TOKENS_INSTEAD_OF_MAX_TOKENS.get(gpt_version, False):
+            response = openai.Completion.create(
             model=gpt_version,
             prompt=prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
+            max_completion_tokens=max_tokens,
+            temperature=1.0,
             stop=stop,
             logprobs=logprobs,
             frequency_penalty=frequency_penalty
         )
+        else:
+            response = openai.Completion.create(
+                model=gpt_version,
+                prompt=prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stop=stop,
+                logprobs=logprobs,
+                frequency_penalty=frequency_penalty
+            )
         token_usage_log.append((time.time(), response["usage"]["total_tokens"]))
         ret = response, response["choices"][0]["text"].strip()
 
     else:
-        response = openai.ChatCompletion.create(
-            model=gpt_version,
-            messages=prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            frequency_penalty=frequency_penalty
-        )
+        if MAX_COMPLETION_TOKENS_INSTEAD_OF_MAX_TOKENS.get(gpt_version, False):
+            response = openai.ChatCompletion.create(
+                model=gpt_version,
+                messages=prompt,
+                max_completion_tokens=max_tokens,
+                temperature=1.0,
+                frequency_penalty=frequency_penalty
+            )
+        else:
+            response = openai.ChatCompletion.create(
+                model=gpt_version,
+                messages=prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                frequency_penalty=frequency_penalty
+            )
         token_usage_log.append((time.time(), response["usage"]["total_tokens"]))
         ret = response, response["choices"][0]["message"]["content"].strip()
 
