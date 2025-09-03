@@ -29,7 +29,7 @@ from omegaconf import OmegaConf
 def main(cfg):
     from hippo.reconstruction.composer import SceneComposer
 
-    target_dir = "/home/charlie/Downloads/tema/yerp"
+    target_dir = "/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/mugtmp/tmp"
     composer = SceneComposer(
         cfg,
         asset_lookup=None,

@@ -141,7 +141,7 @@ class _OpenableObject(_Skill):
 
     @property
     def pre_conditions(self):
-        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled()]
+        return [CONDITION_ObjectExists(), CONDITION_IsInteractable(), CONDITION_SkillEnabled(), CONDITION_InventoryIsEmpty()]
 
 
 @dataclass
@@ -235,7 +235,7 @@ class BreakObject(_Skill):
     @property
     def pre_conditions(self):
         return [CONDITION_ObjectExists(), CONDITION_IsInteractable(),
-                CONDITION_SkillEnabled()]
+                CONDITION_SkillEnabled(), CONDITION_InventoryIsEmpty()]
 
     def BreakObject(self, sas: SimulationActionState):
         ret = self.replace(state_value=True)

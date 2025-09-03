@@ -150,9 +150,15 @@ class CONDITION_AuxiliaryObjectIsInInventory(Condition):
     name: str = "IsInInventory"
 
     def _error_message(self):
+        if self.sas.pre_container.get_held_object() is None:
+            return f"Specified object is not in robot's inventory or a wrong ID was used."
+
         return f"Object {self.sas.auxiliary_object_id} is not in the robot's inventory."
 
     def call(self, sas: SimulationActionState) -> bool:
+        if sas.pre_container.get_held_object() is None:
+            return False
+
         return sas.auxiliary_object.heldBy == f"robot{sas.robot+1}"
 
 @dataclass

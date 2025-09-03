@@ -14,6 +14,8 @@ class SimulationActionState(SelfDataclass):
     robot: str
     target_object_id: str
 
+    #specified_auxiliary_object_id: str
+
     controller: Any
     skill_prettyprint: str = None
     action_callback: Callable = None

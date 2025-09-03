@@ -42,7 +42,7 @@ class HumanViewing:
     def set_plan(self, plan):
         if isinstance(plan, str):
             plan = list(filter(lambda x: len(x) > 0, map(str.strip, plan.split("\n"))))
-            return plan
+        self.plan = plan
         return plan
 
     def incr_action_idx(self):
@@ -53,9 +53,9 @@ class HumanViewing:
         return first_view_frame
 
     def get_latest_topdown_frame(self):
-        self.c.step(action="ToggleMapView")
+        #self.c.step(action="ToggleMapView")
         frame = self.c.last_event.third_party_camera_frames[0]
-        self.c.step(action="ToggleMapView")
+        #self.c.step(action="ToggleMapView")
         return frame
 
     def get_latest_altered_robot_frame(self):
@@ -79,7 +79,7 @@ class HumanViewing:
                     message = None
                 else:
                     message = Condlist(self.s.exception_queue[-1].args[0]).error_message()
-                    message = "ERROR: " + " AND ".join(message)
+                    message = "FAILURE: " + " AND ".join(message)
                     print(f"Got system message: {message}")
                     self.s.exception_queue.pop()
         if message is None or message == "":
@@ -137,13 +137,30 @@ class HumanViewing:
 
         # ---------------- Plan Display (Left section) ----------------
         plan_x = inner_pad
-        plan_y = pad
+        plan_y = inner_pad
         title_plan = "Plan:"
         title_plan_size = cv2.getTextSize(title_plan, font, title_font_scale, thickness)[0]
 
         plan_box_width = section_width - 2 * inner_pad
-        plan_lines = len(self.plan) if self.plan else 1
-        plan_box_height = title_plan_size[1] + (plan_lines * int(20 * hud_scale)) + 2 * inner_pad
+
+        # Wrap each step individually
+        wrapped_plan_steps = []
+        for idx, step in enumerate(self.plan or ["[No plan yet]"], start=1):
+            prefix = f""
+            (prefix_width, _), _ = cv2.getTextSize(prefix, font, font_scale, thickness)
+
+            # Wrap with prefix width reserved on the first line
+            lines = wrap_text(step, font, font_scale, thickness,
+                              plan_box_width - inner_pad * 2 - prefix_width)
+
+            if lines:
+                lines[0] = prefix + lines[0]
+            else:
+                lines = [prefix]
+
+            wrapped_plan_steps.extend(lines)
+
+        plan_box_height = title_plan_size[1] + (len(wrapped_plan_steps) * int(20 * hud_scale)) + 2 * inner_pad
 
         plan_box_tl = (plan_x, plan_y + title_plan_size[1] + inner_pad)
         plan_box_br = (plan_box_tl[0] + plan_box_width, plan_box_tl[1] + plan_box_height)
@@ -152,21 +169,34 @@ class HumanViewing:
         cv2.putText(hud_frame, title_plan, (plan_x, plan_y + title_plan_size[1]),
                     font, title_font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
 
-        line_y = plan_y + title_plan_size[1] + inner_pad + 35
-        for idx, step in enumerate(self.plan, start=1):
+        line_y = plan_box_tl[1] + inner_pad + title_plan_size[1]
+        step_idx = None
+        for line in wrapped_plan_steps:
+            match = re.match(r"^(\d+)\.", line)
+            if match:
+                step_idx = int(match.group(1))
+
             color = (180, 180, 180)
-            if self.current_action_idx == idx:
-                color = (0, 255, 255)
-            elif self.current_action_idx > idx:
-                color = (0, 200, 0)
-            cv2.putText(hud_frame, f"{idx}. {step}",
+            if step_idx is not None:
+                if self.current_action_idx == step_idx:
+                    color = (0, 255, 255)
+                elif self.current_action_idx > step_idx:
+                    color = (255, 140, 0)
+            else:
+                color = (255, 140, 0)
+
+            cv2.putText(hud_frame, line,
                         (plan_x + inner_pad, line_y),
                         font, font_scale, color, thickness, cv2.LINE_AA)
             line_y += int(20 * hud_scale)
 
+            # Advance step index only when this line is the first of a step
+            #if line.startswith(f"{step_idx}. "):
+            #    step_idx += 1
+
         # ---------------- System Message (Middle section) ----------------
         sys_x = section_width + inner_pad
-        sys_y = pad
+        sys_y = inner_pad
         title_msg = "System message:"
         title_size = cv2.getTextSize(title_msg, font, title_font_scale, thickness)[0]
 
@@ -190,12 +220,14 @@ class HumanViewing:
 
         # ---------------- Held Item (Right section) ----------------
         item_x = 2 * section_width + inner_pad
-        item_y = pad
+        item_y = inner_pad
         title_item = "Held item:"
         item_text = f"[{held_item}]" if held_item else "[Empty Gripper]"
         title_item_size = cv2.getTextSize(title_item, font, title_font_scale, thickness)[0]
 
         held_object_image = self.c.get_segmented_held_object()
+        if held_object_image is not None:
+            held_object_image = cv2.cvtColor(held_object_image, cv2.COLOR_RGBA2BGRA)
 
         # Calculate the box dimensions
         item_box_width = section_width - 2 * inner_pad

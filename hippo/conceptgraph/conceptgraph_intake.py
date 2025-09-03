@@ -172,8 +172,8 @@ def load_point_cloud(cfg, path):
     return pcd_o3d
 
 def vis_cg(cg_pcds):
-    for objpcd in cg_pcds:
-        np.random.seed(int(np.sum(np.asarray(objpcd.points))) % (2**32 - 1))
+    for i, objpcd in enumerate(cg_pcds):
+        np.random.seed(i)
         color_for_obj = np.random.choice(range(256), size=3)
         color_for_obj = np.repeat(color_for_obj[None], len(objpcd.points), axis=0)
         objpcd.colors = v3v(color_for_obj / 255)

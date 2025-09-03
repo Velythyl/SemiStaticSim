@@ -1,6 +1,5 @@
-ai2thor_actions_list = ["GoToObject <robot><object>", "OpenObject <robot><object>", "CloseObject <robot><object>",
-                   "BreakObject <robot><object>", "SliceObject <robot><object>", "SwitchOn <robot><object>", 
-                   "SwitchOff <robot><object>", "CleanObject <robot><object>", "PickupObject <robot><object>", 
-                   "PutObject <robot><object><receptacleObject>",
-                   "ThrowObject <robot><object>", "AbortPlan <robot><reason>"] #, "DropHandObject <robot><object>",  "PushObject <robot><object>", "PullObject <robot><object>"]
-ai2thor_actions = ', '.join(ai2thor_actions_list)
+ai2thor_actions_list = ["GoToObject <object>", "OpenObject <object>", "CloseObject <object>",
+                   "BreakObject <object>", "SliceObject <object>", "SwitchOn <object>",
+                   "SwitchOff <object>", "CleanObject <object>", "PickupObject <object>",
+                   "PutObject <object><receptacleObject>",
+                    "AbortPlan <reason>"] #, "DropHandObject <robot><object>",  "PushObject <robot><object>", "PullObject <robot><object>"]

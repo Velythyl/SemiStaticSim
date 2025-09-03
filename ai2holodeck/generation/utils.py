@@ -36,7 +36,50 @@ def all_edges_white(img):
 
 
 def get_top_down_frame(controller, cfg=None, scene=None):
+    """
     # Setup the top-down camera
+    controller.step(
+        action="TeleportFull",
+        position={
+            "x": 1,
+            "y": 1,  # scene["metadata"]["agent"]["position"]["y"],
+            "z": 1,
+        },
+        rotation=0,  # scene["metadata"]["agent"]["rotation"],
+        standing=True,
+        horizon=30,
+        forceAction=True,
+    )
+    controller.step(
+        dict(action='Initialize', agentMode="default", snapGrid=False, snapToGrid=False, gridSize=0.25,
+             rotateStepDegrees=90, visibilityDistance=1, fieldOfView=90, agentCount=1, renderInstanceSegmentation=True),
+        raise_for_failure=True
+    )
+    controller.step(
+        action="TeleportFull",
+        position={
+            "x": 1,
+            "y": -1,  # scene["metadata"]["agent"]["position"]["y"],
+            "z": 1,
+        },
+        rotation=0,  # scene["metadata"]["agent"]["rotation"],
+        standing=True,
+        horizon=30,
+        forceAction=True,
+    )
+    """
+    controller.step( # hides robot under the map
+        action="TeleportFull",
+        position={
+            "x": 1,
+            "y": -1,  # scene["metadata"]["agent"]["position"]["y"],
+            "z": 1,
+        },
+        rotation=0,  # scene["metadata"]["agent"]["rotation"],
+        standing=True,
+        horizon=30,
+        forceAction=True,
+    )
     event = controller.step(action="GetMapViewCameraProperties", raise_for_failure=True)
     pose = copy.deepcopy(event.metadata["actionReturn"])
 
@@ -81,6 +124,10 @@ def get_top_down_frame(controller, cfg=None, scene=None):
     image = Image.fromarray(top_down_frame)
 
     return image
+
+def get_top_down_seg_frame(controller, cfg=None, scene=None):
+    seg_frame = controller.last_event.third_party_instance_segmentation_frames[-1]
+    return Image.fromarray(seg_frame)
 
 
 def get_replica_pov(controller, cfg, scene):

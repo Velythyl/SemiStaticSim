@@ -3,5 +3,5 @@ defaults:
   - meta: meta
   - planner: smartllm
   - feedback: conditiononly
-  - scene: cube_unstacked
+  - scene: bomb
   - paths: default
