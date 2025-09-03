@@ -109,26 +109,6 @@ def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, lo
 
     else:
         if MAX_COMPLETION_TOKENS_INSTEAD_OF_MAX_TOKENS.get(gpt_version, False):
-<<<<<<< HEAD
-            response = openai.ChatCompletion.create(
-                model=gpt_version,
-                messages=prompt,
-                max_completion_tokens=max_tokens,
-                temperature=1.0,
-                frequency_penalty=frequency_penalty
-            )
-        else:
-            response = openai.ChatCompletion.create(
-                model=gpt_version,
-                messages=prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                frequency_penalty=frequency_penalty
-            )
-        token_usage_log.append((time.time(), response["usage"]["total_tokens"]))
-        ret = response, response["choices"][0]["message"]["content"].strip()
-
-=======
             response = openai.responses.create(
                 model=gpt_version,
                 input=prompt,
@@ -146,7 +126,6 @@ def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, lo
             )
         token_usage_log.append((time.time(), response.usage.total_tokens))
         ret = response, response.output_text.strip()
->>>>>>> 3452b56a91a098beb47a75881adbe9697761cfb6
     return ret
 
 from diskcache import FanoutCache, Cache, Deque
