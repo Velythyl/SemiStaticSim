@@ -200,6 +200,7 @@ def keyboard_play(env, top_down_frames, first_view_frames, is_rotate, rotate_per
             objectId = get_interact_object(env)
             if len(sim.exception_queue) <= 0:
                 sim.PutObject(robots[0], pickedupobj, objectId)
+                pickedupobj = None
         elif keystroke == ord(actionList["OpenObject"]):
             action = "OpenObject"
             print("action: OpenObject")
@@ -434,13 +435,70 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
 
 
 if __name__ == "__main__":
-    HU_PLAN = """
-    1. GoToObject("Yellow cube")
-    2. PickUpObject("Yellow cube")
-    3. PutObjectDown("Yellow cube", "Table")
+    PLAN1 = """
+TASK: make a "yellow on black on blue" tower
+1. PickUpObj (green)
+2. PutDownObj (green, table)
+3. PickUpObj (black)
+4. PutDown0bj (black, table)
+5. PickUpObj (blue)
+6. PutDownObj (blue, table)
+7. PickUpObj (black)
+8. PutDown0bj (black, yellow)
+9. PickUpObj (blue)
+10. PutDownObj (blue, black)
+DONE. Should now have a "yellow on black on blue" tower.
     """
 
-    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_box2_stacked_wide/TRELLIS-yes-mask_False-aspect weighted-new-centroid/in_order_0",  # FloorPlan19_physics ## room
+    PLAN2 = """
+TASK: make a "yellow on black on blue" tower
+1. PickUpObj (green)
+2. PickUpObj (black)
+3. PickUpObj (blue)
+4. PickUpObj (yellow)
+5. PutDownObj (blue, table)
+6. PutDownObj (black, blue)
+7. PutDownObj (yellow, black)
+DONE. Should now have a "yellow on black on blue" tower.
+        """
+
+    PLAN3 = """
+TASK: make a "yellow on black on blue" tower
+1. PickUpObj (green)
+2. PutDownObj (green, table)
+3. PickUpObj (black)
+4. PutDown0bj (black, table)
+5. PickUpObj (blue)
+6. PutDownObj (blue, table)
+7. PickUpObj (black)
+8. PutDown0bj (black, blue)
+9. PickUpObj (yellow)
+10. PutDownObj (yellow, black)
+DONE. Should now have a "yellow on black on blue" tower.
+"""
+
+    PLAN4 = """
+TASK: put one of the traffic cones on top of the dumpster
+1. PickUpObj(traffic cone #2)
+2. GoToObj(dumpster)
+3. PutDown0bj(traffic cone #2, dumpster)
+DONE. One of the traffic cones should be on top of the dumpster
+"""
+
+    PLAN5 = """
+TASK: place the red mug in the fridge
+1. PickUpObj(red mug)
+2. OpenObj(fridge)
+3. PutDown0bj (red mug, fridge)
+DONE. red mug should be in the fridge
+"""
+
+    HU_PLAN = PLAN5
+    # for survey:
+    # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_box2_stacked_wide/TRELLIS-yes-mask_False-aspect weighted-tight-new-centroid/in_order_0
+    # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0
+
+    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree
@@ -454,5 +512,5 @@ if __name__ == "__main__":
          generate_gif=True,  ## use frames generate gif
          HU_PLAN=HU_PLAN,
          USE_ALTERED_FIRST_PERSON=True,
-         AUGMENT_FIRST_PERSON=False
+         AUGMENT_FIRST_PERSON=True
          )

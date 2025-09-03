@@ -9,8 +9,9 @@ from typing import Tuple, Dict, List, Union
 import numpy as np
 from tqdm import tqdm
 
-from ai2holodeck.generation.utils import get_top_down_frame, get_hippo_room_images, get_replica_pov
-from hippo.ai2thor_hippo_controller import get_hippo_controller
+from ai2holodeck.generation.utils import get_top_down_frame, get_hippo_room_images, get_replica_pov, \
+    get_top_down_seg_frame
+from hippo.ai2thor_hippo_controller import get_hippo_controller, get_sim
 from hippo.reconstruction.assetlookup._AssetLookup import AssetLookup
 from hippo.reconstruction.llm_annotation import LLM_annotate
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
@@ -295,13 +296,13 @@ class SceneComposer(SelfDataclass):
             else:
                 todo_paths.append(path + "/scene.json")
 
-        photo_funcs = [("replica_pov.png", get_replica_pov), ("topdown.png", get_top_down_frame)]#, ("room_image.png", get_hippo_room_images)]
+        photo_funcs = [("replica_pov.png", get_replica_pov), ("topdown.png", get_top_down_frame), ("topdown_seg.png", get_top_down_seg_frame)]#, ("room_image.png", get_hippo_room_images)]
 
         def process_path(path):
             print(f"Processing path: {path}")
             print("With cuda visible devices:", os.environ.get("CUDA_VISIBLE_DEVICES", "Not set"))
             try:
-                controller = get_hippo_controller(path, width=2048, height=2048)
+                controller = get_sim(path, width=2048, height=2048, renderInstanceSegmentation=True).controller
             except Exception as e:
                 print(f"Failed to create controller for {path}: {e}")
                 raise e

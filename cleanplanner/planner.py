@@ -72,11 +72,31 @@ def parse_ai2thor_plan(scene, task_path):
                      trans_cnt_tasks=trans_cnt_tasks, max_trans_cnt_tasks=max_trans_cnt_tasks, scene=scene,
                      available_robots=available_robots)
 
+SKILL_ALIASES = {
+    "TurnOnObject": "SwitchOn",
+    "TurnOffObject": "SwitchOff",
+    "ActivateObject": "SwitchOn",
+    "DeactivateObject": "SwitchOff",
+}
+
+AI2THOR_ACTIONS = actions.ai2thor_actions_list
+for ALIAS, TARGET in SKILL_ALIASES.items():
+
+    FOUND = None
+    for act in AI2THOR_ACTIONS:
+        if act.startswith(TARGET):
+            FOUND = act
+    assert FOUND is not None
+
+    AI2THOR_ACTIONS.append(f"{ALIAS} {' '.join(FOUND.split(' ')[1:])}")
+AI2THOR_ACTIONS = ", ".join(AI2THOR_ACTIONS)
 
 PROMPT = f"""
 
 You are PLANR, an excellent LLM planner for open-vocabulary scenes. The PLANR system is able to plan using these skills:
-{actions.ai2thor_actions}
+{AI2THOR_ACTIONS}
+
+The SwitchOn/SwitchOff skills are used to toggle things on/off, not just "switch" objects.
 
 INPUT: a list of objects found in the scene, as well as a task description. 
 OUTPUT: PLANR first REASONS about the task. It then OUTPUTs a sequence of skill to complete the task.
@@ -163,7 +183,9 @@ def gen_plan(cfg, scenetask: SceneTask, output_dir, feedback=""):
 
     NUM_INPUT_TOKENS = approx_num_tokens(cfg.planner.llm, prompt)
     _, decomposed_plan = LLM(prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0)
+    decomposed_plan = decomposed_plan.replace('("robot0",', "(").replace('("robot1",', "(").replace("('robot0',", "(").replace("('robot1',", "(") # common llm mistake
     NUM_OUTPUT_TOKENS = approx_num_tokens(cfg.planner.llm, decomposed_plan)
+    decomposed_plan = decomposed_plan.replace("ActivateObject(", "SwitchOn(").replace("TurnOnObject(", "SwitchOn(")
 
     print("Plan obtained! Saving...")
     """

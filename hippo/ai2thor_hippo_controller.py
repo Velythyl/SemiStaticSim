@@ -299,11 +299,16 @@ from diskcache import FanoutCache
 cache = FanoutCache('./diskcache', size_limit=int(1e9), shards=8)
 
 def get_list_of_objects(scene):
-    runtime_container = get_runtime_container(scene)
-    return runtime_container.get_object_list_with_children_as_string()
+    with open(scene, "r") as f:
+        scene_txt = f.read()
+    runtime_container = get_runtime_container(scene, scene_txt)
+    #return runtime_container.get_object_list_with_children_as_string()
+    ret = runtime_container.as_llmjson()
+    del ret["robot0"]
+    return ret
 
 @cache.memoize(typed=True)
-def get_runtime_container(scene):
+def get_runtime_container(scene, scene_txt_for_memoization):
     print("CACHE MISS: getting runtime container...")
 
     runtime_container = get_sim(scene, just_runtime_container=True)
@@ -330,7 +335,7 @@ def resolve_scene_id(floor_name):
         scene = json.load(f)
     return scene
 
-def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False, humanviewing_params={}, renderInstanceSegmentation=False):
+def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False, humanviewing_params={}, renderInstanceSegmentation=False, width=1250, height=1250):
     os.environ["JAX_PLATFORM_NAME"] = "cpu"
     import jax
     jax.config.update('jax_platform_name', "cpu")
@@ -341,7 +346,7 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     assert sum(list(map(int, (just_controller, just_runtime_container, just_controller_no_setup)))) <= 1
 
     GRID_SIZE = 0.25
-    c, runtime_container = get_hippo_controller(scene, get_runtime_container=True, width=1000, height=1000,
+    c, runtime_container = get_hippo_controller(scene, get_runtime_container=True, width=width, height=height,
                                                 snapToGrid=False, visibilityDistance=1, fieldOfView=90, gridSize=GRID_SIZE,
                                                 rotateStepDegrees=20)
 

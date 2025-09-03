@@ -353,10 +353,19 @@ DIFF OF LAST ACTION:
                                         agentId=act['agent_id']
                                     )
                                     x=0
-                                else:
+                                elif False:
                                     target_receptacle = self.current_object_container.get_object_by_id(act['objectId'])
                                     pos = target_receptacle.position
-                                    size = target_receptacle.size
+                                    size = target_receptacle.size # this is a 3 element array
+
+                                    def obj_oobb(obj_id):
+                                        object = None
+                                        for obj in self.controller.last_event.metadata["objects"]:
+                                            if obj["objectId"] == obj_id:
+                                                object = obj
+                                        if object is None:
+                                            raise Exception(f"In PutDownObj, object not found {obj_id}")
+                                        return object["objectOrientedBoundingBox"]["cornerPoints"]  # this is a list of 8 of 3-lists (corners). Remember that the axis 1 is vertical.
 
                                     # get all objects already sitting on top of this receptacle
                                     existing_objs = self.current_object_container.get_objects_that_are_on_obj(target_receptacle.id)
@@ -368,6 +377,118 @@ DIFF OF LAST ACTION:
                                     # linspace from left -> right, top -> bottom
                                     x_vals = np.linspace(pos[0] - size[0] / 2, pos[0] + size[0] / 2, grid_resolution)
                                     z_vals = np.linspace(pos[2] - size[2] / 2, pos[2] + size[2] / 2, grid_resolution)
+                                    held_object = self.current_object_container.get_held_object()
+
+                                    # Receptacle bounds
+                                    rx_min = pos[0] - size[0] / 2
+                                    rx_max = pos[0] + size[0] / 2
+                                    rz_min = pos[2] - size[2] / 2
+                                    rz_max = pos[2] + size[2] / 2
+
+                                    # Object half-size in X and Z
+                                    hx = held_object.size[0] / 2
+                                    hz = held_object.size[2] / 2
+
+                                    # Clip candidate values so the object stays inside
+                                    x_min = rx_min + hx
+                                    x_max = rx_max - hx
+                                    z_min = rz_min + hz
+                                    z_max = rz_max - hz
+
+                                    for x in x_vals:
+                                        if not (x_min <= x <= x_max):
+                                            continue
+                                        for z in z_vals:
+                                            if not (z_min <= z <= z_max):
+                                                continue
+                                            candidate_positions.append({
+                                                "x": float(x),
+                                                "y": pos[1] + size[1] / 2 + epsilon + held_object.size[1] / 2,
+                                                "z": float(z)
+                                            })
+
+                                    def collides_with_existing(new_obj_id, candidate_position, existing_objs):
+                                        """
+                                        Check whether placing `new_obj_id` at `candidate_position`
+                                        would collide with any object in `existing_objs`.
+
+                                        Args:
+                                            new_obj_id (str): ID of the object we want to place.
+                                            candidate_position (dict): {"x": float, "y": float, "z": float}
+                                            existing_objs (list): list of object structs with .position and .size
+                                        """
+                                        new_obj = self.current_object_container.get_object_by_id(new_obj_id)
+                                        new_size = new_obj.size
+                                        new_pos = candidate_position
+
+                                        # Compute new object's AABB on the X-Z plane
+                                        new_min_x = new_pos["x"] - new_size[0] / 2
+                                        new_max_x = new_pos["x"] + new_size[0] / 2
+                                        new_min_z = new_pos["z"] - new_size[2] / 2
+                                        new_max_z = new_pos["z"] + new_size[2] / 2
+
+                                        for obj in existing_objs:
+                                            obj = self.current_object_container.get_object_by_id(obj)
+                                            pos = obj.position
+                                            size = obj.size
+
+                                            obj_min_x = pos[0] - size[0] / 2
+                                            obj_max_x = pos[0] + size[0] / 2
+                                            obj_min_z = pos[2] - size[2] / 2
+                                            obj_max_z = pos[2] + size[2] / 2
+
+                                            # Check 2D AABB overlap in X/Z
+                                            overlap_x = (new_min_x < obj_max_x) and (new_max_x > obj_min_x)
+                                            overlap_z = (new_min_z < obj_max_z) and (new_max_z > obj_min_z)
+
+                                            if overlap_x and overlap_z:
+                                                return True  # collision detected
+
+                                        return False  # no collisions
+
+                                    # pick the first free candidate that doesn't collide
+                                    for above_point in candidate_positions:
+                                        clean = lambda x: float(x)
+                                        above_point = {k: clean(v) for k, v in above_point.items()}
+
+                                        if not collides_with_existing(
+                                                sas.auxiliary_object_id, above_point, existing_objs
+                                        ):
+                                            multi_agent_event = self.controller.step(
+                                                action="PlaceObjectAtPoint",
+                                                objectId=sas.auxiliary_object_id,
+                                                position=above_point,
+                                                agentId=act['agent_id']
+                                            )
+                                            break
+                                else:
+                                    target_receptacle = self.current_object_container.get_object_by_id(act['objectId'])
+                                    pos = target_receptacle.position
+                                    size = target_receptacle.size  # this is a 3 element array
+
+                                    def obj_oobb(obj_id):
+                                        object = None
+                                        for obj in self.controller.last_event.metadata["objects"]:
+                                            if obj["objectId"] == obj_id:
+                                                object = obj
+                                        if object is None:
+                                            raise Exception(f"In PutDownObj, object not found {obj_id}")
+                                        return object["objectOrientedBoundingBox"][
+                                            "cornerPoints"]  # this is a list of 8 of 3-lists (corners). Remember that the axis 1 is vertical.
+
+                                    # get all objects already sitting on top of this receptacle
+                                    existing_objs = self.current_object_container.get_objects_that_are_on_obj(
+                                        target_receptacle.id)
+
+                                    # sample candidate positions across the surface (simple grid)
+                                    grid_resolution = 10  # number of cells per axis
+                                    epsilon = 0.01
+                                    candidate_positions = []
+                                    # linspace from left -> right, top -> bottom
+                                    padding_x = 0 * (abs(pos[0] - size[0] / 2 - pos[0] + size[0] / 2) / grid_resolution)
+                                    padding_z = 0* (abs(pos[2] - size[2] / 2 - pos[2] + size[2] / 2) / grid_resolution)
+                                    x_vals = np.linspace(pos[0] - size[0] / 2 + padding_x, pos[0] + size[0] / 2 - padding_x, grid_resolution)
+                                    z_vals = np.linspace(pos[2] - size[2] / 2 + padding_z, pos[2] + size[2] / 2 - padding_z, grid_resolution)
                                     held_object = self.current_object_container.get_held_object()
 
                                     # Receptacle bounds
@@ -716,6 +837,9 @@ DIFF OF LAST ACTION:
             pass
 
     def _get_object_id(self, target_obj):
+        if target_obj is None:
+            return ""
+
         objs = list(set([obj["objectId"] for obj in self.controller.last_event.metadata["objects"]]))
 
         for obj in objs:
