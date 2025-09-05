@@ -1,11 +1,11 @@
 # @package hydra.launcher
-partition: long
+partition: long-cpu
 _target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
-cpus_per_task: 8
-mem_gb: 40
+cpus_per_task: 6
+mem_gb: 30
 tasks_per_node: 1
-stderr_to_stdout: True
-gres: gpu:rtx8000:1 #gpu:32gb:1 # gpu:rtx8000:1 # No MIG: gpu:32gb:1
+stderr_to_stdout: False
+gres: gpu:0 #gpu:32gb:1 # gpu:rtx8000:1 # No MIG: gpu:32gb:1
 submitit_folder: ${hydra.sweep.dir}/submitit/%j
 timeout_min: 1440 # 2 days: 2880 ; 12h : 720 ; 1 day: 1440
 nodes: 1
@@ -13,18 +13,32 @@ name: ${hydra.job.name}
 array_parallelism: 10 # max num of tasks to run in parallel (via job array)
 setup:
   - "export WANDB_DIR=${hydra.sweep.dir}"
-  - "export BREAK=False"
-  - "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/cudnn86/lib"
-  - "export CPATH=$CPATH:$HOME/cudnn86/include"
-  - 'export WANDB_API_KEY="afe8f40c99e87c32058996ac31bf96e400ea7cc6"'
-  - 'export DISKCACHE_DIR=${oc.env:SCRATCH}/diskcache'
-  - 'export PATH=/venv/bin:$PATH'
-  - "module load python/3.8"
-  - "module load cuda/11.8"
-  - "module load libffi"
-  - "ulimit -n 16384"
-  - "source $HOME/voxvae/venv/bin/activate"
-  - "sleep $((RANDOM % 100))"
+  - "export HYDRA_SWEEP_DIR=${hydra.sweep.dir}"
+  #- "export BREAK=False"
+  #- "export HF_HOME=/network/scratch/c/charlie.gauthier/hfcache"
+  # WANDB ?
+  - 'export TQDM_DISABLE=1'
+  #- "module load python/3.10"
+  #- "module load cuda/12.1.1/cudnn/9.3"
+  #- "module load libffi"
+  #- "ulimit -n 16384"
+  #- "export XDG_RUNTIME_DIR=/tmp"
+  #- "[ \"$MY_STRING\" = \"TRELLIS\" ] && echo \"Running TRELLIS\" || echo \"Not running TRELLIS\""
+  #- '[ "${assetlookup.method}" = "TRELLIS" ] && { cd $HOME/TRELLIS && source venv2/bin/activate && huggingface-cli login --token ${secrets.hf_token} && python3 flaskserver.py & } || echo "Not running TRELLIS"'
+  #- '[ "${assetlookup.method}" = "TRELLIS" ] &&  sleep 180 || echo "Not running TRELLIS"'
+  #- "mkdir -p /tmp/.X11-unix"
+  - "source $HOME/Holodeck/venv/bin/activate"
+  - "export PYTHONPATH=..:$PYTHONPATH" #:$HOME/Holodeck/hippo:$PYTHONPATH"
+  - "export PYTHONPATH=/home/mila/c/charlie.gauthier/Holodeck:$PYTHONPATH"
+  #- "export TMPFILE=$(mktemp)"
+  #- 'Xvfb -screen 0 180x180x24 -displayfd 3 3> "$TMPFILE" &'
+  #- "sleep 30"
+  #- "echo DISPLAY IS"
+  #- 'export DISPLAY=:$(cat "$TMPFILE")'
+  #- "echo $DISPLAY"
+  #- "sleep $((RANDOM % 30))"
+  - 'export HYDRA_SPOOF="toplevel"'
+  - "export CUDA_VISIBLE_DEVICES=-1"
 
 # module load cuda/12.1.1/cudnn
 # module load python/3.10

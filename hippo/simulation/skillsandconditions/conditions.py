@@ -23,7 +23,7 @@ class ConditionIDMeta(type):
 
 
 @dataclass
-class _Condition(Callable, SelfDataclass, FeedbackMixin, metaclass=ConditionIDMeta):
+class _Condition(Callable, SelfDataclass, FeedbackMixin):
     name: str = ""
     state: bool = None
     sas: SimulationActionState = None
