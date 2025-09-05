@@ -29,6 +29,7 @@ setup:
   #- "mkdir -p /tmp/.X11-unix"
   - "source $HOME/Holodeck/venv/bin/activate"
   - "export PYTHONPATH=..:$PYTHONPATH" #:$HOME/Holodeck/hippo:$PYTHONPATH"
+  - "export PYTHONPATH=/home/mila/c/charlie.gauthier/Holodeck:$PYTHONPATH"
   #- "export TMPFILE=$(mktemp)"
   #- 'Xvfb -screen 0 180x180x24 -displayfd 3 3> "$TMPFILE" &'
   #- "sleep 30"
