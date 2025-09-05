@@ -24,8 +24,7 @@ def thread_exception_handler(args):
     os._exit(1)
 
 threading.excepthook = thread_exception_handler
-
-def save_video(frames, fps=20):
+def save_video(frames, fps=40):
     global KILL_CAPTURE_THREAD
     global vid_frames
     KILL_CAPTURE_THREAD = True
@@ -33,24 +32,32 @@ def save_video(frames, fps=20):
     if not frames:
         raise ValueError("Frame list is empty!")
 
-    output_path = f"{executable_output_dir}/output.mp4" # noqa will be filled by compile
+    output_path = f"{executable_output_dir}/output.mp4"  # noqa
 
     frames = [cv2.cvtColor(f, cv2.COLOR_BGR2RGB) for f in frames]
 
     # Get frame size from the first frame
     height, width = frames[0].shape[:2]
 
-    # Define codec and create VideoWriter
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # or "XVID" for .avi
+    # Try a more browser-friendly codec (H.264 in mp4)
+    # Fallback to mp4v if H.264 isn't available in your OpenCV build
+    fourcc = cv2.VideoWriter_fourcc(*"avc1")  # or try "H264"
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
+    if not out.isOpened():
+        fourcc = cv2.VideoWriter_fourcc(*"H264")
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    if not out.isOpened():
+        print("⚠️ H.264 codec not available, falling back to mp4v")
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
     for frame in frames:
-        # Ensure frame is uint8 and correct size
         if frame.shape[:2] != (height, width):
             frame = cv2.resize(frame, (width, height))
         if frame.dtype != np.uint8:
             frame = frame.astype(np.uint8)
-
         out.write(frame)
 
     out.release()
@@ -60,6 +67,7 @@ def save_video(frames, fps=20):
         return os._exit(1)
     else:
         return os._exit(0)
+
 
 
 >>> FILL IN SETUP CODE HERE <<< # noqa

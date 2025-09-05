@@ -3,5 +3,5 @@ defaults:
   - meta: meta
   - planner: smartllm
   - feedback: conditiononly
-  - scene: bomb_laptop
+  - scene: blocks_yel_bla_blu
   - paths: default

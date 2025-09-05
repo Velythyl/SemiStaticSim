@@ -95,7 +95,7 @@ def resolve_cfg(cfg):
 
     return cfg
 
-def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str = None, run_id:str = "blank_run_id"):
+def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str = None, run_id:str = "blank_run_id", carry_table=None):
     print("run_id", run_id)
 
     def log_func(WANDB_LOG):
@@ -112,7 +112,7 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
 
     scene_name = OmegaConf.to_container(HydraConfig.get().runtime.choices)["scene"]
     if num_retries > 4:
-        log_func({f"planning_{num_retries}/max_retries_reached": True, f"scene_task/scenename": scene_name,})
+        log_func({f"planning_{num_retries}/max_retries_reached": 1, f"scene_task/scenename": scene_name,})
         return False
 
     NUM_INPUT_TOKENS, NUM_OUTPUT_TOKENS = 0, 0
@@ -148,12 +148,18 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
     with open(f"{local_plan_output_dir}/plan.txt", "w") as f:
         f.write(plan_log.code_plan)
 
+    artifact = wandb.Artifact(f"logs_for_{num_retries}", type="plan report")
+    artifact.add_dir(local_plan_output_dir)
+    wandb.log_artifact(artifact)
+
+
     last_feedback = get_last_plan_feedback(log_file)
     necessary_feedback = get_necessary_plan_feedback(log_file)
 
     WANDB_LOG = {
+        f"execute_{num_retries}/video": wandb.Video(f"{local_plan_output_dir}/sim.mp4"),
         f"scene_task/scenename": scene_name,
-        f"planning_{num_retries}/max_retries_reached": False,
+        f"planning_{num_retries}/max_retries_reached": 0,
         f"planning_{num_retries}/num_retries": num_retries,
         f"execute_{num_retries}/success": int(is_plan_success(log_file)),
         f"planning_{num_retries}/input_tokens_this_round": plan_log.num_input_tokens,
@@ -169,6 +175,8 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
 
     if last_feedback["Type"] in ["CorrectFinalState", "IncorrectFinalState", "UnsafeFinalState"]:
         WANDB_LOG[f"execute_{num_retries}/final_judge_said"] = ["CorrectFinalState", "IncorrectFinalState", "UnsafeFinalState"].index(last_feedback["Type"])
+    else:
+        WANDB_LOG[f"execute_{num_retries}/final_judge_said"] = -1
     if last_feedback["Type"] in ["UnsafeAction"]:
         WANDB_LOG[f"execute_{num_retries}/step_judge_said"] = 1
     else:
@@ -180,9 +188,26 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
             f"execute_{num_retries}/feedback_type": get_necessary_plan_feedback(log_file)["Type"],
             f"execute_{num_retries}/feedback_message": get_necessary_plan_feedback(log_file)["Error message"]
         })
+    else:
+        WANDB_LOG.update({
+            f"execute_{num_retries}/feedback": "N/A",
+            f"execute_{num_retries}/feedback_type": "N/A",
+            f"execute_{num_retries}/feedback_message": "N/A"
+        })
+
+    TABLE_LOGS = {k: (json.dumps(v) if isinstance(v, dict) else v) for k, v in WANDB_LOG.items() if "/video" not in k}
+    if carry_table is None:
+        carry_table = wandb.Table(columns=list(TABLE_LOGS.keys()))
+    table = wandb.Table(columns=list(TABLE_LOGS.keys()))
+    table.add_data(*list(TABLE_LOGS.values()))
+    carry_table.add_data(*list(TABLE_LOGS.values()))
+    WANDB_LOG[f"report_table_{num_retries}/table"] = table
+    WANDB_LOG[f"report_table_{num_retries}/carry_table"] = table
 
     IS_SUCCESS = is_plan_success(log_file)
     if IS_SUCCESS:
+        WANDB_LOG.update({f"execute_{num_retries}/judge_says_plan_can_be_fixed_{num_retries}": -1})
+
         log_func(WANDB_LOG)
         return True
     else:
@@ -192,7 +217,7 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
         if plan_can_be_fixed:
             feedback = f'# ------\n\n# Last time you tried to generate a plan for this task and scene, you generated the following:\n"""{plan_log.code_plan}"""\n\n# But the plan failed, and you got this error message:\n#{necessary_feedback["Error message"]}\n# ------'
             print("run_id", run_id)
-            return run_scenetask(cfg, scenetask, num_retries+1, feedback, run_id=run_id)
+            return run_scenetask(cfg, scenetask, num_retries+1, feedback, run_id=run_id, carry_table=carry_table)
         else:
             print("Plan cannot be fixed, aborting.")
 
@@ -261,7 +286,7 @@ if __name__ == "__main__":
     os.makedirs("/tmp/.X11-unix", exist_ok=True)
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    if True:  # True:# and "pop-os" in socket.gethostname():
+    if False:  # True:# and "pop-os" in socket.gethostname():
         # >>>>>>> 65a6c915d8db8271e7200ea220dd14a74d135e1d
         print("Running in Xvfb...")
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)

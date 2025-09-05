@@ -11,9 +11,19 @@ from hippo.simulation.singlefilelog import log_feedback_to_file, FeedbackMixin
 from hippo.simulation.skillsandconditions.sas import SimulationActionState
 from hippo.utils.selfdataclass import SelfDataclass
 
+class ConditionIDMeta(type):
+    _counter = 0
+    def __new__(mcls, name, bases, attrs):
+        cls = super().__new__(mcls, name, bases, attrs)
+        cls._condition_id = ConditionIDMeta._counter
+        ConditionIDMeta._counter += 1
+        return cls
+    # todo
+
+
 
 @dataclass
-class _Condition(Callable, SelfDataclass, FeedbackMixin):
+class _Condition(Callable, SelfDataclass, FeedbackMixin, metaclass=ConditionIDMeta):
     name: str = ""
     state: bool = None
     sas: SimulationActionState = None

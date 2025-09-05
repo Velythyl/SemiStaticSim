@@ -216,8 +216,10 @@ DIFF BETWEEN FIRST AND FINAL STATES:
         llmsemantic = LLM_verify_final_state(self.task_description, diff, pure_diff, action_history)    # always have task desc for final state verif otherwise cant verify if plan was ok
         self.currently_thinking = False
         print(llmsemantic.response)
-
-        maybe_raise_llmcondition_exception(llmsemantic)
+        maybe_raise_llmcondition_exception(llmsemantic) # raises exception if bad plan
+        # only gets here if good plan
+        self.exception_queue.append(
+            llmsemantic.reason)  # janky but after final judge has been called the simulation will close so we can safely mess with the queue to display closing messages
 
     def llm_verify_diff_alignment(self):
         log_scenedict_to_file(len(self.object_containers)-1, self.current_object_container.as_llmjson())
@@ -877,11 +879,12 @@ DIFF OF LAST ACTION:
 
 
     def _get_robot_location_dict(self,  robot):
+        pos = get_robot_position_from_controller(self.controller, robot)
         metadata = self.controller.last_event.events[self._get_robot_id(robot)].metadata
         robot_location = {
-            "x": metadata["agent"]["position"]["x"],
-            "y": metadata["agent"]["position"]["y"],
-            "z": metadata["agent"]["position"]["z"],
+            "x": pos[0],
+            "y": pos[1],
+            "z": pos[2],
             "rotation": metadata["agent"]["rotation"]["y"],
             "horizon": metadata["agent"]["cameraHorizon"]}
         return robot_location
@@ -932,7 +935,7 @@ DIFF OF LAST ACTION:
                 obj_pos, obj_size
             )
 
-        def RotateToNodeOLD(robot, node):
+        def RotateToNode(robot, node):
             # align the robot once goal is reached
             # compute angle between robot heading and object
             robot_location = self._get_robot_location_dict(robot)
@@ -957,7 +960,7 @@ DIFF OF LAST ACTION:
                                   'agent_id': self._get_robot_id(robot)})
             self._await_robot(robot)
 
-        def RotateToNode(robot, node):
+        def RotateToNode_MO(robot, node):
             robot_location = self._get_robot_location_dict(robot)
 
             # Calculate target angle using atan2
@@ -996,7 +999,7 @@ DIFF OF LAST ACTION:
                     d2 < goal_thresh
             )
 
-        if are_we_done():
+        if are_we_done() and is_dest_obj_visible():
             print(f"Was going to {dest_obj_id}, but already next to object. Will only adjust camera.")
         elif not DISABLE_MOVE:
             from hippo.simulation.spatialutils.motion_planning import astar
@@ -1099,7 +1102,8 @@ DIFF OF LAST ACTION:
             print(f"Now looking at obj {dest_obj}.")
 
     def LookAtObj(self, robot, dest_obj):
-        return self.GoToObject(robot, dest_obj, DISABLE_MOVE=True)
+        return
+        return self.GoToObject(robot, dest_obj, DISABLE_MOVE=False)
 
     def PickupObject(self, robot, pick_obj):
         self.LookAtObj(robot, pick_obj)
@@ -1114,6 +1118,10 @@ DIFF OF LAST ACTION:
             {'action': 'PutObject', 'objectId': self._get_object_id(recp), 'agent_id': self._get_robot_id(robot),
              'auxiliaryObjectId': self._get_object_id(put_obj)})
         self._await_robot(robot)
+        self.GoToObject(robot, put_obj)
+        # sometimes, object gets put "on" the target receptacle but more like on a side of the object beyond the robot's
+        # view... this forces the object to be within the robot's POV so that plans can still assume that after putting
+        # an obj on something, the obj is still visible
         return ret
 
     def SwitchOn(self, robot, sw_obj):
