@@ -130,7 +130,7 @@ class CONDITION_IsInteractable(Condition):
     prev: _Condition = CONDITION_ObjectExists()
 
     def _error_message(self):
-        return f"Object {self.sas.target_object_id} is not interactable. It might be inside a closed object, or not visible by the robot."
+        return f"Object {self.sas.target_object_id} is not interactable. It might be too far, be inside a closed object, or not visible by the robot."
 
     def call(self, sas: SimulationActionState) -> bool:
         object = get_object_from_controller(sas.controller, sas.target_object_id)

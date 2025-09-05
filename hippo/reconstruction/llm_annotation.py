@@ -13,9 +13,10 @@ def get_prompt(ho: HippoObject):
 You are helping out with robotic experiments.
 The robot is a single-arm robot with a gripper (similar to a LoCobot).
 It is slightly shorter than a human.
-It cannot intereact objects that are taller than itself.
+It cannot interact with objects that are taller than itself.
 It can open doors and drawers, slice items, etc.
 All skills in the list below can be performed by the robot, but not on all objects.
+Note: the turn on/off skills are also used for toggling electronics on/off, or activating/deactivating electronics or other such devices.
 
 Please assign labels to the object <{ho.object_name}> of description <{ho.object_description}>. 
 

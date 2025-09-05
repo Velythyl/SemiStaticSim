@@ -226,15 +226,15 @@ def load_conceptgraph(cfg, path,):
 
     """"""
     #vis_id2obj()
-    segments_anno = make_pcd_axis_aligned(segments_anno,
-                                          0)  # align before filtering pcds because we will need the background pcds such as walls, doors, etc
+    #segments_anno = make_pcd_axis_aligned(segments_anno,
+    #                                      0)  # align before filtering pcds because we will need the background pcds such as walls, doors, etc
 
     #vis_id2obj()
-    segments_anno = make_pcd_axis_aligned(segments_anno,
-                                          1)  # align before filtering pcds because we will need the background pcds such as walls, doors, etc
+    #segments_anno = make_pcd_axis_aligned(segments_anno,
+    #                                      1)  # align before filtering pcds because we will need the background pcds such as walls, doors, etc
 
     #vis_id2obj()
-    segments_anno = make_pcd_axis_aligned(segments_anno,2)    # align before filtering pcds because we will need the background pcds such as walls, doors, etc
+    #segments_anno = make_pcd_axis_aligned(segments_anno,2)    # align before filtering pcds because we will need the background pcds such as walls, doors, etc
 
     #vis_id2obj()
 

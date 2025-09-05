@@ -134,6 +134,7 @@ if __name__ == '__main__':
 
 
     import socket
+    from hippo.utils.subproc import run_subproc
     os.environ["XDG_RUNTIME_DIR"] = "/tmp"
     os.makedirs("/tmp/.X11-unix", exist_ok=True)
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -217,4 +218,6 @@ CLOSE TO WORKING  PYTHONPATH=..:$PYTHONPATH python3 main.py  secrets=secrets_clu
 PYTHONPATH=..:$PYTHONPATH python3 main.py --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=300  hydra.launcher.gres=gpu:l40s:1 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main  secrets=secrets_cluster  assetfitting=norot_and_aspect_weighted,rot_and_aspect_weighted  paths=realscenes paths.scene_id='i_feu_3' assetlookup=trellis,trellis_nomask,clip scene=strayscanner_outside assetlookup.image_sequence_end=3 assetlookup.image_sequence_start=0 assetlookup.image_sequence_stride=1 scene.statistical_pcd_denoise_std=1.0
 
 kinda PYTHONPATH=..:$PYTHONPATH python3 main.py  secrets=secrets_cluster  assetfitting=rot_and_aspect_fit  paths=realscenes paths.scene_id='i_mug_kitchen_surely3' assetlookup=trellis scene=strayscanner_outside assetlookup.image_sequence_start=1 assetlookup.image_sequence_end=1
+
+PYTHONPATH=..:$PYTHONPATH python3 main.py  secrets=secrets_cluster  assetfitting=rot_and_aspect_fit  paths=realscenes paths.scene_id='i_miguel_bomb_5' assetlookup=trellis scene=strayscanner_outside
 """

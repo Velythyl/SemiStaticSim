@@ -5,3 +5,4 @@ defaults:
   - feedback: conditiononly
   - scene: blocks_yel_bla_blu
   - paths: default
+  - secrets: secrets
