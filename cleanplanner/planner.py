@@ -181,7 +181,7 @@ def gen_plan(cfg, scenetask: SceneTask, output_dir, feedback=""):
     #curr_prompt = f"{curr_prompt}\n# generate here..."
 
     NUM_INPUT_TOKENS = approx_num_tokens(cfg.planner.llm, prompt)
-    _, decomposed_plan = LLM(prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0)
+    _, decomposed_plan = LLM(prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0, ignore_cache=cfg.planner.ignore_cache)
     decomposed_plan = decomposed_plan.replace('("robot0",', "(").replace('("robot1",', "(").replace("('robot0',", "(").replace("('robot1',", "(") # common llm mistake
     NUM_OUTPUT_TOKENS = approx_num_tokens(cfg.planner.llm, decomposed_plan)
     decomposed_plan = decomposed_plan.replace("ActivateObject(", "SwitchOn(").replace("TurnOnObject(", "SwitchOn(")

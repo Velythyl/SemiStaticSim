@@ -1055,43 +1055,25 @@ DIFF OF LAST ACTION:
         if not is_dest_obj_visible():
             RotateToNode(robot, dest_obj_pos)
 
-        def LookUpDownAtObject(robot, agent_id, dest_obj_pos):
+        def LookUpDownAtObject(robot, agent_id):
+            # todo make this its own function and call it after every object interaction...
             robot_location = self._get_robot_location_dict(robot)
             dy = dest_obj_pos[1] - robot_location["y"]
+            # Compute yaw rotation
             dx = dest_obj_pos[0] - robot_location["x"]
             dz = dest_obj_pos[2] - robot_location["z"]
 
-            # Compute horizontal distance and desired pitch
             horizontal_dist = math.sqrt(dx ** 2 + dz ** 2)
-            desired_pitch = math.degrees(math.atan2(dy, horizontal_dist))
+            pitch = math.degrees(math.atan2(dy, horizontal_dist))
 
-            # Normalize the desired pitch to be within [-90, 90] degrees
-            desired_pitch = (desired_pitch + 180) % 360 - 180
-            if desired_pitch > 90:
-                desired_pitch = 180 - desired_pitch
-            elif desired_pitch < -90:
-                desired_pitch = -180 - desired_pitch
-
+            # Adjust camera pitch
             current_horizon = robot_location["horizon"]
 
-            # Calculate the pitch difference and determine direction
-            pitch_diff = desired_pitch - current_horizon
-
-            # Handle the shortest rotational path (avoid flipping through 180 degrees)
-            if pitch_diff > 180:
-                pitch_diff -= 360
-            elif pitch_diff < -180:
-                pitch_diff += 360
-
             self._lock_robot(robot)
-
-            # Use a threshold to avoid micro-adjustments
-            if abs(pitch_diff) > 2:  # 2-degree threshold to prevent jitter
-                if pitch_diff > 0:
-                    self.push_action({"action": "LookUp", "agent_id": agent_id})
-                else:
-                    self.push_action({"action": "LookDown", "agent_id": agent_id})
-
+            if pitch > current_horizon:
+                self.push_action({"action": "LookUp", "agent_id": agent_id})
+            else:
+                self.push_action({"action": "LookDown", "agent_id": agent_id})
             self._await_robot(robot)
 
 
