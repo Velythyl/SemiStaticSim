@@ -11,7 +11,6 @@ def get_prompt_for_diff_verification(task_description, diff):
     PROMPT = f"""
 You are an LLM being used as part of a robotic planning pipeline. 
 Your job is to verify the validity of substeps of a plan.
-In particular, while the plan is being output by GPT-4, you are GPT-3.5! 
 Part of the experiment is to show that smaller LLMs can verify plans of larger LLMs, so do your best to prove us right!
 
 You need to verify steps of a plan that require semantic/commonsense thinking that we can't otherwise do with an hardcoded simulator.
@@ -58,7 +57,7 @@ SafeAction("<reason>")
 
 ---
 
-The high-level task is {task_description}
+{"The high-level task is " +task_description if task_description is not None else ""}
 
 {diff}
 """
@@ -92,26 +91,32 @@ class _LLMSemanticVerification(SelfDataclass, FeedbackMixin):
 @dataclasses.dataclass
 class SafeAction(_LLMSemanticVerification):
     is_valid: bool = True
+    success: bool = True
 
 @dataclasses.dataclass
 class UnsafeAction(_LLMSemanticVerification):
     is_valid: bool = False
+    success: bool = False
 
 @dataclasses.dataclass
 class CorrectFinalState(_LLMSemanticVerification):
     is_valid: bool = True
+    success: bool = True
 
 @dataclasses.dataclass
 class IncorrectFinalState(_LLMSemanticVerification):
     is_valid: bool = False
+    success: bool = False
 
 @dataclasses.dataclass
 class IncorrectTaskDescription(_LLMSemanticVerification):
     is_valid: bool = False
+    success: bool = False
 
 @dataclasses.dataclass
 class UnsafeFinalState(_LLMSemanticVerification):
     is_valid: bool = False
+    success: bool = False
 
 
 def parse_response_for_diff_verif(task_description, diff, llm_reply: str):
@@ -141,7 +146,7 @@ def LLM_verify_diff(task_description, diff, pure_diff, pure_past_actions, skill_
 
     prompt = get_prompt_for_diff_verification(task_description, diff)
 
-    _, response = LLM(prompt, "gpt-3.5-turbo", max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, "gpt-4", max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     parsed = parse_response_for_diff_verif(task_description, diff, response).replace(prompt=prompt, pure_diff=pure_diff, pure_past_actions=pure_past_actions, skill_prettyprint=skill_prettyprint)
     if parsed is not None:
@@ -220,7 +225,7 @@ IncorrectFinalState("<reason>")
 >
 ```
 
-The high-level task is {task_description}
+{"The high-level task is " +task_description if task_description is not None else ""}
 
 ---
 

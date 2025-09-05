@@ -27,11 +27,13 @@ def get_object_position_from_controller(controller, object_id):
     return (pos['x'], pos['y'], pos['z'])
 
 def get_robot_position_from_controller(controller, robot_id):
-    metadata = controller.last_event.events[robot_id].metadata
+    #metadata = controller.last_event.events[robot_id].metadata
+    controller.step(
+        dict(action="MoveAhead", moveMagnitude=0.001, agentId=0)) # for some reason, non-move actions tend to alter the robot position in unexpected ways. To fix this, we spoof a fake movement to reset it
+    metadata = controller.last_event.metadata
     pos = [metadata["agent"]["position"]["x"],
         metadata["agent"]["position"]["y"],
         metadata["agent"]["position"]["z"]]
-
     return pos
 
 def get_object_list_from_controller(controller):

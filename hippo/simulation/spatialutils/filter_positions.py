@@ -38,8 +38,9 @@ def _filter_agent_positions(agent_positions, object_positions, object_sizes, mar
     return jnp.logical_not(mask)
 
 
-def build_grid_graph(points, GRID_SIZE, diagonal=False):
-    points = [(float(p[0]), float(p[1]), float(p[2])) for p in points]
+def build_grid_graph(points, GRID_SIZE, diagonal=False, clean_convert=lambda x: x):
+    #points = [(float(p[0]), float(p[1]), float(p[2])) for p in points]
+    points = [clean_convert(p) for p in points]
 
     G = nx.Graph()
     points_set = set(points)

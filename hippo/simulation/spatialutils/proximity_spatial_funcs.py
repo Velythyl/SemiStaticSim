@@ -48,7 +48,7 @@ def isOnTop_OLD(pos1, size1, pos2, size2, tol_overlap=0.5, tol_dist=0.1):
     return (xy_overlap_ratio >= tol_overlap) & z_close
 
 
-def isOnTop(pos1, size1, pos2, size2, tol_overlap=0.5, tol_dist=0.5):
+def isOnTop(pos1, size1, pos2, size2, tol_overlap=0.1, tol_dist=0.2):
     """Returns True if obj1 is on top of obj2 within given tolerances.
 
     Args:

@@ -1,0 +1,4 @@
+enabled: true
+conditions: true
+audits: true
+include_task_description_in_audit_prompt: true

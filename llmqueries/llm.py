@@ -24,6 +24,8 @@ TOKENS_PER_MINUTE_DICT = {
     "gpt-4.1-mini-2025-04-14": 200000,
     "gpt-4.1-2025-04-14": 10000,
     "gpt-5-2025-08-07": 30000,
+    "gpt-5-mini-2025-08-07": 200000,
+    "gpt-5-nano-2025-08-07": 200000,
     "bbllm": np.inf
 }
 MAX_COMPLETION_TOKENS_INSTEAD_OF_MAX_TOKENS = {

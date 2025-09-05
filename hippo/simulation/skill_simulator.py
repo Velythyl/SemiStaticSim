@@ -28,7 +28,7 @@ from hippo.utils.git_diff import git_diff
 
 
 class Simulator:
-    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP", kill_sim_on_condition_failure: bool = True, raise_exception_on_condition_failure = True):    # STEP or HISTORY
+    def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP", kill_sim_on_condition_failure: bool = True, raise_exception_on_condition_failure = True, feedback_cfg=None):    # STEP or HISTORY
         self.controller = controller
         self.object_containers = [objects]
 
@@ -56,6 +56,9 @@ class Simulator:
 
         self.exception_queue = []
         self.roblock = {}
+
+        self.feedback_cfg = feedback_cfg # contains enabled, conditions, audits, and include_task_description_in_audit_prompt
+        self.currently_thinking = False
 
     @property
     def last_action(self):
@@ -209,15 +212,18 @@ DIFF BETWEEN FIRST AND FINAL STATES:
         print("The diff:")
         print(diff)
         print("Querying now...")
-        llmsemantic = LLM_verify_final_state(self.task_description, diff, pure_diff, action_history)
-
+        self.currently_thinking = True
+        llmsemantic = LLM_verify_final_state(self.task_description, diff, pure_diff, action_history)    # always have task desc for final state verif otherwise cant verify if plan was ok
+        self.currently_thinking = False
         print(llmsemantic.response)
 
         maybe_raise_llmcondition_exception(llmsemantic)
 
     def llm_verify_diff_alignment(self):
         log_scenedict_to_file(len(self.object_containers)-1, self.current_object_container.as_llmjson())
-        return
+        if self.feedback_cfg is None or (not self.feedback_cfg["audits"]):
+            return
+        #return
         pure_diff = self.get_object_container_diff()
         action_history = [f'{i}: {x}' for i, x in enumerate(self.done_actions)]
         action_history = "\n".join(action_history)
@@ -234,7 +240,9 @@ DIFF OF LAST ACTION:
         print("The diff:")
         print(diff)
         print("Querying now...")
-        llmsemantic = LLM_verify_diff(self.task_description, diff, pure_diff, action_history, self.done_actions[-1])    # this assumes we're synced with the done actions, which SHOULD be true. but todo verify this is true for multi agent
+        self.currently_thinking = True
+        llmsemantic = LLM_verify_diff(self.task_description if self.feedback_cfg["include_task_description_in_audit_prompt"] else None, diff, pure_diff, action_history, self.done_actions[-1])    # this assumes we're synced with the done actions, which SHOULD be true. but todo verify this is true for multi agent
+        self.currently_thinking = False
         maybe_raise_llmcondition_exception(llmsemantic)
 
     def _exec_actions(self):
@@ -748,7 +756,9 @@ DIFF OF LAST ACTION:
                         self.controller.step(action="Done")
                         self.llm_verify_final_state()
                         print("Done!")
-                        raise Exception("Done!")
+                        print("Stopping simulation.")
+                        self.controller.stop()
+                        #raise Exception("Done!")
                 except ConditionFailure as e:
                     print("Condition Failure!")
 
@@ -757,6 +767,10 @@ DIFF OF LAST ACTION:
                         self.controller.stop()
                         os._exit(0)
                     if self.raise_exception_on_condition_failure:
+                        if isinstance(self.raise_exception_on_condition_failure, int):
+                            time.sleep(self.raise_exception_on_condition_failure)
+
+                        self.controller.stop()
                         raise e
                     else:
                         print("Condition failure (not raised, added to queue).")
@@ -885,19 +899,26 @@ DIFF OF LAST ACTION:
             "reason": reason,
         })
 
-    def GoToObject(self, robot, dest_obj):
+    def GoToObject(self, robot, dest_obj, DISABLE_MOVE=False):
         # todo https://chat.deepseek.com/a/chat/s/411a780c-246e-4909-ac93-48ad5f66e14f
         print("Going to ", dest_obj)
         # check if robots is a list
 
+        def get_robot_position(controller, robot_id):
+            return get_robot_position_from_controller(controller, robot_id)
+            if not hasattr(self, "CURRENT_ROBOT_POSITION_FROM_LAST_GOTO"):
+                self.CURRENT_ROBOT_POSITION_FROM_LAST_GOTO = get_robot_position_from_controller(controller, robot_id)
+            return self.CURRENT_ROBOT_POSITION_FROM_LAST_GOTO
+
         dest_obj_id = self._get_object_id(dest_obj)
-        self.push_action(
-            {
-                'action': 'GoToObject_PreConditionCheck',
-                'agent_id': self._get_robot_id(robot),
-                'objectId': dest_obj_id
-            }
-        )
+        if not DISABLE_MOVE:
+            self.push_action(
+                {
+                    'action': 'GoToObject_PreConditionCheck',
+                    'agent_id': self._get_robot_id(robot),
+                    'objectId': dest_obj_id
+                }
+            )
 
         dest_obj_pos = get_object_position_from_controller(self.controller, dest_obj_id)
         dest_obj_size = get_object_size_from_controller(self.controller, dest_obj_id)
@@ -907,11 +928,11 @@ DIFF OF LAST ACTION:
             obj_pos = np.array(obj_pos)
             obj_size = np.array(obj_size)
             return bbox_dist(
-                np.array(get_robot_position_from_controller(self.controller, self._get_robot_id(robot))), np.array([0.6, 0.95, 0.6]),
+                np.array(get_robot_position(self.controller, self._get_robot_id(robot))), np.array([0.6, 0.95, 0.6]),
                 obj_pos, obj_size
             )
 
-        def RotateToNode(robot, node):
+        def RotateToNodeOLD(robot, node):
             # align the robot once goal is reached
             # compute angle between robot heading and object
             robot_location = self._get_robot_location_dict(robot)
@@ -936,6 +957,27 @@ DIFF OF LAST ACTION:
                                   'agent_id': self._get_robot_id(robot)})
             self._await_robot(robot)
 
+        def RotateToNode(robot, node):
+            robot_location = self._get_robot_location_dict(robot)
+
+            # Calculate target angle using atan2
+            dx = node[0] - robot_location['x']
+            dz = node[2] - robot_location['z']
+            target_angle = np.degrees(np.arctan2(dx, dz))  # atan2(x, z) assuming z is forward
+
+            # Calculate the difference, handling angle wrapping
+            current_angle = robot_location['rotation']
+            angle_diff = (target_angle - current_angle + 180) % 360 - 180
+
+            self._lock_robot(robot)
+            if angle_diff > 0:
+                self.push_action({'action': 'RotateRight', 'degrees': abs(angle_diff),
+                                  'agent_id': self._get_robot_id(robot)})
+            else:
+                self.push_action({'action': 'RotateLeft', 'degrees': abs(angle_diff),
+                                  'agent_id': self._get_robot_id(robot)})
+            self._await_robot(robot)
+
         goal_thresh = 0.75
 
         def is_dest_obj_visible():
@@ -956,9 +998,9 @@ DIFF OF LAST ACTION:
 
         if are_we_done():
             print(f"Was going to {dest_obj_id}, but already next to object. Will only adjust camera.")
-        else:
+        elif not DISABLE_MOVE:
             from hippo.simulation.spatialutils.motion_planning import astar
-            path_gen = astar(get_robot_position_from_controller(self.controller, self._get_robot_id(robot)), dest_obj_pos, self.full_reachability_graph,
+            path_gen = astar(get_robot_position(self.controller, self._get_robot_id(robot)), dest_obj_pos, self.full_reachability_graph,
                                             self.current_object_container)
             NUM_RETRIES = 0
             MAX_NUM_RETRIES = 3
@@ -972,15 +1014,17 @@ DIFF OF LAST ACTION:
                     print(node)
 
                     moveMagnitude =  np.linalg.norm(
-                        np.array(get_robot_position_from_controller(self.controller, self._get_robot_id(robot)))
+                        np.array(get_robot_position(self.controller, self._get_robot_id(robot)))
                         - np.array(node)
                     )
+                    #if not is_dest_obj_visible():
                     RotateToNode(robot, node)
                     self._lock_robot(robot)
                     self.push_action(
                         {'action': 'MoveAhead', 'moveMagnitude': moveMagnitude,
                          'agent_id': self._get_robot_id(robot)})
                     self._await_robot(robot)
+                    self.CURRENT_ROBOT_POSITION_FROM_LAST_GOTO = get_robot_position_from_controller(self.controller, self._get_robot_id(robot))
 
                     d = dist_to_goal(dest_obj_pos, dest_obj_size)
                     print(f"Going to {dest_obj_id}, distance:", d)
@@ -992,7 +1036,7 @@ DIFF OF LAST ACTION:
 
                     NUM_OUTPUT_NODES += 1
                     if NUM_OUTPUT_NODES >= MAX_OUTPUT_NODES:
-                        path_gen = astar(get_robot_position_from_controller(self.controller, self._get_robot_id(robot)),
+                        path_gen = astar(get_robot_position(self.controller, self._get_robot_id(robot)),
                                          dest_obj_pos, self.full_reachability_graph,
                                          self.current_object_container)
                         NUM_OUTPUT_NODES = 0
@@ -1000,7 +1044,7 @@ DIFF OF LAST ACTION:
                 except StopIteration:
                     if not are_we_done():
                         if NUM_RETRIES < MAX_NUM_RETRIES:
-                            path_gen = astar(get_robot_position_from_controller(self.controller, self._get_robot_id(robot)), dest_obj_pos, self.full_reachability_graph,
+                            path_gen = astar(get_robot_position(self.controller, self._get_robot_id(robot)), dest_obj_pos, self.full_reachability_graph,
                                                 self.current_object_container)
                             NUM_RETRIES += 1
                         else:
@@ -1008,27 +1052,46 @@ DIFF OF LAST ACTION:
                     else:
                         break
 
-        RotateToNode(robot, dest_obj_pos)
+        if not is_dest_obj_visible():
+            RotateToNode(robot, dest_obj_pos)
 
-        def LookUpDownAtObject(robot, agent_id):
-            # todo make this its own function and call it after every object interaction...
+        def LookUpDownAtObject(robot, agent_id, dest_obj_pos):
             robot_location = self._get_robot_location_dict(robot)
             dy = dest_obj_pos[1] - robot_location["y"]
-            # Compute yaw rotation
             dx = dest_obj_pos[0] - robot_location["x"]
             dz = dest_obj_pos[2] - robot_location["z"]
 
+            # Compute horizontal distance and desired pitch
             horizontal_dist = math.sqrt(dx ** 2 + dz ** 2)
-            pitch = math.degrees(math.atan2(dy, horizontal_dist))
+            desired_pitch = math.degrees(math.atan2(dy, horizontal_dist))
 
-            # Adjust camera pitch
+            # Normalize the desired pitch to be within [-90, 90] degrees
+            desired_pitch = (desired_pitch + 180) % 360 - 180
+            if desired_pitch > 90:
+                desired_pitch = 180 - desired_pitch
+            elif desired_pitch < -90:
+                desired_pitch = -180 - desired_pitch
+
             current_horizon = robot_location["horizon"]
 
+            # Calculate the pitch difference and determine direction
+            pitch_diff = desired_pitch - current_horizon
+
+            # Handle the shortest rotational path (avoid flipping through 180 degrees)
+            if pitch_diff > 180:
+                pitch_diff -= 360
+            elif pitch_diff < -180:
+                pitch_diff += 360
+
             self._lock_robot(robot)
-            if pitch > current_horizon:
-                self.push_action({"action": "LookUp", "agent_id": agent_id})
-            else:
-                self.push_action({"action": "LookDown", "agent_id": agent_id})
+
+            # Use a threshold to avoid micro-adjustments
+            if abs(pitch_diff) > 2:  # 2-degree threshold to prevent jitter
+                if pitch_diff > 0:
+                    self.push_action({"action": "LookUp", "agent_id": agent_id})
+                else:
+                    self.push_action({"action": "LookDown", "agent_id": agent_id})
+
             self._await_robot(robot)
 
 
@@ -1041,21 +1104,29 @@ DIFF OF LAST ACTION:
             if NUM_TRIES > MAX_NUM_TRIES:
                 break
 
-        self.push_action(
-            {
-                'action': 'GoToObject_PostConditionCheck',
-                'agent_id': self._get_robot_id(robot),
-                'objectId': dest_obj_id
-            }
-        )
-        print("Reached: ", dest_obj)
+        if not DISABLE_MOVE:
+            self.push_action(
+                {
+                    'action': 'GoToObject_PostConditionCheck',
+                    'agent_id': self._get_robot_id(robot),
+                    'objectId': dest_obj_id
+                }
+            )
+            print("Reached: ", dest_obj)
+        else:
+            print(f"Now looking at obj {dest_obj}.")
+
+    def LookAtObj(self, robot, dest_obj):
+        return self.GoToObject(robot, dest_obj, DISABLE_MOVE=True)
 
     def PickupObject(self, robot, pick_obj):
+        self.LookAtObj(robot, pick_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'PickupObject', 'objectId': self._get_object_id(pick_obj), 'agent_id': self._get_robot_id(robot)})
         self._await_robot(robot)
 
     def PutObject(self, robot, put_obj, recp):
+        self.LookAtObj(robot, put_obj)
         self._lock_robot(robot)
         ret = self.push_action(
             {'action': 'PutObject', 'objectId': self._get_object_id(recp), 'agent_id': self._get_robot_id(robot),
@@ -1064,41 +1135,49 @@ DIFF OF LAST ACTION:
         return ret
 
     def SwitchOn(self, robot, sw_obj):
+        self.LookAtObj(robot, sw_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'ToggleObjectOn', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         self._await_robot(robot)
 
     def SwitchOff(self, robot, sw_obj):
+        self.LookAtObj(robot, sw_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'ToggleObjectOff', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         self._await_robot(robot)
 
     def OpenObject(self, robot, sw_obj):
+        self.LookAtObj(robot, sw_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'OpenObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         self._await_robot(robot)
 
     def CloseObject(self, robot, sw_obj):
+        self.LookAtObj(robot, sw_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'CloseObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         self._await_robot(robot)
 
     def BreakObject(self, robot, sw_obj):
+        self.LookAtObj(robot, sw_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'BreakObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         self._await_robot(robot)
 
     def SliceObject(self, robot, sw_obj):
+        self.LookAtObj(robot, sw_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'SliceObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         self._await_robot(robot)
 
     def CleanObject(self, robot, sw_obj):
+        self.LookAtObj(robot, sw_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'CleanObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         self._await_robot(robot)
 
     def ThrowObject(self, robot, sw_obj):
+        self.LookAtObj(robot, sw_obj)
         self._lock_robot(robot)
         self.push_action({'action': 'ThrowObject', 'objectId': self._get_object_id(sw_obj), 'agent_id': self._get_robot_id(robot)})
         time.sleep(1)

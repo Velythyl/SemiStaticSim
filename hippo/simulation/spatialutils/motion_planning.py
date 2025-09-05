@@ -24,11 +24,14 @@ def astar(requested_start_node, requested_end_node, full_reachability_graph, run
 
         dists = jnp.nan_to_num(jax.vmap(functools.partial(dist, p2=pos))(all_nodes), neginf=jnp.inf, nan=jnp.inf, posinf=jnp.inf)
         argret = dists.argmin()
-        return tuple(np.array(all_nodes[argret]).tolist())
+        return full_reachability_graph.clean_convert(all_nodes[argret])
 
     universal_y = list(filtered.nodes)[0][1]
     start_node = shunt(requested_start_node, universal_y=universal_y)
     end_node = shunt(requested_end_node, universal_y=universal_y)
+
+    assert start_node in full_reachability_graph
+    assert end_node in full_reachability_graph
 
     path = nx.astar_path(filtered, start_node, end_node)[1:]
 

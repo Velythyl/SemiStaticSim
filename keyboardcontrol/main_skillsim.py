@@ -492,13 +492,42 @@ TASK: place the red mug in the fridge
 3. PutDown0bj (red mug, fridge)
 DONE. red mug should be in the fridge
 """
+    TEMPPLAN = """1. GoToObject('green cube-3844-0db9')
+2. PickupObject('green cube-3844-0db9')
+3. GoToObject('cardboard box-4768-7579')
+4. PutObject('green cube-3844-0db9', 'cardboard box-4768-7579')
+5. GoToObject('black cube-9c69-6afc')
+6. PickupObject('black cube-9c69-6afc')
+7. GoToObject('cardboard box-4768-7579')
+8. PutObject('black cube-9c69-6afc', 'cardboard box-4768-7579')
+9. GoToObject('blue cube-e86f-dc29')
+10. PickupObject('blue cube-e86f-dc29')
+11. GoToObject('cardboard box-4768-7579')
+12. PutObject('blue cube-e86f-dc29', 'cardboard box-4768-7579')
+13. GoToObject('yellow sponge-54ca-568e')
+14. PickupObject('yellow sponge-54ca-568e')
+15. GoToObject('cardboard box-4768-7579')
+16. PutObject('yellow sponge-54ca-568e', 'cardboard box-4768-7579')
+17. GoToObject('blue cube-e86f-dc29')
+18. PickupObject('blue cube-e86f-dc29')
+19. GoToObject('cardboard box-4768-7579')
+20. PutObject('blue cube-e86f-dc29', 'cardboard box-4768-7579')
+21. GoToObject('black cube-9c69-6afc')
+22. PickupObject('black cube-9c69-6afc')
+23. GoToObject('blue cube-e86f-dc29')
+24. PutObject('black cube-9c69-6afc', 'blue cube-e86f-dc29')
+25. GoToObject('yellow sponge-54ca-568e')
+26. PickupObject('yellow sponge-54ca-568e')
+27. GoToObject('black cube-9c69-6afc')
+28. PutObject('yellow sponge-54ca-568e', 'black cube-9c69-6afc')"""
 
-    HU_PLAN = PLAN5
+    HU_PLAN = TEMPPLAN
     # for survey:
     # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_box2_stacked_wide/TRELLIS-yes-mask_False-aspect weighted-tight-new-centroid/in_order_0
     # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0
+    # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0
 
-    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0",  # FloorPlan19_physics ## room
+    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/cube_unstacked/TRELLIS-yes-mask_True-axis-5_2025-09-04-19-44-50/in_order_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree

@@ -1,4 +1,4 @@
 enabled: true
 conditions: true
-audits: false
+audits: true
 include_task_description_in_audit_prompt: false
