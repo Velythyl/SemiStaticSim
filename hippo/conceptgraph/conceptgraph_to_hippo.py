@@ -405,8 +405,9 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
 
                     return (tx, ty, tz)
                 def raise_objX_above_objY(objX, bboxX, objY, bboxY):
-                    vec = mtv_for_aabbs(bboxY, bboxX) # np.array([0,0.05,0]) # empirically seems to be fine #mtv_for_aabbs(bboxY, bboxX)
+                    vec = np.array([0,0.05,0]) # mtv_for_aabbs(bboxY, bboxX) # np.array([0,0.05,0]) # empirically seems to be fine #mtv_for_aabbs(bboxY, bboxX)
                     vec = np.absolute(vec)
+                    print(f"Bumping {objX} by {vec}")
 
                     x_pcd = np.array(id2objs[objX]._cg_pcd_points)
                     x_pcd = x_pcd + np.array(vec)
