@@ -5,7 +5,7 @@ from typing import Callable
 from hippo.conceptgraph.conceptgraph_intake import load_conceptgraph, vis_cg
 from hippo.reconstruction.scenedata import HippoObject, HippoRoomPlan
 from hippo.utils.o3d_np_v3v import v3v
-from hippo.utils.spatial_utils import get_size, disambiguate, disambiguate2, disambiguate3, get_bounding_box, filter_points_by_y_quartile
+from hippo.utils.spatial_utils import get_size, disambiguate, disambiguate2, disambiguate3, get_bounding_box, filter_points_by_y_quartile, is_fully_contained
 from hippo.utils.string_utils import get_uuid
 from omegaconf import ListConfig
 import numpy as np
@@ -189,6 +189,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
 
     id2objs = {}
     name2objs = {}
+    id2bbox = {}
     for hippo_object, pcd, pcd_color in (zip(hippo_objects,pcds, pcd_colors)):
         original_pcd = pcd
 
@@ -248,6 +249,7 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
         for name_to_add in names_to_add:
             if name_to_add not in name2objs:
                 name2objs[name_to_add] = []
+            id2bbox[hippo_object.object_name_id] = (get_bounding_box(original_pcd), len(original_pcd), original_pcd)
             name2objs[name_to_add].append((hippo_object, get_bounding_box(original_pcd), len(original_pcd), original_pcd))
         id2objs[hippo_object.object_name_id] = hippo_object
 
@@ -321,6 +323,106 @@ def get_hippos(cfg, path, pad=lambda bounddists: bounddists * 0.25):
                     keep_delete(False, obj1.object_name_id)
                 else:
                     keep_delete(False, obj2.object_name_id)
+
+    MOVED_OBJS = []
+    for k1, (bbox1,len1,original_pcd_1) in id2bbox.items():
+        for k2, (bbox2,len2,original_pcd_2) in id2bbox.items():
+            if k1 == k2 or k1 in MOVED_OBJS:
+                continue
+            def needs_to_move(bbox1,original_pcd_1, bbox2,original_pcd_2):
+                if is_fully_contained(bbox1, bbox2):
+                    return (True, False)  # obj2 is fully contained in obj1
+                if is_fully_contained(bbox2, bbox1):
+                    return (False, True)  # obj1 is fully contained in obj2
+                return (False, False)
+            obj1_full_contains_obj2, obj2_full_contains_obj1 = needs_to_move(bbox1,original_pcd_1, bbox2,original_pcd_2)
+
+            if obj1_full_contains_obj2 != obj2_full_contains_obj1:
+                def raise_objX_above_objY_OLD(objX, bboxX, objY, bboxY):
+                    min_x = bboxX[1] # (x,y,z,x,y,z)
+                    max_y = bboxY[4]
+                    dist = 0.05 # abs(max_y - min_x)
+
+                    x_pcd = np.array(id2objs[objX]._cg_pcd_points)
+                    x_pcd = x_pcd + dist
+                    x_pcd = tuple(x_pcd.tolist())
+
+                    x_pos = id2objs[objX]._position
+                    x_pos = (x_pos[0], x_pos[1]+dist, x_pos[2])
+
+                    id2objs[objX] = id2objs[objX].replace(_position=x_pos, _cg_pcd_points=x_pcd)
+                    MOVED_OBJS.append(objX)
+                    #MOVED_OBJS.append(objY)
+
+                def normalize_bbox(b):
+                    xmin, ymin, zmin, xmax, ymax, zmax = b
+                    if xmin > xmax:
+                        xmin, xmax = xmax, xmin
+                    if ymin > ymax:
+                        ymin, ymax = ymax, ymin
+                    if zmin > zmax:
+                        zmin, zmax = zmax, zmin
+                    return (xmin, ymin, zmin, xmax, ymax, zmax)
+
+                def mtv_for_aabbs(bboxX, bboxY):
+                    """
+                    Returns the minimum translation vector (tx,ty,tz) to apply to bboxX
+                    so that bboxX and bboxY are no longer intersecting.
+                    If they are already disjoint, returns (0,0,0).
+                    Assumes axis-aligned bounding boxes.
+                    """
+                    xminX, yminX, zminX, xmaxX, ymaxX, zmaxX = normalize_bbox(bboxX)
+                    xminY, yminY, zminY, xmaxY, ymaxY, zmaxY = normalize_bbox(bboxY)
+
+                    # overlaps (positive if intersecting along that axis)
+                    ox = min(xmaxX, xmaxY) - max(xminX, xminY)
+                    oy = min(ymaxX, ymaxY) - max(yminX, yminY)
+                    oz = min(zmaxX, zmaxY) - max(zminX, zminY)
+
+                    # if any overlap <= 0 then boxes are separated already
+                    if ox <= 0 or oy <= 0 or oz <= 0:
+                        return (0.0, 0.0, 0.0)
+
+                    # choose smallest overlap axis
+                    overlaps = {'x': ox, 'y': oy, 'z': oz}
+                    axis = min(overlaps, key=overlaps.get)
+                    depth = overlaps[axis]
+
+                    # find direction: push X away from Y along chosen axis
+                    centerX = ((xminX + xmaxX) / 2.0, (yminX + ymaxX) / 2.0, (zminX + zmaxX) / 2.0)
+                    centerY = ((xminY + xmaxY) / 2.0, (yminY + ymaxY) / 2.0, (zminY + zmaxY) / 2.0)
+
+                    tx = ty = tz = 0.0
+                    if axis == 'x':
+                        sign = -1.0 if centerX[0] < centerY[0] else 1.0
+                        tx = sign * depth
+                    elif axis == 'y':
+                        sign = -1.0 if centerX[1] < centerY[1] else 1.0
+                        ty = sign * depth
+                    else:  # 'z'
+                        sign = -1.0 if centerX[2] < centerY[2] else 1.0
+                        tz = sign * depth
+
+                    return (tx, ty, tz)
+                def raise_objX_above_objY(objX, bboxX, objY, bboxY):
+                    vec = np.array([0,0.05,0]) # empirically seems to be fine #mtv_for_aabbs(bboxY, bboxX)
+                    vec = np.absolute(vec)
+
+                    x_pcd = np.array(id2objs[objX]._cg_pcd_points)
+                    x_pcd = x_pcd + np.array(vec)
+                    x_pcd = tuple(x_pcd.tolist())
+
+                    x_pos = id2objs[objX]._position
+                    x_pos = (x_pos[0]+vec[0], x_pos[1]+vec[1], x_pos[2]+vec[2])
+
+                    id2objs[objX] = id2objs[objX].replace(_position=x_pos, _cg_pcd_points=x_pcd)
+                    MOVED_OBJS.append(objX)
+                    #MOVED_OBJS.append(objY)
+                if obj1_full_contains_obj2:
+                    raise_objX_above_objY(k2, bbox2, k1, bbox1)
+                else:
+                    raise_objX_above_objY(k1, bbox1, k2, bbox2)
+
 
 
     hippo_objects = list(id2objs.values())
