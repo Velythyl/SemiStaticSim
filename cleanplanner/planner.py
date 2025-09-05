@@ -103,8 +103,7 @@ OUTPUT: PLANR first REASONS about the task. It then OUTPUTs a sequence of skill 
 
 Here is an example:
 
----EX1
-
+```
 # INPUT:
 # Put Tomato in Fridge
 objects = ['Apple-9213#jk', 'Bowl|aekgj|o', 'CounterTop|2|0', 'Tomato-#211a-be',
@@ -129,27 +128,27 @@ def put_tomato_in_fridge():
     # 6: Close the Fridge.
     CloseObject('Fridge|2|1')
 slice_potato()
-
-EX1---
+```
 
 PLANR is very smart, and when a task is not feasible, it aborts the plan.
 
----EX2
-
+```
 # INPUT:
 # Slice the Lettuce
 objects = ['Bowl|aekgj|o', 'CounterTop|2|0', 'Tomato-#211a-be',
            'Fridge|2|1', 'Lettuce-2199-ae98', "Dolphin-2919|I@1", "Jeremy|219|9"]
 
 # OUTPUT:
-# REASONING: We must slice the lettuce. But! There's no knife! We cannot accomplish this plan
+# REASONING:
+# We must slice the lettuce. But! There's no knife! We cannot accomplish this plan
 
 AbortPlan("We must use SliceObject, but there is no knife in the scene.")
-
-EX2---
+```
 
 PLANR can also receive FEEDBACK. This FEEDBACK will contain a previous plan from PLANR as well as the reason why the plan failed.
 The FEEDBACK will be included as part of the INPUT. When there is FEEDBACK, PLANR must talk about it in the REASONING section.
+
+And don't forget, all reasoning must be inside python comments!
 
 Now, apply PLANR to this input:
 
@@ -172,7 +171,7 @@ def gen_plan(cfg, scenetask: SceneTask, output_dir, feedback=""):
 
     print("Generating Decomposed Plans...")
 
-    prompt = f"{PROMPT}\n\n# INPUT:\n# TASK: {scenetask.tasks[0]}\nobjects = {get_list_of_objects(scenetask.scene)}"
+    prompt = f"{PROMPT}\n\n```# INPUT: \n# TASK: {scenetask.tasks[0]}\nobjects = {get_list_of_objects(scenetask.scene)}\n```"
     if feedback is not None and len(feedback) > 0:
         prompt = f"{prompt}\n# START FEEDBACK\n{feedback}\n# END FEEDBACK"
     prompt = f"{prompt}\n# OUTPUT:"
@@ -182,10 +181,16 @@ def gen_plan(cfg, scenetask: SceneTask, output_dir, feedback=""):
     #curr_prompt = f"{curr_prompt}\n# generate here..."
 
     NUM_INPUT_TOKENS = approx_num_tokens(cfg.planner.llm, prompt)
-    _, decomposed_plan = LLM(prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0)
+    _, decomposed_plan = LLM(prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0, ignore_cache=cfg.planner.ignore_cache)
     decomposed_plan = decomposed_plan.replace('("robot0",', "(").replace('("robot1",', "(").replace("('robot0',", "(").replace("('robot1',", "(") # common llm mistake
     NUM_OUTPUT_TOKENS = approx_num_tokens(cfg.planner.llm, decomposed_plan)
     decomposed_plan = decomposed_plan.replace("ActivateObject(", "SwitchOn(").replace("TurnOnObject(", "SwitchOn(")
+    decomposed_plan = decomposed_plan.split("def ")[1:]
+    if len(decomposed_plan) == 1:
+        decomposed_plan = [""] + decomposed_plan
+    decomposed_plan = "def ".join(decomposed_plan)
+    decomposed_plan = decomposed_plan.replace("```", "\n")
+
 
     print("Plan obtained! Saving...")
     """

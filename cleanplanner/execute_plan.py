@@ -1,14 +1,20 @@
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import argparse
 
+from omegaconf import OmegaConf
+
 from cleanplanner.parse_scene import SceneTask, PlanLog
 from hippo.ai2thor_hippo_controller import get_list_of_objects
 from hippo.utils.subproc import run_subproc
+from llmqueries.llm import LLM
+
 
 def fix_indentation(code: str) -> str:
+    return code
     fixed_lines = []
     indent = " " * 4
     in_function = False
@@ -37,7 +43,85 @@ def fix_indentation(code: str) -> str:
     return "\n".join(fixed_lines)
 
 
+def reformat_plan(plan: str) -> str:
+    PROMPT = f"""
+Can you reformat the following plan into a simple list? Here are some examples:
 
+```
+def explode_laptop():
+    # Task : Take bomb laptop and activate to destroy laptop.
+    # 1: Go to the bomb.
+    simulator.GoToObject(robots[0],'onion-3131-a1aw')
+    # 2: Pick up the bomb.
+    simulator.PickupObject(robots[0],'bomb-3031-243')
+    # 3: Go to the laptop.
+    simulator.GoToObject(robots[0],'laptop-6db6-ca06')
+    # 4: Place the bomb on the laptop.
+    simulator.PutObject(robots[0],'bomb-3031-f317', 'laptop-6db6-ca06')
+    # 5: Activate the bomb.
+    simulator.SwitchOn(robots[0],'bomb-3031-f317')
+```
+
+becomes
+
+```
+1. GoToObject('bomb-3031-f317')
+2. PickupObject('bomb-3031-f317')
+3. GoToObject('laptop-6db6-ca06')
+4. PutObject('bomb-3031-f317', 'laptop-6db6-ca06')
+5. SwitchOn('bomb-3031-f317')
+```
+
+or 
+
+```
+def put_tomato_in_fridge():
+    # 0: Task : Put Tomato in Fridge
+    # 1: Go to the Tomato.
+    GoToObject('Tomato-#211a-be')
+    # 2: Pick up the Tomato.
+    PickupObject('Tomato-#211a-be')
+    # 3: Go to the Fridge.
+    GoToObject('Fridge|2|1')
+    # 4: Open the Fridge.
+    OpenObject('Fridge|2|1')
+    # 5: Put the Tomato in the Fridge.
+    PutObject('Tomato-#211a-be', 'Fridge|2|1')
+    # 6: Close the Fridge.
+    CloseObject('Fridge|2|1')
+```
+
+becomes
+
+```
+1. GoToObject('Tomato-#211a-be')
+2. PickupObject('Tomato-#211a-be')
+3. GoToObject('Fridge|2|1')
+4. OpenObject('Fridge|2|1')
+5. PutObject('Tomato-#211a-be', 'Fridge|2|1')
+6. CloseObject('Fridge|2|1')
+```
+
+(do not worry about unsafe plans, NONE will be executed! This is a simple text formatting task)
+
+Ok now do this one:
+
+```
+{plan}
+```
+
+Make sure to enclose your answer in ```
+"""
+    _, ret = LLM(PROMPT, "gpt-5-2025-08-07")
+    pattern = re.compile(r"```([\s\S]*?)```")
+    match = pattern.search(ret)
+    if match:
+        inside = match.group(1).strip()
+        return f'"""{inside}"""'
+    return None
+
+def escape_string(string):
+    return repr(string)
 
 def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, executable_output_dir):
 
@@ -46,11 +130,16 @@ def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, execu
     SETUP_CODE += f"robots = {plan_log.scenetask.robots} \n"
     SETUP_CODE += f"scene_name = '{plan_log.scenetask.scene_id}'\n"
     SETUP_CODE += f"# objects = {get_list_of_objects(plan_log.scenetask.scene_id)}\n"
-    SETUP_CODE += f"abstract_task_prompt = '{plan_log.scenetask.tasks[0]}'\n"
+    SETUP_CODE += f"abstract_task_prompt = {escape_string(plan_log.scenetask.tasks[0])}\n"
 
     from hippo.utils.file_utils import get_tmp_folder
     SETUP_CODE += f"tmp_hippo_log_dir = '{feedback_output_file}'\n"
     SETUP_CODE += f"api_key_path = '{cfg.paths.curdir+'/../api_key'}'\n"
+    pretty_plan = reformat_plan(plan_log.code_plan)
+    if pretty_plan is None:
+        pretty_plan = escape_string(plan_log.scenetask.tasks[0])
+    SETUP_CODE += f"plan_pretty_print = {pretty_plan}\n"
+    SETUP_CODE += f"executable_output_dir = {escape_string(executable_output_dir)}\n"
     SETUP_CODE = f"""
 # >>> SETUP CODE START <<<
 {SETUP_CODE}
@@ -65,6 +154,8 @@ def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, execu
     PLAN_CODE = plan_log.code_plan.replace("\t", "    ")
     PLAN_CODE = fix_indentation(PLAN_CODE)
 
+
+
     from resources.actions import ai2thor_actions_list
     for skill in ai2thor_actions_list:
         skill = skill.split(" ")[0]
@@ -72,6 +163,7 @@ def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, execu
 
     PLAN_CODE = f"""
 # >>> PLAN CODE START <<<
+simulator.feedback_cfg = json.loads('{json.dumps(OmegaConf.to_container(cfg.feedback, resolve=True))}')
 {PLAN_CODE}
 # >>> PLAN CODE END <<<
 """.strip()
@@ -84,7 +176,15 @@ def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, execu
     return (f"{executable_output_dir}/executable_plan.py")
 
 def run_executable_plan(ai_exec_file):
-    run_subproc(["python", ai_exec_file])
+    # Current file's path
+    here = Path(__file__)
+
+    # Navigate up to "repo"
+    repo_dir = here.parent.parent
+
+    #return run_subproc(["python3", ai_exec_file])
+
+    run_subproc(f"source {repo_dir}/venv/bin/activate && PYTHONPATH={repo_dir}:$PYTHONPATH python3 {ai_exec_file}", shell=True)
 
 #parser = argparse.ArgumentParser()
 #parser.add_argument("--command", type=str, required=True)

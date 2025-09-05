@@ -3,6 +3,7 @@ import hashlib
 import json
 import os.path
 import time
+import uuid
 from collections import deque
 from pathlib import Path
 
@@ -24,6 +25,8 @@ TOKENS_PER_MINUTE_DICT = {
     "gpt-4.1-mini-2025-04-14": 200000,
     "gpt-4.1-2025-04-14": 10000,
     "gpt-5-2025-08-07": 30000,
+    "gpt-5-mini-2025-08-07": 200000,
+    "gpt-5-nano-2025-08-07": 200000,
     "bbllm": np.inf
 }
 MAX_COMPLETION_TOKENS_INSTEAD_OF_MAX_TOKENS = {
@@ -133,17 +136,18 @@ CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
 cache = FanoutCache(CACHEPATH, shards=64)
 
 @cache.memoize()
-def _LLM_cache(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
+def _LLM_cache(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0, ignore_cache=False):
     print("LLM QUERY: Could not find prompt in cache, querying OpenAI API.")
     ret = _LLM_retry(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)
     return ret
 
 #from termcolor import colored
 
-def LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
-    #print(colored(">> USER:", "orange"))
-    #print(colored(prompt, "orange"))
-    a, response = _LLM_cache(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)
+def LLM(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0, ignore_cache=False):
+    if ignore_cache:
+        ignore_cache = uuid.uuid4().hex # adds random input to fool diskcache
+
+    a, response = _LLM_cache(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty, ignore_cache=ignore_cache)
 
     return a, response
 

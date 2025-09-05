@@ -496,13 +496,13 @@ class RuntimeObjectContainer(_Hippo):
         for i, name in enumerate((self.object_names+self.robot_names)):
             if isinstance(name, str):   # fixme this is gross
                 objdict = self.objects_map[name].as_llmjson()
+                objdict["isOnTopOf"] = self.bool_spatial_attribute_to_list(i, obj_isOnTopOf[i])
+                objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
+                # objdict["isBesideOf"] = self.bool_spatial_attribute_to_list(i, obj_isBesideOf[i])
             else:
                 objdict = self.robots_map[name].as_llmjson()
                 name = f"robot{name}"
 
-            objdict["isOnTopOf"] = self.bool_spatial_attribute_to_list(i, obj_isOnTopOf[i])
-            objdict["isInsideOf"] = self.bool_spatial_attribute_to_list(i, obj_isInsideOf[i])
-            #objdict["isBesideOf"] = self.bool_spatial_attribute_to_list(i, obj_isBesideOf[i])
             objdict["object_distances"] = self.float_spatial_attribute_to_dict(i, obj_distances[i])
 
             final_dict[name] = objdict
@@ -593,7 +593,18 @@ def resolve_spatial_attributes(positions, sizes):
     obj_isInsideOf = jax.vmap(fix_for_each_object)(obj_isInsideOf, indices)
     obj_isBesideOf = jax.vmap(fix_for_each_object)(obj_isBesideOf, indices)
 
+    # last one is always robot
+    obj_isOnTopOf = obj_isOnTopOf.at[:,-1].set(False).at[-1,:].set(False)
+    obj_isInsideOf = obj_isInsideOf.at[:,-1].set(False).at[-1,:].set(False)
+
+    def fix_conditionals(obj_isOnTopOf, obj_isInsideOf, obj_isBesideOf):
+        obj_isInsideOf = jnp.zeros_like(obj_isInsideOf) * jnp.any(obj_isOnTopOf).astype(int) + obj_isInsideOf * (1-jnp.any(obj_isOnTopOf))
+        obj_isBesideOf = jnp.zeros_like(obj_isBesideOf) * jnp.any(obj_isInsideOf).astype(int) + obj_isBesideOf * (1-jnp.any(obj_isInsideOf))
+        return obj_isOnTopOf.astype(bool), obj_isInsideOf.astype(bool), obj_isBesideOf.astype(bool)
+    obj_isOnTopOf, obj_isInsideOf, obj_isBesideOf = jax.vmap(fix_conditionals)(obj_isOnTopOf, obj_isInsideOf, obj_isBesideOf)
+
     obj_distances = jax.vmap(lambda x: jnp.round(x, decimals=2))(obj_distances.squeeze())
+
 
     return {
         "obj_isOnTopOf": obj_isOnTopOf.squeeze(),

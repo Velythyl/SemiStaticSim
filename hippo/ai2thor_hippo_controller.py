@@ -158,7 +158,7 @@ def get_hippo_controller(scene, target_dir=None, objathor_asset_dir=OBJATHOR_ASS
 
         print("Local executable path for AI2Thor controller:", f"{_get_ai2thor_install_build_dir()}/thor-Linux64-local/thor-Linux64-local")
 
-        print("Attempting to create AI2Thor controller... this might time out. If so, you're SOL, I can't figure out how to fix it.")
+        print("Attempting to create AI2Thor controller... this might time out. If so, well, I can't figure out how to fix it.")
         
 
         #import os
@@ -296,7 +296,7 @@ def get_controller(scene, get_runtime_container=False, **kwargs):
 
 
 from diskcache import FanoutCache
-cache = FanoutCache('./diskcache', size_limit=int(1e9), shards=8)
+cache = FanoutCache('./diskcache8', size_limit=int(1e9), shards=8)
 
 def get_list_of_objects(scene):
     with open(scene, "r") as f:
@@ -347,7 +347,7 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
 
     GRID_SIZE = 0.25
     c, runtime_container = get_hippo_controller(scene, get_runtime_container=True, width=width, height=height,
-                                                snapToGrid=False, visibilityDistance=1, fieldOfView=90, gridSize=GRID_SIZE,
+                                                snapGrid=False, snapToGrid=False, visibilityDistance=1, fieldOfView=90, gridSize=GRID_SIZE,
                                                 rotateStepDegrees=20)
 
     if just_controller_no_setup:
@@ -409,7 +409,18 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
     #reachable_positions = c.last_event.metadata["actionReturn"]
     #reachable_positions = [(p["x"], p["y"], p["z"]) for p in reachable_positions]
 
-    full_reachability_graph = build_grid_graph(reachable_positions, GRID_SIZE)
+    def clean_convert(point):
+        # fixes conversion errors between np, jnp, lists
+        import jax.numpy as jnp
+        if isinstance(point, jnp.ndarray):
+            point = np.array(point)
+        if isinstance(point, np.ndarray):
+            point = point.tolist()
+        rounded = [round(x / GRID_SIZE) * GRID_SIZE for x in point]
+        return tuple(rounded)
+    full_reachability_graph = build_grid_graph(reachable_positions, GRID_SIZE, clean_convert=clean_convert)
+    full_reachability_graph.name = f"full_reachability_graph(GRID_SIZE={GRID_SIZE})"
+    full_reachability_graph.clean_convert = clean_convert
 
     # initialize n agents into the scene
     c.step(
@@ -477,14 +488,26 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
         )
     c.step(action="AddThirdPartyCamera", **get_altered_cam_position())
     old_step = c.step
-    def new_step(**kwargs):
+    def new_step(*args,**kwargs):
+        if isinstance(args, tuple) and len(args) == 1 and isinstance(args[0], dict):
+            kwargs = args[0]
+            args = tuple([])
+        if isinstance(args, dict):
+            kwargs = args
+            args = tuple([])
         if kwargs["action"] == "UpdateThirdPartyCamera":
             print("Third Party Camera Updated")
-            ret = old_step(**kwargs)
+            ret = old_step(*args,**kwargs)
             return ret
-        ret = old_step(**kwargs)
+        before = c.last_event.metadata # noqa
+        ret = old_step(*args,**kwargs)
+        middle = c.last_event.metadata  # noqa
         if kwargs["action"].startswith("Move") or kwargs["action"].startswith("Rotate") or kwargs["action"].startswith("Look"):
             update_altered_cam_position()
+            after = c.last_event.metadata # noqa
+            #print("Middle", middle["agent"]["position"])
+            #print("After", after["agent"]["position"])
+            i=0
         return ret
     c.step = new_step
 
