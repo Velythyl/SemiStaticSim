@@ -55,18 +55,18 @@ def resolve_cfg(cfg):
     scenelist = cfg.scene.sceneids
     scenetasks = cfg.scene.tasks
 
-    with open("../objlist_tasked.json", 'r') as f:
-        procthor_task_dict = json.load(f)
+    #with open("../objlist_tasked.json", 'r') as f:
+    #    procthor_task_dict = json.load(f)
 
     new_scenelist = []
     new_tasklist = []
     for i, (scene, tasks) in enumerate(zip(scenelist, scenetasks)):
-        if "procthor" in scene.lower():
-            assert tasks is None
-            scene_id = scene.replace("procthor", '')
-            assert str(int(scene_id)) == scene_id
-            tasks = procthor_task_dict[scene_id]["tasks"]
-            assert tasks is not None
+        #if "procthor" in scene.lower():
+        #    assert tasks is None
+        #    scene_id = scene.replace("procthor", '')
+        #    assert str(int(scene_id)) == scene_id
+        #    tasks = procthor_task_dict[scene_id]["tasks"]
+        #    assert tasks is not None
 
         new_tasklist.append(tasks)
         new_scenelist.append(scene)
