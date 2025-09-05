@@ -276,6 +276,13 @@ class RuntimeObjectContainer(_Hippo):
         if listed.any():
             return self.object_names[int(np.array(listed.nonzero()[0][0]))]
 
+    def get_obj2id_that_obj1id_is_beside_of(self, obj1_id):
+        obj1_index = self.object_names.index(obj1_id)
+        listed = self.obj_isBesideOf[obj1_index]
+
+        if listed.any():
+            return self.object_names[int(np.array(listed.nonzero()[0][0]))]
+
     def is_obj_inside_anything(self, obj1_id):
         obj1_index = self.object_names.index(obj1_id)
         return self.obj_isInsideOf[obj1_index].any()
