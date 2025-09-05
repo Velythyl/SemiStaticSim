@@ -770,7 +770,7 @@ DIFF OF LAST ACTION:
                         os._exit(0)
                     if self.raise_exception_on_condition_failure:
                         if isinstance(self.raise_exception_on_condition_failure, int):
-                            time.sleep(self.raise_exception_on_condition_failure)
+                            time.sleep(self.raise_exception_on_condition_failure * (1 if sys.platform == "darwin" else 5.0)) # wait longer here because we capture less frames on the cluster (Sorry for jank)
 
                         self.controller.stop()
                         raise e

@@ -1,5 +1,8 @@
 import json
 import os
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+os.environ['JAX_PLATFORMS'] = 'cpu'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 import shutil
 import uuid
 from pathlib import Path
@@ -261,10 +264,19 @@ Output `CANCEL REPLAN` anywhere in your answer to abort and terminate the progra
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg):
+    if "HYDRA_SPOOF" in os.environ and os.environ["HYDRA_SPOOF"] == "toplevel":
+        # cluster hates the way hydra-submitit works, so we just re-run the command in a subprocess
+        print("Detected HYDRA_SPOOF environment variable. Launching bottom-level code now...")
+        from hydra.core.hydra_config import HydraConfig 
+        hc = HydraConfig.get()
+        overrides = hc.overrides.task
+        print(overrides)
+        return run_subproc(f'cd /home/mila/c/charlie.gauthier/Holodeck/cleanplanner && source ../venv/bin/activate && CUDA_VISIBLE_DEVICES=-1 HYDRA_SPOOF="bottomlevel" PYTHONPATH=..:$PYTHONPATH python3 run_full_loop.py {" ".join(overrides)}', shell=True)
+
     cfg = resolve_cfg(cfg)
 
     run_id = uuid.uuid4().hex
-    set_api_key("../hippo/secrets/openai_api_key")
+    set_api_key(cfg.secrets.openai_key)
     for i, scene_id in enumerate(cfg.scene.sceneids):
         curdir = "/".join(__file__.split("/")[:-1])
         cfg.scene.sceneids[i] = f"{curdir}/planscenes/{scene_id}/scene.json"
@@ -286,10 +298,14 @@ if __name__ == "__main__":
     os.makedirs("/tmp/.X11-unix", exist_ok=True)
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    if False:  # True:# and "pop-os" in socket.gethostname():
+    if True:  # True:# and "pop-os" in socket.gethostname():
         # >>>>>>> 65a6c915d8db8271e7200ea220dd14a74d135e1d
         print("Running in Xvfb...")
         run_subproc(f'Xvfb :99 -screen 10 180x180x24', shell=True, immediately_return=True)
         os.environ["DISPLAY"] = f":99"
     print("launching main...")
     main()
+
+"""
+PYTHONPATH=..:$PYTHONPATH python3 run_full_loop.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=180  hydra.launcher.gres=gpu:0 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main-cpu  secrets=secrets_cluster planner.llm="gpt-4-turbo-2024-04-09","gpt-4.1-2025-04-14","gpt-5-2025-08-07" scene=blocks_yel_bla_blu,bomb_laptop
+"""

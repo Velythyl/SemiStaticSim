@@ -19,8 +19,8 @@ def thread_exception_handler(args):
     global FAILURE_STATE
     FAILURE_STATE = True
     print("Condition failure caught by thread handler")
-    if len(vid_frames) > 0:
-        save_video(vid_frames)
+    assert len(vid_frames) > 0
+    save_video(vid_frames)
     os._exit(1)
 
 threading.excepthook = thread_exception_handler
@@ -29,8 +29,14 @@ def save_video(frames, fps=40):
     global vid_frames
     KILL_CAPTURE_THREAD = True
     time.sleep(1)
+    print("Saving video...")
     if not frames:
         raise ValueError("Frame list is empty!")
+    
+    #if sys.platform == "darwin":
+    #    fps = 40
+    #else:
+    #    fps = 100 # really slow on cluster for some reason
 
     output_path = f"{executable_output_dir}/output.mp4"  # noqa
 
@@ -92,7 +98,10 @@ def capture_frames():
             OLD_NUM_ACTIONS = len(simulator.done_actions)
             simulator.humanviewing.incr_action_idx()
         #print("Capturing frames...")
-        time.sleep(0.1)
+        if sys.platform == "darwin":
+            time.sleep(0.1)
+        else:
+            time.sleep(0.5)
         vid_frames.append(simulator.humanviewing.get_augmented_robot_frame(simulator.humanviewing.get_latest_robot_frame()))
 frame_thread = threading.Thread(target=capture_frames)
 frame_thread.daemon = True

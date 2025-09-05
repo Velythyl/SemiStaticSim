@@ -134,6 +134,7 @@ if __name__ == '__main__':
 
 
     import socket
+    from hippo.utils.subproc import run_subproc
     os.environ["XDG_RUNTIME_DIR"] = "/tmp"
     os.makedirs("/tmp/.X11-unix", exist_ok=True)
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
