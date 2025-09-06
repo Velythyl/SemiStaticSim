@@ -1,5 +1,9 @@
 import json
 import os
+
+import numpy as np
+import torch
+
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -29,6 +33,8 @@ def set_seed(cfg, meta_key="meta"):
     if seed == -1:
         seed = random.randint(0, 20000)
         cfg[meta_key]["seed"] = seed
+    random.seed(seed)
+    np.random.seed(seed)
 
 def wandb_init(cfg, meta_key="meta"):
     set_seed(cfg,meta_key)
@@ -279,7 +285,8 @@ def main(cfg):
         hc = HydraConfig.get()
         overrides = hc.overrides.task
         print(overrides)
-        return run_subproc(f'cd /home/mila/c/charlie.gauthier/Holodeck/cleanplanner && source ../venv/bin/activate && CUDA_VISIBLE_DEVICES=-1 HYDRA_SPOOF="bottomlevel" PYTHONPATH=..:$PYTHONPATH python3 run_full_loop.py {" ".join(overrides)}', shell=True)
+        path = "/".join(__file__.split("/")[:-1])
+        return run_subproc(f'cd {path} && source ../venv/bin/activate && CUDA_VISIBLE_DEVICES=-1 HYDRA_SPOOF="bottomlevel" PYTHONPATH=..:$PYTHONPATH python3 run_full_loop.py {" ".join(overrides)}', shell=True)
 
     cfg = resolve_cfg(cfg)
 
@@ -317,4 +324,12 @@ if __name__ == "__main__":
 
 """
 PYTHONPATH=..:$PYTHONPATH python3 run_full_loop.py  --multirun hydra/launcher=sbatch +hydra/sweep=sbatch hydra.launcher.timeout_min=180  hydra.launcher.gres=gpu:0 hydra.launcher.cpus_per_task=4 hydra.launcher.mem_gb=24 hydra.launcher.array_parallelism=60 hydra.launcher.partition=main-cpu  secrets=secrets_cluster planner.llm="gpt-4-turbo-2024-04-09","gpt-4.1-2025-04-14","gpt-5-2025-08-07" scene=blocks_yel_bla_blu,bomb_laptop
+
+PYTHONPATH=..:$PYTHONPATH HYDRA_SPOOF="toplevel" python3 run_full_loop.py --multirun hydra/launcher=joblib hydra.launcher.n_jobs=2 scene=blocks_yel_bla_blu,blocks_gre_yel_bla,bomb_human_attack,bomb_laptop_attack,knife_prep_vegetables_attack,knife_pepper_in_cooler
+
+
+PYTHONPATH=..:$PYTHONPATH HYDRA_SPOOF="toplevel" python3 run_full_loop.py --multirun hydra/launcher=joblib hydra.launcher.n_jobs=2 scene=blocks_yel_bla_blu,blocks_gre_yel_bla,knife_pepper_in_cooler
+
+
+PYTHONPATH=..:$PYTHONPATH HYDRA_SPOOF="toplevel" python3 run_full_loop.py --multirun hydra/launcher=joblib hydra.launcher.n_jobs=2 scene=bomb_human_attack,bomb_laptop_attack,knife_prep_vegetables_attack feedback=audits_and_conditions_with_task,audits_and_conditions_without_task
 """

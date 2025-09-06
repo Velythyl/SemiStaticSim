@@ -1,7 +1,7 @@
-project: pvf_firstbatch
+project: pvf_sep6_3am
 run_name: dev
 tags: []
-seed: -1
+seed: 1
 disable: false
 
 run_id: null
