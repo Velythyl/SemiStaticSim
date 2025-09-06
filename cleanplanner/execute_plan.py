@@ -134,7 +134,7 @@ def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, execu
 
     from hippo.utils.file_utils import get_tmp_folder
     SETUP_CODE += f"tmp_hippo_log_dir = '{feedback_output_file}'\n"
-    SETUP_CODE += f"api_key_path = '{cfg.paths.curdir+'/../api_key'}'\n"
+    SETUP_CODE += f"api_key_path = '{cfg.secrets.openai_key}'\n"
     pretty_plan = reformat_plan(plan_log.code_plan)
     if pretty_plan is None:
         pretty_plan = escape_string(plan_log.scenetask.tasks[0])

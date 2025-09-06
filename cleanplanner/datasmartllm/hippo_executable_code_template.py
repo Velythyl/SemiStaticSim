@@ -17,13 +17,19 @@ vid_frames = []
 FAILURE_STATE = False
 def thread_exception_handler(args):
     global FAILURE_STATE
-    FAILURE_STATE = True
+    if str(args.exc_value) == "Done!":
+        pass
+    else:
+        FAILURE_STATE = True
     print("Condition failure caught by thread handler")
     assert len(vid_frames) > 0
     save_video(vid_frames)
     os._exit(1)
 
+
 threading.excepthook = thread_exception_handler
+
+
 def save_video(frames, fps=40):
     global KILL_CAPTURE_THREAD
     global vid_frames
@@ -32,10 +38,10 @@ def save_video(frames, fps=40):
     print("Saving video...")
     if not frames:
         raise ValueError("Frame list is empty!")
-    
-    #if sys.platform == "darwin":
+
+    # if sys.platform == "darwin":
     #    fps = 40
-    #else:
+    # else:
     #    fps = 100 # really slow on cluster for some reason
 
     output_path = f"{executable_output_dir}/output.mp4"  # noqa
@@ -67,7 +73,6 @@ def save_video(frames, fps=40):
         out.write(frame)
 
     out.release()
-    vid_frames = []
     print(f"Video saved at {output_path}")
     if FAILURE_STATE:
         return os._exit(1)
@@ -110,7 +115,4 @@ frame_thread.start()
 >>> FILL IN PLAN CODE HERE <<<  # noqa
 
 simulator.Done()
-time.sleep(5)
-
-save_video(vid_frames)
-os._exit(0)
+threading.Lock().acquire() # lock self to handle exit in the thread exception handler

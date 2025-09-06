@@ -760,7 +760,9 @@ DIFF OF LAST ACTION:
                         print("Done!")
                         print("Stopping simulation.")
                         self.controller.stop()
-                        #raise Exception("Done!")
+                        class Done(Exception):
+                            pass
+                        raise Done("Done!")
                 except ConditionFailure as e:
                     print("Condition Failure!")
 
