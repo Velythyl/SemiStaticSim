@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from ai2holodeck.constants import THOR_COMMIT_ID, OBJATHOR_ASSETS_DIR
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
+from hippo.simulation.semanticverifllm.llm_semantic_verification import CorrectFinalState
 from hippo.simulation.skillsandconditions.conditions import Condlist
 from hippo.reconstruction.scenedata import HippoObject, dict2xyztuple
 from hippo.utils.file_utils import get_tmp_folder
@@ -325,11 +326,14 @@ class HumanViewing:
                     if self.s.currently_thinking:
                         message = "Judge currently thinking..."
                 else:
-                    exceptionqueue = self.s.exception_queue[-1].args[0]
-                    if not isinstance(exceptionqueue, List):
-                        exceptionqueue = [exceptionqueue]
-                    message = Condlist(exceptionqueue).error_message()
-                    message = "FAILURE: " + " AND ".join(message)
+                    if isinstance(self.s.exception_queue[-1], CorrectFinalState):
+                        message = f"Correct Plan: {self.s.exception_queue[-1].reason}"
+                    else:
+                        exceptionqueue = self.s.exception_queue[-1].args[0]
+                        if not isinstance(exceptionqueue, List):
+                            exceptionqueue = [exceptionqueue]
+                        message = Condlist(exceptionqueue).error_message()
+                        message = "FAILURE: " + " AND ".join(message)
                     print(f"Got system message: {message}")
                     # self.s.exception_queue.pop()
         if message is None or message == "":

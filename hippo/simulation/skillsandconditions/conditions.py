@@ -283,7 +283,7 @@ class Condlist(SelfDataclass, FeedbackMixin):
     def error_message(self):
         errors = []
         for cond in self.badconds:
-            if isinstance(cond, UnsafeAction) or isinstance(cond, UnsafeFinalState):
+            if isinstance(cond, _LLMSemanticVerification):
                 return [cond.error_message()]
             msg = " AND ".join(cond.error_message())
             errors.append(msg)

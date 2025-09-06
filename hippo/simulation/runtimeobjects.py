@@ -34,6 +34,9 @@ class RuntimeObject(_Hippo):
 
     heldBy: str = None
 
+    _force_inside_target: str = None
+    _force_contain_target: str = None
+
 
     def change_posrotsize(self, position, rotation, size) -> Self:
         if isinstance(position, dict):
@@ -79,7 +82,12 @@ class RuntimeObject(_Hippo):
         del dico["metadata"]
         del dico["size"] # todo do we need to keep this ?
         del dico["rotation"] # todo do we need to keep this ?
-        return dico
+        ret = {}
+        for k, v in dico.items():
+            if k.startswith("_"):
+                continue
+            ret[k] = v
+        return ret
 
     @classmethod
     def from_hippoobject(cls, hippoobject):
@@ -244,6 +252,32 @@ class RuntimeObjectContainer(_Hippo):
 
     obj_isOnTopOf: jnp.ndarray
 
+    def force_obj1_inside_obj2(self, obj1, obj2):
+        obj1 = self.objects_map[obj1]
+        obj2 = self.objects_map[obj2]
+
+        obj1 = obj1.replace(_force_inside_target=obj2.id)
+        obj2 = obj2.replace(_force_contain_target=obj1.id)
+
+        ret = copy.deepcopy(self.objects_map)
+        ret[obj1.id] = obj1
+        ret[obj2.id] = obj2
+
+        return self.replace(objects_map=ret).resolve_spatial_attributes()
+
+    def undo_force_obj1_inside_obj2(self, obj1, obj2):
+        obj1 = self.objects_map[obj1]
+        obj2 = self.objects_map[obj2]
+
+        obj1 = obj1.replace(_force_inside_target=None)
+        obj2 = obj2.replace(_force_contain_target=None)
+
+        ret = copy.deepcopy(self.objects_map)
+        ret[obj1.id] = obj1
+        ret[obj2.id] = obj2
+
+        return self.replace(objects_map=ret).resolve_spatial_attributes()
+
     @property
     def obj_hasOnTopOf(self):
         return self.obj_isOnTopOf.T
@@ -377,6 +411,18 @@ class RuntimeObjectContainer(_Hippo):
         sizes = jnp.stack(sizes)
 
         kwargs = resolve_spatial_attributes(positions, sizes)
+
+        for i, k in enumerate(self.object_names):
+            v = self.objects_map[k]
+            try:
+                if v._force_inside_target is not None:
+                    j = self.object_names.index(v._force_inside_target)
+                    kwargs["obj_isInsideOf"] = kwargs["obj_isInsideOf"].at[i,j].set(True)
+                    kwargs["obj_isOnTopOf"] = kwargs["obj_isOnTopOf"].at[i,j].set(False)
+                    kwargs["obj_isBesideOf"] = kwargs["obj_isBesideOf"].at[i,j].set(False)
+                    kwargs["obj_distances"] = kwargs["obj_distances"].at[i,j].set(False)
+            except:
+                pass
 
         #p_patate = positions[22]
         #s_patate = sizes[22]

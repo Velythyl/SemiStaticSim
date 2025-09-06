@@ -12,7 +12,7 @@ from hippo.simulation.ai2thor_metadata_reader import get_object_list_from_contro
     get_object_aabb_from_controller, get_object_from_controller
 from hippo.simulation.runtimeobjects import RuntimeObjectContainer
 from hippo.simulation.semanticverifllm.llm_semantic_verification import LLM_verify_diff, UnsafeAction, \
-    LLM_verify_final_state, _LLMSemanticVerification, UnsafeFinalState, IncorrectTaskDescription
+    LLM_verify_final_state, _LLMSemanticVerification, UnsafeFinalState, IncorrectTaskDescription, CorrectFinalState
 from hippo.simulation.singlefilelog import log_scenedict_to_file
 from hippo.simulation.skillsandconditions.conditions import get_slicing_implement_from_inventory, eval_conditions, \
     maybe_raise_llmcondition_exception, ConditionFailure, LLMVerificationFailure, Condition
@@ -26,6 +26,7 @@ from hippo.simulation.spatialutils.motion_planning import AStar
 from hippo.utils.file_utils import get_next_file_counter
 from hippo.utils.git_diff import git_diff
 
+DELAY_FOR_DISPLAY = 10 if sys.platform == "darwin" else 50
 
 class Simulator:
     def __init__(self, controller, no_robots, objects: RuntimeObjectContainer, full_reachability_graph, llmverifstyle: str = "STEP", kill_sim_on_condition_failure: bool = True, raise_exception_on_condition_failure = True, feedback_cfg=None):    # STEP or HISTORY
@@ -157,6 +158,8 @@ class Simulator:
             new_object_container = sas.pre_container.update_object(target_object_instance)
         elif result is None:
             new_object_container = sas.pre_container #.update_from_ai2thor(sas.get_object_list_from_controller())
+        elif isinstance(result, RuntimeObjectContainer):
+            new_object_container = result
         else:
             raise AssertionError(
                 "Could not recognize the result of the skill method. Make sure that the skill method returns either a skill or None.")
@@ -218,8 +221,8 @@ DIFF BETWEEN FIRST AND FINAL STATES:
         print(llmsemantic.response)
         maybe_raise_llmcondition_exception(llmsemantic) # raises exception if bad plan
         # only gets here if good plan
-        self.exception_queue.append(
-            llmsemantic.reason)  # janky but after final judge has been called the simulation will close so we can safely mess with the queue to display closing messages
+        self.exception_queue.append(llmsemantic)  # janky but after final judge has been called the simulation will close so we can safely mess with the queue to display closing messages
+
 
     def llm_verify_diff_alignment(self):
         log_scenedict_to_file(len(self.object_containers)-1, self.current_object_container.as_llmjson())
@@ -325,6 +328,13 @@ DIFF OF LAST ACTION:
                                                        agentId=act['agent_id'], forceAction=True)
                             if multi_agent_event.metadata['errorMessage'] != "":
                                 raise Exception(multi_agent_event.metadata['errorMessage'])
+
+                            if self.current_object_container.objects_map[act['objectId']]._force_inside_target is not None:
+                                # note: we already check for openness of container in precondition
+                                container = self.pop_object_container()
+                                container = container.undo_force_obj1_inside_obj2(act['objectId'], container.objects_map[act['objectId']]._force_inside_target)
+                                self.append_object_container(container)
+
                             #else:
                             #    self.success_exec += 1
                         self.apply_skill('PickupObject', agent_id=act['agent_id'], target_object_id=act['objectId'], callback=PickupObjectCallback)
@@ -592,6 +602,15 @@ DIFF OF LAST ACTION:
                         self.llm_verify_diff_alignment()
                         self._release_robot(robot=act['agent_id'])
 
+                    elif act['action'] == 'PutObjectIn':
+                        def PutObjectInCallback(sas):
+                            container = sas.pre_container
+                            return container.force_obj1_inside_obj2(sas.auxiliary_object_id, act['objectId'])
+
+                        self.apply_skill('PutObject', agent_id=act['agent_id'], target_object_id=act['objectId'], auxiliary_object_id=act["auxiliaryObjectId"], callback=PutObjectInCallback)
+                        self.llm_verify_diff_alignment()
+                        self._release_robot(robot=act['agent_id'])
+
                     elif act['action'] == 'ToggleObjectOn':
                         #self.total_exec += 1
                         def ToggleObjectOn(sas):
@@ -757,6 +776,7 @@ DIFF OF LAST ACTION:
                     elif act['action'] == 'Done':
                         self.controller.step(action="Done")
                         self.llm_verify_final_state()
+                        time.sleep(DELAY_FOR_DISPLAY)
                         print("Done!")
                         print("Stopping simulation.")
                         self.controller.stop()
@@ -772,7 +792,7 @@ DIFF OF LAST ACTION:
                         os._exit(0)
                     if self.raise_exception_on_condition_failure:
                         if isinstance(self.raise_exception_on_condition_failure, int):
-                            time.sleep(self.raise_exception_on_condition_failure * (1 if sys.platform == "darwin" else 5.0)) # wait longer here because we capture less frames on the cluster (Sorry for jank)
+                            time.sleep(DELAY_FOR_DISPLAY) # wait longer here because we capture less frames on the cluster (Sorry for jank)
 
                         self.controller.stop()
                         raise e
@@ -1123,6 +1143,20 @@ DIFF OF LAST ACTION:
              'auxiliaryObjectId': self._get_object_id(put_obj)})
         self._await_robot(robot)
         self.GoToObject(robot, put_obj)
+        # sometimes, object gets put "on" the target receptacle but more like on a side of the object beyond the robot's
+        # view... this forces the object to be within the robot's POV so that plans can still assume that after putting
+        # an obj on something, the obj is still visible
+        return ret
+
+    def PutObjectIn(self, robot, put_obj, recp):
+        self.LookAtObj(robot, put_obj)
+        self._lock_robot(robot)
+        ret = self.push_action(
+            {'action': 'PutObjectIn', 'objectId': self._get_object_id(recp), 'agent_id': self._get_robot_id(robot),
+             'auxiliaryObjectId': self._get_object_id(put_obj)})
+        self._await_robot(robot)
+        self.PutObject(robot, put_obj, recp)
+        #self.GoToObject(robot, put_obj)
         # sometimes, object gets put "on" the target receptacle but more like on a side of the object beyond the robot's
         # view... this forces the object to be within the robot's POV so that plans can still assume that after putting
         # an obj on something, the obj is still visible

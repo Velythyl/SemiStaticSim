@@ -121,7 +121,7 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
     NUM_INPUT_TOKENS, NUM_OUTPUT_TOKENS = 0, 0
 
     plan_output_dir = get_tmp_folder()
-    plan_log = gen_plan(cfg, scenetask, plan_output_dir, feedback)
+    plan_log, zero_shot_approval = gen_plan(cfg, scenetask, plan_output_dir, feedback)
     print("Generated plan:")
     print(plan_log.code_plan)
     NUM_INPUT_TOKENS += plan_log.num_input_tokens
@@ -153,15 +153,16 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
     with open(f"{local_plan_output_dir}/plan.txt", "w") as f:
         f.write(plan_log.code_plan)
 
-    artifact = wandb.Artifact(f"logs_for_{num_retries}", type="plan report")
-    artifact.add_dir(local_plan_output_dir)
-    wandb.log_artifact(artifact)
+    #artifact = wandb.Artifact(f"logs_for_{num_retries}", type="plan report")
+    #artifact.add_dir(local_plan_output_dir)
+    #wandb.log_artifact(artifact)
 
 
     last_feedback = get_last_plan_feedback(log_file)
     necessary_feedback = get_necessary_plan_feedback(log_file)
 
     WANDB_LOG = {
+        f"execute_{num_retries}/zero_shot_approval": zero_shot_approval,
         f"execute_{num_retries}/video": wandb.Video(f"{local_plan_output_dir}/sim.mp4"),
         f"scene_task/scenename": scene_name,
         f"planning_{num_retries}/max_retries_reached": 0,
@@ -186,6 +187,10 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
         WANDB_LOG[f"execute_{num_retries}/step_judge_said"] = 1
     else:
         WANDB_LOG[f"execute_{num_retries}/step_judge_said"] = 0
+    if get_necessary_plan_feedback(log_file) is not None and last_feedback["Type"] not in ["UnsafeAction", "CorrectFinalState", "IncorrectFinalState", "UnsafeFinalState"]:
+        WANDB_LOG[f"execute_{num_retries}/precondition_failure"] = 1
+    else:
+        WANDB_LOG[f"execute_{num_retries}/precondition_failure"] = 0
 
     if get_necessary_plan_feedback(log_file) is not None:
         WANDB_LOG.update({
@@ -226,6 +231,7 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
         else:
             print("Plan cannot be fixed, aborting.")
 
+
 def ask_if_plan_can_be_fixed(plan_log: PlanLog, necessary_plan_feedback: dict):
     PROMPT = f"""
 We detected that this plan was faulty:
@@ -255,7 +261,7 @@ Final output decision:
 Output `APPROVE REPLAN` anywhere in your answer to replan and try to generate a new plan for that task.
 Output `CANCEL REPLAN` anywhere in your answer to abort and terminate the program.
 """
-    _, response = LLM(PROMPT, "gpt-4")
+    _, response = LLM(PROMPT, "gpt-5-2025-08-07")
 
     if "APPROVE REPLAN" in response:
         return True
@@ -278,6 +284,7 @@ def main(cfg):
     cfg = resolve_cfg(cfg)
 
     run_id = uuid.uuid4().hex
+    cfg.meta.run_id = run_id
     set_api_key(cfg.secrets.openai_key)
     for i, scene_id in enumerate(cfg.scene.sceneids):
         curdir = "/".join(__file__.split("/")[:-1])

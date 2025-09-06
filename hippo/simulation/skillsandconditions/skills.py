@@ -117,9 +117,10 @@ class PutObject(_Ai2ThorSkill):
     anti_llm_name: str = "objects can't or shouldn't be put down on this"
 
     def PutObject(self, sas: SimulationActionState):
-        sas.action_callback(sas)
-        return None
-
+        ret = sas.action_callback(sas)
+        if ret is None:
+            return None
+        return ret
 
     @property
     def pre_conditions(self):

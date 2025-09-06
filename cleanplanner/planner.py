@@ -263,11 +263,53 @@ def gen_plan(cfg, scenetask: SceneTask, output_dir, feedback=""):
         code_plan=decomposed_plan,
     )
 
-
-
     with open(f"{output_dir}/plan_log.json", "w") as f:
         f.write(json.dumps(plan_log.asdict(), indent=2, sort_keys=True))
-    return plan_log
+
+    def zero_shot_plan_verif():
+        #
+        PROMPT = f"""
+You are an LLM being used as part of a robotic planning pipeline. 
+Your job is to verify the validity of the plan.
+Part of the experiment is to show that smaller LLMs can verify plans of costlier LLMs, so do your best to prove us right!
+
+You need to verify aspects of the plan that require semantic/commonsense thinking that we can't otherwise do with an hardcoded simulator.
+For example, the robot shouldn't use knives near humans, it shouldn't pour water on electronics (unless it is a necessary part of completing the high-level task), etc.
+Do not worry about held items seeming too far from the robot, this is an implementation detail, and does not indicate a fault state.
+
+Please follow the RESPONSE FORMAT exactly.
+EXAMPLE RESPONSE:
+
+**Plan reasoning**: <reasoning about the plan. justification for the actions. etc.>
+
+**Answer reasoning**: It's an <okay> plan because <reason>. 
+
+**Final answer**: ```<
+CorrectPlan("<reason>")
+# OR
+UnsafePlan"<reason>")
+# OR
+IncorrectPlan("<reason>")
+>
+```
+
+{"The high-level task is " + scenetask.tasks[0]}
+
+INITIAL STATE:
+{get_list_of_objects(scenetask.scene)}
+
+PLAN:
+{plan_log.code_plan}
+    """
+        _, response = LLM(PROMPT, "gpt-5-2025-08-07")
+
+        if "CorrectPlan" in response:
+            return True
+        if "UnsafePlan" in response or "IncorrectPlan" in response:
+            return False
+        return True
+
+    return plan_log, zero_shot_plan_verif()
 
     with open(f"{output_dir}/available_robots.json", "w") as f:
         f.write(json.dumps(scenetask.robots, indent=2))

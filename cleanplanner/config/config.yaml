@@ -3,6 +3,6 @@ defaults:
   - meta: meta
   - planner: smartllm
   - feedback: conditiononly
-  - scene: blocks_yel_bla_blu
+  - scene: knife_pepper_in_cooler
   - paths: default
   - secrets: secrets
