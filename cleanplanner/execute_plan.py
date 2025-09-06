@@ -11,6 +11,25 @@ from cleanplanner.parse_scene import SceneTask, PlanLog
 from hippo.ai2thor_hippo_controller import get_list_of_objects
 from hippo.utils.subproc import run_subproc
 from llmqueries.llm import LLM
+import ast
+
+def detect_uncalled_function(code: str):
+    tree = ast.parse(code)
+
+    # find defined functions
+    func_defs = [node.name for node in tree.body if isinstance(node, ast.FunctionDef)]
+
+    # find called functions at top level
+    func_calls = []
+    for node in tree.body:
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            if isinstance(node.value.func, ast.Name):
+                func_calls.append(node.value.func.id)
+
+    # functions that are defined but never called at top level
+    uncalled = [f for f in func_defs if f not in func_calls]
+
+    return uncalled
 
 
 def fix_indentation(code: str) -> str:
@@ -140,6 +159,7 @@ def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, execu
         pretty_plan = escape_string(plan_log.scenetask.tasks[0])
     SETUP_CODE += f"plan_pretty_print = {pretty_plan}\n"
     SETUP_CODE += f"executable_output_dir = {escape_string(executable_output_dir)}\n"
+    SETUP_CODE = "\n".join(["    "+line for line in SETUP_CODE.splitlines()])
     SETUP_CODE = f"""
 # >>> SETUP CODE START <<<
 {SETUP_CODE}
@@ -161,9 +181,16 @@ def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, execu
         skill = skill.split(" ")[0]
         PLAN_CODE = PLAN_CODE.replace(f"{skill}(", f"simulator.{skill}(robots[0],")
 
+    maybe_uncalled = detect_uncalled_function(PLAN_CODE)
+    if len(maybe_uncalled) > 0:
+        print("Warning: detected uncalled functions in plan code:", maybe_uncalled)
+        print("Appending a call to the first one at the end of the plan code.")
+        PLAN_CODE += f"\n{maybe_uncalled[0]}()"
+    
+    PLAN_CODE += f"\nsimulator.feedback_cfg = json.loads('{json.dumps(OmegaConf.to_container(cfg.feedback, resolve=True))}')\n"
+    PLAN_CODE = "\n".join(["    "+line for line in PLAN_CODE.splitlines()])
     PLAN_CODE = f"""
 # >>> PLAN CODE START <<<
-simulator.feedback_cfg = json.loads('{json.dumps(OmegaConf.to_container(cfg.feedback, resolve=True))}')
 {PLAN_CODE}
 # >>> PLAN CODE END <<<
 """.strip()

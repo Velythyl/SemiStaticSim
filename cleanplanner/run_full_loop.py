@@ -122,6 +122,8 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
 
     plan_output_dir = get_tmp_folder()
     plan_log = gen_plan(cfg, scenetask, plan_output_dir, feedback)
+    print("Generated plan:")
+    print(plan_log.code_plan)
     NUM_INPUT_TOKENS += plan_log.num_input_tokens
     NUM_OUTPUT_TOKENS += plan_log.num_output_tokens
 

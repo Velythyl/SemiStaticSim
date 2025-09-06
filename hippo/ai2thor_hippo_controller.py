@@ -335,7 +335,7 @@ def resolve_scene_id(floor_name):
         scene = json.load(f)
     return scene
 
-def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False, humanviewing_params={}, renderInstanceSegmentation=False, width=1250, height=1250):
+def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_controller_no_setup=False, humanviewing_params={}, renderInstanceSegmentation=False, width=1250, height=1250, GRID_SIZE=0.25):
     os.environ["JAX_PLATFORM_NAME"] = "cpu"
     import jax
     jax.config.update('jax_platform_name', "cpu")
@@ -345,7 +345,7 @@ def get_sim(floor_no, just_controller=False, just_runtime_container=False, just_
 
     assert sum(list(map(int, (just_controller, just_runtime_container, just_controller_no_setup)))) <= 1
 
-    GRID_SIZE = 0.25
+    GRID_SIZE = GRID_SIZE
     c, runtime_container = get_hippo_controller(scene, get_runtime_container=True, width=width, height=height,
                                                 snapGrid=False, snapToGrid=False, visibilityDistance=1, fieldOfView=90, gridSize=GRID_SIZE,
                                                 rotateStepDegrees=20)
