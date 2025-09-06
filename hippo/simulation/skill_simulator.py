@@ -873,6 +873,9 @@ DIFF OF LAST ACTION:
             if match is not None:
                 sw_obj_id = obj
                 break  # find the first instance
+        
+        if obj == "robot1" or obj == "robot0":
+            return ""
 
         return sw_obj_id
 
@@ -914,14 +917,13 @@ DIFF OF LAST ACTION:
             return self.CURRENT_ROBOT_POSITION_FROM_LAST_GOTO
 
         dest_obj_id = self._get_object_id(dest_obj)
-        if not DISABLE_MOVE:
-            self.push_action(
-                {
-                    'action': 'GoToObject_PreConditionCheck',
-                    'agent_id': self._get_robot_id(robot),
-                    'objectId': dest_obj_id
-                }
-            )
+        self.push_action(
+            {
+                'action': 'GoToObject_PreConditionCheck',
+                'agent_id': self._get_robot_id(robot),
+                'objectId': dest_obj_id
+            }
+        )
 
         dest_obj_pos = get_object_position_from_controller(self.controller, dest_obj_id)
         dest_obj_size = get_object_size_from_controller(self.controller, dest_obj_id)

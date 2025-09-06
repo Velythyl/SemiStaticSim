@@ -91,6 +91,7 @@ def run_subproc(cmd, callback=None, shell=False, timeout=None, timeout_cleanup_f
 
     def callbacker():
         while True:
+            time.sleep(1)
             line = callback_queue.get()
             if line is None:
                 time.sleep(0.01)
