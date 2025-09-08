@@ -159,6 +159,7 @@ def compile_aithor_exec_file(cfg, plan_log: PlanLog, feedback_output_file, execu
         pretty_plan = escape_string(plan_log.scenetask.tasks[0])
     SETUP_CODE += f"plan_pretty_print = {pretty_plan}\n"
     SETUP_CODE += f"executable_output_dir = {escape_string(executable_output_dir)}\n"
+    SETUP_CODE += f"JUDGE_LLM_FROM_CFG = '{cfg.feedback.judge_llm}'\n"
     SETUP_CODE = "\n".join(["    "+line for line in SETUP_CODE.splitlines()])
     SETUP_CODE = f"""
 # >>> SETUP CODE START <<<

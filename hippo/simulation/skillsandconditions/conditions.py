@@ -246,7 +246,7 @@ class CONDITION_SlicingImplementInInventory(Condition):
     prev: _Condition = CONDITION_AttributeEnabled()
 
     def _error_message(self):
-        return f"The robot does not have access to a slicing implement."
+        return f"The robot does not have a knife/slicing tool in hand."
 
     def call(self, sas: SimulationActionState) -> bool:
         tool = get_slicing_implement_from_inventory(sas)

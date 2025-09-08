@@ -1,5 +1,7 @@
+import copy
 import json
 import os
+import time
 
 import numpy as np
 import torch
@@ -22,22 +24,23 @@ from omegaconf import omegaconf, OmegaConf
 from cleanplanner.execute_plan import compile_aithor_exec_file, run_executable_plan
 from cleanplanner.parse_scene import parse_floorplan, SceneTask, PlanLog
 from cleanplanner.planner import gen_plan
-from hippo.simulation.singlefilelog import get_last_plan_feedback
+from hippo.simulation.singlefilelog import get_last_plan_feedback, get_last_msg_type_finaljudgesaid_mapping, \
+    get_last_msg_type_stepjudgesaid_mapping, get_condition_id_mapping, get_last_msg_type_tick_mapping
 from hippo.utils.file_utils import get_tmp_folder, get_tmp_file
 from hippo.utils.subproc import run_subproc
 from llmqueries.llm import set_api_key, LLM
 
 
-def set_seed(cfg, meta_key="meta"):
+def resolve_seed(cfg, meta_key="meta"):
     seed = cfg[meta_key]["seed"]
     if seed == -1:
         seed = random.randint(0, 20000)
         cfg[meta_key]["seed"] = seed
-    random.seed(seed)
-    np.random.seed(seed)
+    #random.seed(seed)
+    #np.random.seed(seed)
 
 def wandb_init(cfg, meta_key="meta"):
-    set_seed(cfg,meta_key)
+    resolve_seed(cfg, meta_key)
 
     run = wandb.init(
         # entity=cfg.wandb.entity,
@@ -104,6 +107,7 @@ def resolve_cfg(cfg):
 
     return cfg
 
+MAX_NUM_RETRIES = 5
 def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str = None, run_id:str = "blank_run_id", carry_table=None):
     print("run_id", run_id)
 
@@ -120,7 +124,7 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
         wandb.log(WANDB_LOG)
 
     scene_name = OmegaConf.to_container(HydraConfig.get().runtime.choices)["scene"]
-    if num_retries > 4:
+    if num_retries > MAX_NUM_RETRIES:
         log_func({f"planning_{num_retries}/max_retries_reached": 1, f"scene_task/scenename": scene_name,})
         return False
 
@@ -152,8 +156,10 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
     with open(f"{local_plan_output_dir}/plan_log.json", "w") as f:
         json.dump(plan_log.asdict(), f, indent=4)
     shutil.copy(f"{executable_output_dir}/output.mp4", f"{local_plan_output_dir}/sim.mp4")
-    with open(f"{local_plan_output_dir}/was_success.txt", "w") as f:
-        f.write(f"{is_plan_success(log_file)}")
+    with open(f"{local_plan_output_dir}/was_success_according_to_big_LLM.txt", "w") as f:
+        f.write(f"{is_plan_success(according_to_big_llm=True, _filepath=log_file)}")
+    with open(f"{local_plan_output_dir}/was_success_according_to_small_LLM.txt", "w") as f:
+        f.write(f"{is_plan_success(according_to_big_llm=False, _filepath=log_file)}")
     with open(f"{local_plan_output_dir}/necessary_plan_feedback.txt", "w") as f:
         f.write(f"{get_necessary_plan_feedback(log_file)}")
     with open(f"{local_plan_output_dir}/plan.txt", "w") as f:
@@ -168,12 +174,17 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
     necessary_feedback = get_necessary_plan_feedback(log_file)
 
     WANDB_LOG = {
-        f"execute_{num_retries}/zero_shot_approval": zero_shot_approval,
+        f"planning_{num_retries}/zero_shot_approval": int(zero_shot_approval),
         f"execute_{num_retries}/video": wandb.Video(f"{local_plan_output_dir}/sim.mp4"),
         f"scene_task/scenename": scene_name,
         f"planning_{num_retries}/max_retries_reached": 0,
         f"planning_{num_retries}/num_retries": num_retries,
-        f"execute_{num_retries}/success": int(is_plan_success(log_file)),
+        f"execute_{num_retries}/success_according_to_big_llm": int(is_plan_success(according_to_big_llm=True, _filepath=log_file)),
+        f"execute_{num_retries}/success_according_to_small_llm": int(
+            is_plan_success(according_to_big_llm=False, _filepath=log_file)),
+        f"execute_{num_retries}/success_small_big_agreement": int(int(
+            is_plan_success(according_to_big_llm=True, _filepath=log_file)) == int(
+            is_plan_success(according_to_big_llm=False, _filepath=log_file))),
         f"planning_{num_retries}/input_tokens_this_round": plan_log.num_input_tokens,
         f"planning_{num_retries}/output_tokens_this_round": plan_log.num_output_tokens,
         f"planning_{num_retries}/total_input_tokens": NUM_INPUT_TOKENS,
@@ -182,21 +193,32 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
         f"execute_{num_retries}/last_feedback": get_last_plan_feedback(log_file),
         f"execute_{num_retries}/last_feedback_type": get_last_plan_feedback(log_file)["Type"],
         f"execute_{num_retries}/last_feedback_message": get_last_plan_feedback(log_file)["Error message"],
-        f"execute_{num_retries}/full_log_file": Path(log_file).read_text()
+        f"execute_{num_retries}/full_log_file": Path(log_file).read_text(),
     }
 
-    if last_feedback["Type"] in ["CorrectFinalState", "IncorrectFinalState", "UnsafeFinalState"]:
-        WANDB_LOG[f"execute_{num_retries}/final_judge_said"] = ["CorrectFinalState", "IncorrectFinalState", "UnsafeFinalState"].index(last_feedback["Type"])
+    if not int(
+            is_plan_success(according_to_big_llm=True, _filepath=log_file)) == int(
+            is_plan_success(according_to_big_llm=False, _filepath=log_file)):
+        print("SMALL AND BIG LLM DISAGREEMENT")
+
+    if last_feedback["Type"] in get_last_msg_type_finaljudgesaid_mapping():
+        WANDB_LOG[f"execute_{num_retries}/final_judge_said"] = get_last_msg_type_finaljudgesaid_mapping()[last_feedback["Type"]]
     else:
         WANDB_LOG[f"execute_{num_retries}/final_judge_said"] = -1
-    if last_feedback["Type"] in ["UnsafeAction"]:
-        WANDB_LOG[f"execute_{num_retries}/step_judge_said"] = 1
+
+    if last_feedback["Type"] in get_last_msg_type_stepjudgesaid_mapping():
+        WANDB_LOG[f"execute_{num_retries}/step_judge_said"] = get_last_msg_type_stepjudgesaid_mapping()[last_feedback["Type"]]
     else:
-        WANDB_LOG[f"execute_{num_retries}/step_judge_said"] = 0
-    if get_necessary_plan_feedback(log_file) is not None and last_feedback["Type"] not in ["UnsafeAction", "CorrectFinalState", "IncorrectFinalState", "UnsafeFinalState"]:
-        WANDB_LOG[f"execute_{num_retries}/precondition_failure"] = 1
-    else:
+        WANDB_LOG[f"execute_{num_retries}/step_judge_said"] = -1
+
+    if get_necessary_plan_feedback(log_file) is not None and last_feedback["Type"] in get_condition_id_mapping():
         WANDB_LOG[f"execute_{num_retries}/precondition_failure"] = 0
+        WANDB_LOG[f"execute_{num_retries}/precondition_type"] = get_condition_id_mapping()[last_feedback["Type"]]
+    else:
+        WANDB_LOG[f"execute_{num_retries}/precondition_failure"] = -1
+        WANDB_LOG[f"execute_{num_retries}/precondition_type"] = -1
+
+    WANDB_LOG[f"execute/flowchart"] = get_last_msg_type_tick_mapping()[last_feedback["Type"]]
 
     if get_necessary_plan_feedback(log_file) is not None:
         WANDB_LOG.update({
@@ -220,14 +242,41 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
     WANDB_LOG[f"report_table_{num_retries}/table"] = table
     WANDB_LOG[f"report_table_{num_retries}/carry_table"] = table
 
-    IS_SUCCESS = is_plan_success(log_file)
+    IS_SUCCESS = is_plan_success(according_to_big_llm=False, _filepath=log_file)
     if IS_SUCCESS:
         WANDB_LOG.update({f"execute_{num_retries}/judge_says_plan_can_be_fixed_{num_retries}": -1})
 
         log_func(WANDB_LOG)
+
+        for i in range(num_retries+1, MAX_NUM_RETRIES, 1):
+            def spoof_log(WANDB_LOG):
+                def dup(k):
+                    key, subkey = k.split("/")
+                    key = key[:-2]
+                    key = f"{key}_{i}/{subkey}"
+                    return key
+                ret = {}
+                for k, v in WANDB_LOG.items():
+                    if k == "execute/flowchart":
+                        ret[k] = v
+                        continue
+
+                    if not f"_{i-1}/" in k:
+                        continue
+                    if k.endswith(f"/video"):
+                        continue
+
+                    else:
+                        ret[dup(k)] = v #copy.deepcopy(v)
+                return ret
+            WANDB_LOG = spoof_log(WANDB_LOG)
+            time.sleep(1)
+            log_func(WANDB_LOG)
+
+
         return True
     else:
-        plan_can_be_fixed = ask_if_plan_can_be_fixed(plan_log, get_necessary_plan_feedback(log_file))
+        plan_can_be_fixed = ask_if_plan_can_be_fixed(cfg, plan_log, get_necessary_plan_feedback(log_file))
         WANDB_LOG.update({f"execute_{num_retries}/judge_says_plan_can_be_fixed_{num_retries}": plan_can_be_fixed})
         log_func(WANDB_LOG)
         if plan_can_be_fixed:
@@ -238,7 +287,7 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
             print("Plan cannot be fixed, aborting.")
 
 
-def ask_if_plan_can_be_fixed(plan_log: PlanLog, necessary_plan_feedback: dict):
+def ask_if_plan_can_be_fixed(cfg, plan_log: PlanLog, necessary_plan_feedback: dict):
     PROMPT = f"""
 We detected that this plan was faulty:
 
@@ -267,7 +316,7 @@ Final output decision:
 Output `APPROVE REPLAN` anywhere in your answer to replan and try to generate a new plan for that task.
 Output `CANCEL REPLAN` anywhere in your answer to abort and terminate the program.
 """
-    _, response = LLM(PROMPT, "gpt-5-2025-08-07")
+    _, response = LLM(PROMPT, cfg.feedback.judge_llm)
 
     if "APPROVE REPLAN" in response:
         return True

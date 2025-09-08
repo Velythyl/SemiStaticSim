@@ -93,6 +93,8 @@ try:
     simulator.humanviewing.set_plan(plan_pretty_print)
     simulator.kill_sim_on_condition_failure = False # adds a 10 sec delay
     simulator.raise_exception_on_condition_failure = 10
+    simulator.judge_llm = JUDGE_LLM_FROM_CFG
+    print("Using judge LLM:", simulator.judge_llm)
     KILL_CAPTURE_THREAD = False
     OLD_NUM_ACTIONS = len(simulator.done_actions)
     simulator.humanviewing.incr_action_idx()

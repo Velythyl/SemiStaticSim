@@ -6,6 +6,7 @@ from typing import Union, List
 import jax.numpy as jnp
 import numpy as np
 
+
 def todict(obj, classkey=None):
     if isinstance(obj, dict):
         data = {}
@@ -101,10 +102,14 @@ def is_obj_FeedbackMixin(obj):
 def is_obj_scenedict(obj):
     return "IS_SCENEDICT" in obj and "scenedict_index" in obj
 
-def is_plan_success(_filepath = None):
-    for obj in iterator(_filepath, reverse=True):
+def is_plan_success(according_to_big_llm=False, _filepath = None):
+    TRIPPED_ONCE = not according_to_big_llm # if we want according to big, then tripped once is False, so we need to ignore the small llm's answer
+    for i, obj in enumerate(iterator(_filepath, reverse=True)):
         if is_obj_FeedbackMixin(obj) and (obj["Type"] in ["CorrectFinalState", "IncorrectFinalState", "UnsafeFinalState"]):
-            return obj["Type"] == "CorrectFinalState"
+            if TRIPPED_ONCE:
+                return obj["Type"] == "CorrectFinalState"
+            else:
+                TRIPPED_ONCE = True
     return False
 
 def get_necessary_plan_feedback(_filepath = None):
@@ -127,3 +132,48 @@ def get_scenedict_of_id(id, _filepath = None):
         if is_obj_scenedict(obj) and obj["scenedict_index"] == id:
             return obj
     raise AssertionError("Could not find scene dict of id {id}")
+
+def get_condition_id_mapping():
+    from hippo.simulation.skillsandconditions.conditions import _Condition
+    """
+    Returns a dictionary mapping condition class names to their numeric IDs.
+    """
+    def get_all_subclasses(cls):
+        """Get all subclasses recursively"""
+        return set(cls.__subclasses__()).union(
+            [s for c in cls.__subclasses__() for s in get_all_subclasses(c)]
+        )
+
+    # Get all subclasses, sort by name, and create mapping
+    all_conditions = sorted(get_all_subclasses(_Condition), key=lambda x: x.__name__)
+    return {condition_class.__name__: idx for idx, condition_class in enumerate(all_conditions)}
+
+def get_last_msg_type_mapping():
+    conditions = get_condition_id_mapping()
+    for llmsemantic in ["UnsafeAction", "CorrectFinalState", "IncorrectFinalState", "UnsafeFinalState"]:
+        conditions[llmsemantic] = len(conditions)
+    return conditions
+
+def get_last_msg_type_tick_mapping():
+    conditions = {k: 1 for k,_ in get_last_msg_type_mapping().items()}
+    conditions["UnsafeAction"] = 2
+    conditions["UnsafeFinalState"] = 3
+    conditions["IncorrectFinalState"] = 4
+    conditions["CorrectFinalState"] = 5
+    return conditions
+
+def get_last_msg_type_finaljudgesaid_mapping():
+    return {
+        "CorrectFinalState": 0, "IncorrectFinalState":1, "UnsafeFinalState":2
+    }
+
+def get_last_msg_type_stepjudgesaid_mapping():
+    return {"UnsafeAction":0}
+
+
+def get_last_msg_llmsemantic_mapping():
+    conditions = get_last_msg_type_mapping()
+
+
+if __name__ == "__main__":
+    print(get_last_msg_type_tick_mapping())

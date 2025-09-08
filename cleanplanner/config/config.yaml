@@ -3,6 +3,6 @@ defaults:
   - meta: meta
   - planner: smartllm
   - feedback: conditiononly
-  - scene: knife_pepper_in_cooler
+  - scene: knife_prep_vegetables
   - paths: default
   - secrets: secrets

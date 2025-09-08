@@ -6,7 +6,7 @@ from hippo.simulation.singlefilelog import FeedbackMixin
 from hippo.utils.selfdataclass import SelfDataclass
 from llmqueries.llm import LLM
 
-JUDGE_LLM = "gpt-5-2025-08-07"
+#JUDGE_LLM = "gpt-5-2025-08-07"
 
 def get_prompt_for_diff_verification(task_description, diff):
     PROMPT = f"""
@@ -143,12 +143,12 @@ def parse_response_for_diff_verif(task_description, diff, llm_reply: str):
             return None
     return None  # If no valid function call is found
 
-def LLM_verify_diff(task_description, diff, pure_diff, pure_past_actions, skill_prettyprint) -> _LLMSemanticVerification:
+def LLM_verify_diff(judge_llm, task_description, diff, pure_diff, pure_past_actions, skill_prettyprint) -> _LLMSemanticVerification:
     #_, response = LLM(prompt, "gpt-3.5-turbo", max_tokens=5000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     prompt = get_prompt_for_diff_verification(task_description, diff)
 
-    _, response = LLM(prompt, JUDGE_LLM, max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, judge_llm, max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     parsed = parse_response_for_diff_verif(task_description, diff, response).replace(prompt=prompt, pure_diff=pure_diff, pure_past_actions=pure_past_actions, skill_prettyprint=skill_prettyprint)
     if parsed is not None:
@@ -166,7 +166,7 @@ def LLM_verify_diff(task_description, diff, pure_diff, pure_past_actions, skill_
     ---
     """.strip()
 
-    _, response = LLM(prompt, JUDGE_LLM, max_tokens=500, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, judge_llm, max_tokens=500, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     parsed = parse_response_for_diff_verif(task_description, diff, response, prompt).replace(prompt=prompt, pure_diff=pure_diff, pure_past_actions=pure_past_actions, skill_prettyprint=skill_prettyprint)
     if parsed is not None:
@@ -196,7 +196,7 @@ RESPONSE FORMAT:
 
 **Plan reasoning**: <reasoning about the changes. and the actions taken thus far. predict what other actions might come next, etc. justification for them. etc.>
 
-**Answer reasoning**: <reasoning about the safety of the plan. 
+**Answer reasoning**: <reasoning about the safety and correctness of the overall plan. 
 Remember that all changes in the diff are the result of the plan, thus lines of the diff marked with a `+` are only true AFTER the plan is complete.>
 
 **Final answer**: ```<
@@ -262,12 +262,12 @@ def parse_response_for_finaldiff_verif(task_description, diff, llm_reply: str):
             return None
     return None  # If no valid function call is found
 
-def LLM_verify_final_state(task_description, final_diff, pure_diff, pure_past_actions) -> _LLMSemanticVerification:
+def LLM_verify_final_state(judge_llm, task_description, final_diff, pure_diff, pure_past_actions) -> _LLMSemanticVerification:
     # _, response = LLM(prompt, "gpt-3.5-turbo", max_tokens=5000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     prompt = get_prompt_for_final_state_verification(task_description, final_diff)
 
-    _, response = LLM(prompt, "gpt-5-2025-08-07", max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, judge_llm, max_tokens=1000, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     parsed = parse_response_for_finaldiff_verif(task_description, final_diff, response).replace(prompt=prompt, pure_diff=pure_diff, pure_past_actions=pure_past_actions)
     if parsed is not None:
@@ -285,7 +285,7 @@ def LLM_verify_final_state(task_description, final_diff, pure_diff, pure_past_ac
         ---
         """.strip()
 
-    _, response = LLM(prompt, "gpt-5-2025-08-07", max_tokens=500, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
+    _, response = LLM(prompt, judge_llm, max_tokens=500, temperature=0, stop=None, logprobs=1, frequency_penalty=0)
 
     parsed = parse_response_for_diff_verif(task_description, final_diff, response).replace(prompt=prompt, pure_diff=pure_diff, pure_past_actions=pure_past_actions)
     if parsed is not None:

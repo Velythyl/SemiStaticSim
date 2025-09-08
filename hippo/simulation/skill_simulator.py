@@ -61,6 +61,8 @@ class Simulator:
         self.feedback_cfg = feedback_cfg # contains enabled, conditions, audits, and include_task_description_in_audit_prompt
         self.currently_thinking = False
 
+        self.judge_llm = "gpt-5-2025-08-07"
+
     @property
     def last_action(self):
         return self.done_actions[-1]
@@ -196,7 +198,7 @@ class Simulator:
         return sas
 
 
-    def llm_verify_final_state(self):
+    def llm_verify_final_state(self, override_judge_llm=None):
         first_state = self.object_containers[0].as_llmjson()
         last_state = self.current_object_container.as_llmjson()
 
@@ -216,12 +218,13 @@ DIFF BETWEEN FIRST AND FINAL STATES:
         print(diff)
         print("Querying now...")
         self.currently_thinking = True
-        llmsemantic = LLM_verify_final_state(self.task_description, diff, pure_diff, action_history)    # always have task desc for final state verif otherwise cant verify if plan was ok
+        llmsemantic = LLM_verify_final_state(self.judge_llm if override_judge_llm is None or (not override_judge_llm) else override_judge_llm, self.task_description, diff, pure_diff, action_history)    # always have task desc for final state verif otherwise cant verify if plan was ok
         self.currently_thinking = False
         print(llmsemantic.response)
         maybe_raise_llmcondition_exception(llmsemantic) # raises exception if bad plan
         # only gets here if good plan
-        self.exception_queue.append(llmsemantic)  # janky but after final judge has been called the simulation will close so we can safely mess with the queue to display closing messages
+        if override_judge_llm is None or (not override_judge_llm):
+            self.exception_queue.append(llmsemantic)  # janky but after final judge has been called the simulation will close so we can safely mess with the queue to display closing messages
 
 
     def llm_verify_diff_alignment(self):
@@ -246,7 +249,7 @@ DIFF OF LAST ACTION:
         print(diff)
         print("Querying now...")
         self.currently_thinking = True
-        llmsemantic = LLM_verify_diff(self.task_description if self.feedback_cfg["include_task_description_in_audit_prompt"] else None, diff, pure_diff, action_history, self.done_actions[-1])    # this assumes we're synced with the done actions, which SHOULD be true. but todo verify this is true for multi agent
+        llmsemantic = LLM_verify_diff(self.judge_llm, self.task_description if self.feedback_cfg["include_task_description_in_audit_prompt"] else None, diff, pure_diff, action_history, self.done_actions[-1])    # this assumes we're synced with the done actions, which SHOULD be true. but todo verify this is true for multi agent
         self.currently_thinking = False
         maybe_raise_llmcondition_exception(llmsemantic)
 
@@ -775,6 +778,12 @@ DIFF OF LAST ACTION:
 
                     elif act['action'] == 'Done':
                         self.controller.step(action="Done")
+                        try:    # just for logging purposes. The overriding llm is for planning purposes.
+                            self.llm_verify_final_state("gpt-5-2025-08-07")
+                        except:
+                            pass
+                        # always verify with strongest LLM first, but dont raise exceptions, just log
+                        # note: if judge_llm wasnt overrid, then the cache will save us from calling LLM twice
                         self.llm_verify_final_state()
                         time.sleep(DELAY_FOR_DISPLAY)
                         print("Done!")

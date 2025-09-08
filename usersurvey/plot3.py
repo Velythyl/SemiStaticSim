@@ -2,10 +2,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from scipy import stats  # Import scipy for T-test
+from scipy import stats
+from scipy.stats import f_oneway
+import warnings
 
-# Load CSV (your .xslt export saved as CSV)
-df = pd.read_csv("Full text export Robot Planning Survey Release(2).xlsx - All Data.csv")
+warnings.filterwarnings('ignore')
+
+# Load CSV
+df = pd.read_csv("Full text export Robot Planning Survey Release.xlsx - All Data.csv")
 
 # Identify all AB Test columns and their paired question columns
 cols = df.columns
@@ -41,7 +45,7 @@ def filter_robotics(df, robotics=True):
 ANSWER_ORDER = ["Success", "Failure", "I don't know", "I don't understand the plan or the objects in the scene"]
 
 
-# Calculate accuracy for a given test and return individual responses for T-test
+# Calculate accuracy for a given test and return individual responses
 def calculate_accuracy(df, ab_pair, test_idx):
     ab_col, q_col = ab_pair
     subset = df[[ab_col, q_col]].dropna()
@@ -76,7 +80,128 @@ def perform_t_test(individual_responses):
         return None, None
 
 
-# Plot with AB hue and percentages
+# Perform ANOVA test for multiple groups
+def perform_anova_test(groups_data):
+    """
+    Perform one-way ANOVA test for multiple groups
+    groups_data: dictionary with group names as keys and list of accuracy values as values
+    """
+    valid_groups = {name: data for name, data in groups_data.items() if len(data) >= 2}
+
+    if len(valid_groups) >= 2:
+        f_stat, p_value = f_oneway(*valid_groups.values())
+        return f_stat, p_value
+    else:
+        return None, None
+
+
+# Function to collect accuracy data for ANOVA
+def collect_accuracy_data_for_anova(df, test_indices, group_name):
+    """
+    Collect accuracy data for specified tests to use in ANOVA
+    """
+    accuracy_data = []
+
+    for test_idx in test_indices:
+        ab_col, q_col = ab_pairs[test_idx - 1]
+        subset = df[[ab_col, q_col]].dropna()
+        correct_answer = true_answers[test_idx]
+
+        group_data = subset[subset[ab_col] == group_name]
+        if len(group_data) > 0:
+            # Convert to binary accuracy (1 for correct, 0 for incorrect)
+            accuracy_binary = (group_data[q_col] == correct_answer).astype(int).tolist()
+            accuracy_data.extend(accuracy_binary)
+
+    return accuracy_data
+
+
+# Function to perform ANOVA comparison between different test groups
+def perform_anova_comparison(df, group_definitions):
+    """
+    Perform ANOVA comparison between different groups of tests
+    group_definitions: dictionary with group names as keys and test indices as values
+    Example: {"Group1": [1, 3], "Group2": [2, 4, 5]}
+    """
+    groups_data = {}
+
+    for group_name, test_indices in group_definitions.items():
+        # Collect data for both A and B groups
+        groups_data[f"A: {group_name}"] = collect_accuracy_data_for_anova(df, test_indices, "A:")
+        groups_data[f"B: {group_name}"] = collect_accuracy_data_for_anova(df, test_indices, "B:")
+
+    # Perform ANOVA
+    f_stat, p_value = perform_anova_test(groups_data)
+
+    return groups_data, f_stat, p_value
+
+
+# Plot with ANOVA results
+def plot_with_anova(df, group_definitions, title):
+    """
+    Create a plot showing accuracy for different groups with ANOVA results
+    """
+    # Collect data and perform ANOVA
+    groups_data, f_stat, p_value = perform_anova_comparison(df, group_definitions)
+
+    # Calculate mean accuracy for each group
+    group_means = {}
+    group_counts = {}
+    for group_name, data in groups_data.items():
+        group_means[group_name] = np.mean(data) * 100 if len(data) > 0 else 0
+        group_counts[group_name] = len(data)
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Plot bars
+    groups = list(group_means.keys())
+    means = [group_means[group] for group in groups]
+    colors = ['skyblue' if 'A:' in group else 'lightcoral' for group in groups]
+
+    bars = ax.bar(groups, means, color=colors, alpha=0.7)
+
+    # Add value labels on bars
+    for i, (bar, mean, count) in enumerate(zip(bars, means, group_counts.values())):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+                f'{mean:.1f}% (n={count})', ha='center', va='bottom', fontweight='bold')
+
+    # Customize plot
+    ax.set_ylabel('Accuracy (%)')
+    ax.set_title(f'{title}\nANOVA F-statistic: {f_stat:.3f}, p-value: {p_value:.3f}' if f_stat is not None else title)
+    ax.set_ylim(0, 100)
+    ax.grid(axis='y', alpha=0.3)
+
+    # Add horizontal line at 50% for reference
+    ax.axhline(y=50, color='gray', linestyle='--', alpha=0.7)
+
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+
+    plt.tight_layout()
+    plt.show()
+
+    # Print detailed ANOVA results
+    print(f"ANOVA Results for {title}:")
+    if f_stat is not None and p_value is not None:
+        print(f"  F-statistic: {f_stat:.3f}")
+        print(f"  p-value: {p_value:.3f}")
+        if p_value < 0.05:
+            print("  * Statistically significant difference between groups (p < 0.05)")
+        else:
+            print("  * No statistically significant difference between groups")
+    else:
+        print("  * Not enough data to perform ANOVA test")
+
+    print("\nGroup details:")
+    for group_name, data in groups_data.items():
+        mean_acc = np.mean(data) * 100 if len(data) > 0 else 0
+        std_acc = np.std(data) * 100 if len(data) > 0 else 0
+        print(f"  {group_name}: {mean_acc:.1f}% ± {std_acc:.1f}% (n={len(data)})")
+
+    print("\n" + "=" * 50 + "\n")
+
+
 def plot_abtest(df, ab_pair, title, test_idx):
     ab_col, q_col = ab_pair
     subset = df[[ab_col, q_col]].dropna()
@@ -165,13 +290,13 @@ def plot_abtest(df, ab_pair, title, test_idx):
     plt.tight_layout()
     plt.show()
 
-
-# Individual AB tests
+# Individual AB tests (unchanged)
 for idx, pair in enumerate(ab_pairs, start=1):
     plot_abtest(df, pair, f"AB Test {idx}: Do you think the plan will succeed?", idx)
 
 
-# Group averages
+# Group averages (unchanged)
+
 def plot_average(df, indices, title):
     dfs = []
     all_individual_responses = {"A:": [], "B:": []}
@@ -295,6 +420,8 @@ def plot_average(df, indices, title):
     plt.show()
 
 
+# ... (unchanged code from your original function)
+
 # Average of all 5 tests
 plot_average(df, [1, 2, 3, 4, 5], "Average of All 5 AB Tests")
 
@@ -302,15 +429,89 @@ plot_average(df, [1, 2, 3, 4, 5], "Average of All 5 AB Tests")
 plot_average(df, [1, 3], "Average of AB Test 1 & 3")
 plot_average(df, [2, 4, 5], "Average of AB Test 2, 4 & 5")
 
-plot_average(filter_robotics(df, robotics=True), [1, 3], "Robotics Only: Average of AB Test 1 & 3")
-plot_average(filter_robotics(df, robotics=True), [2, 4, 5], "Robotics Only: Average of AB Test 2, 4 & 5")
+# ANOVA comparisons for the specific groups you requested
+print("ANOVA COMPARISON RESULTS")
+print("=" * 50)
 
-plot_average(filter_robotics(df, robotics=False), [1, 3], "Non-Robotics Only: Average of AB Test 1 & 3")
-plot_average(filter_robotics(df, robotics=False), [2, 4, 5], "Non-Robotics Only: Average of AB Test 2, 4 & 5")
+# 1. Overall average comparison
+group_definitions = {
+    "Overall": [1, 2, 3, 4, 5]
+}
+plot_with_anova(df, group_definitions, "Overall Average: A vs B")
 
-# Example robotics filter
+# 2. Average of tests 1 & 3 vs tests 2,4,5
+group_definitions = {
+    "Tests 1&3": [1, 3],
+    "Tests 2,4,5": [2, 4, 5]
+}
+plot_with_anova(df, group_definitions, "Comparison: Tests 1&3 vs Tests 2,4,5")
+
+# 3. Separate comparison for A and B groups across test types
+group_definitions = {
+    "A: Tests 1&3": [1, 3],
+    "A: Tests 2,4,5": [2, 4, 5],
+    "B: Tests 1&3": [1, 3],
+    "B: Tests 2,4,5": [2, 4, 5]
+}
+plot_with_anova(df, group_definitions, "Detailed Comparison: A vs B across Test Types")
+
+# 4. Robotics vs Non-Robotics for the specific test groups
 robotics_df = filter_robotics(df, robotics=True)
-plot_average(robotics_df, [1, 2, 3, 4, 5], "Robotics Only: Average of All 5 AB Tests")
+non_robotics_df = filter_robotics(df, robotics=False)
 
-robotics_df = filter_robotics(df, robotics=False)
-plot_average(robotics_df, [1, 2, 3, 4, 5], "Non-Robotics Only: Average of All 5 AB Tests")
+if len(robotics_df) > 0:
+    group_definitions = {
+        "Robotics: Tests 1&3": [1, 3],
+        "Robotics: Tests 2,4,5": [2, 4, 5]
+    }
+    plot_with_anova(robotics_df, group_definitions, "Robotics Only: Tests 1&3 vs Tests 2,4,5")
+
+if len(non_robotics_df) > 0:
+    group_definitions = {
+        "Non-Robotics: Tests 1&3": [1, 3],
+        "Non-Robotics: Tests 2,4,5": [2, 4, 5]
+    }
+    plot_with_anova(non_robotics_df, group_definitions, "Non-Robotics Only: Tests 1&3 vs Tests 2,4,5")
+
+
+# Post-hoc analysis if ANOVA shows significant differences
+def perform_posthoc_analysis(groups_data):
+    """
+    Perform post-hoc Tukey HSD test if ANOVA shows significant differences
+    """
+    from statsmodels.stats.multicomp import pairwise_tukeyhsd
+
+    # Prepare data for Tukey test
+    all_data = []
+    group_labels = []
+
+    for group_name, data in groups_data.items():
+        if len(data) >= 2:  # Only include groups with sufficient data
+            all_data.extend(data)
+            group_labels.extend([group_name] * len(data))
+
+    if len(set(group_labels)) >= 2:  # Need at least 2 groups
+        tukey = pairwise_tukeyhsd(endog=all_data, groups=group_labels, alpha=0.05)
+        return tukey
+    return None
+
+
+# Additional detailed analysis for the main comparison
+print("DETAILED POST-HOC ANALYSIS")
+print("=" * 50)
+
+# Collect data for the main comparison
+main_groups_data, f_stat, p_value = perform_anova_comparison(df, {
+    "Tests 1&3": [1, 3],
+    "Tests 2,4,5": [2, 4, 5]
+})
+
+if f_stat is not None and p_value < 0.05:
+    print("Significant difference found in main comparison. Performing post-hoc analysis...")
+    tukey_results = perform_posthoc_analysis(main_groups_data)
+    if tukey_results:
+        print(tukey_results)
+else:
+    print("No significant difference found in main comparison. No post-hoc analysis needed.")
+
+print("\nANALYSIS COMPLETE")

@@ -301,7 +301,7 @@ INITIAL STATE:
 PLAN:
 {plan_log.code_plan}
     """
-        _, response = LLM(PROMPT, "gpt-5-2025-08-07")
+        _, response = LLM(PROMPT, cfg.feedback.judge_llm)
 
         if "CorrectPlan" in response:
             return True
