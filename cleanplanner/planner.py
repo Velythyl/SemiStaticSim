@@ -184,7 +184,9 @@ def gen_plan(cfg, scenetask: SceneTask, output_dir, feedback=""):
     _, decomposed_plan = LLM(prompt, cfg.planner.llm, max_tokens=1300, frequency_penalty=0.0, ignore_cache=cfg.planner.ignore_cache)
     decomposed_plan = decomposed_plan.replace('("robot0",', "(").replace('("robot1",', "(").replace("('robot0',", "(").replace("('robot1',", "(") # common llm mistake
     NUM_OUTPUT_TOKENS = approx_num_tokens(cfg.planner.llm, decomposed_plan)
-    decomposed_plan = decomposed_plan.replace("ActivateObject(", "SwitchOn(").replace("TurnOnObject(", "SwitchOn(")
+    for alias, truename in SKILL_ALIASES.items():
+        decomposed_plan = decomposed_plan.replace(f"{alias}(", f"{truename}(")
+    #decomposed_plan = decomposed_plan.replace("ActivateObject(", "SwitchOn(").replace("TurnOnObject(", "SwitchOn(")
     decomposed_plan = decomposed_plan.split("def ")[1:]
     if len(decomposed_plan) == 1:
         decomposed_plan = [""] + decomposed_plan

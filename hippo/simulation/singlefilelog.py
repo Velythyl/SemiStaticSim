@@ -146,7 +146,10 @@ def get_condition_id_mapping():
 
     # Get all subclasses, sort by name, and create mapping
     all_conditions = sorted(get_all_subclasses(_Condition), key=lambda x: x.__name__)
-    return {condition_class.__name__: idx for idx, condition_class in enumerate(all_conditions)}
+    ret = {condition_class.__name__: idx for idx, condition_class in enumerate(all_conditions)}
+    ret["Condlist"] = -1
+    ret["MultiplePreconditionFailure"] = -1
+    return ret
 
 def get_last_msg_type_mapping():
     conditions = get_condition_id_mapping()

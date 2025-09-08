@@ -527,7 +527,7 @@ DONE. red mug should be in the fridge
     # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0
     # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0
 
-    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/cube_unstacked/TRELLIS-yes-mask_True-axis-5_2025-09-04-19-44-50/in_order_0",  # FloorPlan19_physics ## room
+    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_anais_knife_4/CLIP_True-aspect fit-5_2025-09-06-01-45-49/in_order_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree
@@ -540,6 +540,6 @@ DONE. red mug should be in the fridge
          generate_video=True,  ## use frames generate video
          generate_gif=True,  ## use frames generate gif
          HU_PLAN=HU_PLAN,
-         USE_ALTERED_FIRST_PERSON=True,
-         AUGMENT_FIRST_PERSON=True
+         USE_ALTERED_FIRST_PERSON=False,
+         AUGMENT_FIRST_PERSON=False
          )

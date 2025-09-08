@@ -248,7 +248,7 @@ def run_scenetask(cfg, scenetask: SceneTask, num_retries: int = 0, feedback: str
 
         log_func(WANDB_LOG)
 
-        for i in range(num_retries+1, MAX_NUM_RETRIES, 1):
+        for i in range(num_retries+1, MAX_NUM_RETRIES+1, 1):
             def spoof_log(WANDB_LOG):
                 def dup(k):
                     key, subkey = k.split("/")
