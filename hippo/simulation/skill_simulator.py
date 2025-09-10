@@ -62,6 +62,8 @@ class Simulator:
         self.currently_thinking = False
 
         self.judge_llm = "gpt-5-2025-08-07"
+        self.aborted_plan_raised = False
+
 
     @property
     def last_action(self):
@@ -767,12 +769,13 @@ DIFF OF LAST ACTION:
                         #    self.success_exec += 1
 
                     elif act['action'] == "AbortPlan":
-                        temp = IncorrectTaskDescription(
+                        temp = UnsafeFinalState( # spoofing judge reaction; actually the planner is the one that said to abort
                             task_description = self.task_description,
                             diff = "",
                             response ="",
                             reason=act['reason']
                         )
+                        self.aborted_plan_raised = True
                         maybe_raise_llmcondition_exception(temp)
 
 
