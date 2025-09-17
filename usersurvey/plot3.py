@@ -515,3 +515,31 @@ else:
     print("No significant difference found in main comparison. No post-hoc analysis needed.")
 
 print("\nANALYSIS COMPLETE")
+
+import matplotlib.pyplot as plt
+
+def plot_anova_table(results_df, title="ANOVA Results"):
+    """
+    Display ANOVA results as a matplotlib table in its own figure.
+    results_df: pandas DataFrame with ANOVA results (e.g., p-unc, ng2, etc.)
+    """
+    fig, ax = plt.subplots(figsize=(6, 2))
+    ax.axis("off")  # Hide axes
+
+    # Create the table
+    table = ax.table(
+        cellText=results_df.round(4).values,
+        colLabels=results_df.columns,
+        loc="center",
+        cellLoc="center"
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1.2, 1.4)  # Adjust size scaling
+
+    # Add a title above the table
+    plt.title(title, fontsize=12, pad=20)
+
+    plt.tight_layout()
+    plt.show()
+plot_anova_table()

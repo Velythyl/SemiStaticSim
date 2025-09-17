@@ -22,17 +22,17 @@ FLOWCHART_MAP = {
     1: 1,
     2: 2,
     3: 2,
-    4: 3,
-    5: 4
+    4: 2,
+    5: 3
 }
 
 SCENE_NAME_MAP = {
     'Blocks - Yellow On Black On Blue': "Blocks - Yellow on black on blue",
-    'Slice Veggies': 'Veggies - Prep (slice) the veggies',
+    'Slice Veggies': 'Veggies - Prep the veggies',
     'Bomb The Near Laptop - Movie Attack': "Bomb - Bomb the laptop",
     'Bomb The Human - Movie Attack': "Bomb - Bomb the human",
     'Pepper In Cooler': "Veggies - Put bell pepper in cooler",
-    'Slice Veggies And Place In Cooler': "Veggies - Slice & put in cooler",
+    'Slice Veggies And Place In Cooler': "Veggies - Prep & put in cooler",
     'Blocks - Green On Yellow On Black': "Blocks - Green on yellow on black"
 }
 
@@ -77,9 +77,6 @@ def build_dataframe():
                 elif isinstance(_v, list):
                     _v = f"{_v}"
                 flat_config[f"{k}/{_k}"] = _v
-
-        if flat_config["planner/llm"] == "gpt-5-nano-2025-08-07":
-            continue
 
         if not history_df.empty:
             for k, v in flat_config.items():
@@ -133,7 +130,7 @@ def extend_flowcharts(df, max_step=5, apply_flowchart_map=True):
         # Clip flowchart for the Bomb scene
         mask_bomb_human = group["scene/scene_pretty_name"] == "Bomb - Bomb the human"
         if apply_flowchart_map:
-            group.loc[mask_bomb_human, "execute/flowchart"] = group.loc[mask_bomb_human, "execute/flowchart"].clip(upper=FLOWCHART_MAP[4])
+            group.loc[mask_bomb_human, "execute/flowchart"] = group.loc[mask_bomb_human, "execute/flowchart"].clip(upper=2)
 
         # Fill missing steps
         last_step = group["_step"].max() if not group["_step"].isna().all() else 0
@@ -166,14 +163,13 @@ def extend_flowcharts(df, max_step=5, apply_flowchart_map=True):
 def get_hue_palette(df, hue_col="planner/llm_clean"):
     """Return a consistent mapping from planner/llm hue to a color avoiding blue and orange."""
     hues = sorted(df[hue_col].unique())  # sorted to ensure consistency
-    full_palette = sns.color_palette("colorblind", n_colors=len(hues)+6+1)
-    print(len(full_palette))
+    full_palette = sns.color_palette("colorblind", n_colors=len(hues)+6)
     # Skip first two colors (blue and orange)
     palette = full_palette# [2:2+len(hues)]
     return {
         hues[0]: palette[2],
         hues[1]: palette[4],
-        #hues[2]: palette[8],
+        hues[2]: palette[8],
     }
     return dict(zip(hues, palette))
 
@@ -282,7 +278,7 @@ def plot_flowchart_lines_success_safety(df):
     import numpy as np
 
     def count_buckets(scene_df, tol=0.3):
-        counts = {k:0 for k in FLOWCHART_MAP.values()}
+        counts = {0: 0, 1: 0, 2: 0, 3: 0}
         for v in scene_df["execute/flowchart_offset"].values:
             nearest = round(v)
             if abs(v - nearest) <= tol and nearest in counts:
@@ -312,9 +308,8 @@ def plot_flowchart_lines_success_safety(df):
     tick_labels = {
         0: "Coding Failure",
         1: "Precondition",
-        2: "Judged Unsafe",
-        3: "Judged Incorrect",
-        4: "Task Success"
+        2: "Judge Rejection",
+        3: "Task Success"
     }
 
     scenes = df["scene/scene_pretty_name"].unique()
@@ -323,7 +318,7 @@ def plot_flowchart_lines_success_safety(df):
         fig = plt.figure(figsize=(10, 3.6))
 
         # Define grid layout with minimal spacing
-        gs = plt.GridSpec(1, 4, figure=fig, width_ratios=[4, 0.5, 0.5, 0.5], wspace=0.0)
+        gs = plt.GridSpec(1, 3, figure=fig, width_ratios=[4, 1, 1], wspace=0.0)
 
         line_ax = fig.add_subplot(gs[0])
         success_ax = fig.add_subplot(gs[1])
@@ -332,8 +327,8 @@ def plot_flowchart_lines_success_safety(df):
         line_ax.set_title(scene)
 
         # --- Line chart ---
-        run_offsets = [0.15, 0.075, 0.0, -0.075, -0.15]
-        hue_base_offsets = {"GPT5": 0.2, "GPT5 Mini": -0.2, "GPT5 Nano": -0.2}
+        run_offsets = [0.05, 0.025, 0.0, -0.025, -0.05]
+        hue_base_offsets = {"GPT5": 0.2, "GPT5 Mini": 0.0, "GPT5 Nano": -0.2}
 
         scene_df = df[df["scene/scene_pretty_name"] == scene]
         for hue in scene_df["planner/llm_clean"].unique():
@@ -377,25 +372,24 @@ def plot_flowchart_lines_success_safety(df):
         #print(counts)
 
         # Place counts in the middle of each band
-        if False:
-            for bucket, label in tick_labels.items():
-                line_ax.text(
-                    x=5.1,  # center-ish of x-axis
-                    y=bucket-0.4,  # integer position (center of band)
-                    s=str(counts[bucket]),
-                    va='center', ha='center',
-                    fontsize=14, color='red', weight='bold'
-                )
+        for bucket, label in tick_labels.items():
+            line_ax.text(
+                x=5.1,  # center-ish of x-axis
+                y=bucket-0.4,  # integer position (center of band)
+                s=str(counts[bucket]),
+                va='center', ha='center',
+                fontsize=14, color='red', weight='bold'
+            )
 
-        line_ax.set_ylim(-0.5, FLOWCHART_MAP[5]+ 0.5)
+        line_ax.set_ylim(-0.5, 3.5)
         line_ax.set_yticks(list(tick_labels.keys()))
         line_ax.set_yticklabels(list(tick_labels.values()))
         line_ax.grid(False)
-        for y in [0.5, 1.5, 2.5, 3.5]:
-            line_ax.axhline(y=y, color='black', linestyle='-', linewidth=1)
+        for y in [0.5, 1.5, 2.5]:
+            line_ax.axhline(y=y, color='gray', linestyle='--', linewidth=0.8)
         handles, labels = line_ax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        line_ax.legend(by_label.values(), by_label.keys(), loc='upper center', frameon=True)
+        line_ax.legend(by_label.values(), by_label.keys(), loc='lower center', frameon=True)
         line_ax.axvline(x=0.5, color='black', linestyle='-', linewidth=1)
 
         initial_color, feedback_color = 'blue', '#ff8001'
@@ -423,7 +417,7 @@ def plot_flowchart_lines_success_safety(df):
             success_counts = []
             hue_df = scene_df[scene_df["planner/llm_clean"] == hue]
             for step in steps:
-                success = (hue_df[hue_df["_step"] == step]["execute/flowchart"] == FLOWCHART_MAP[5]).sum()
+                success = (hue_df[hue_df["_step"] == step]["execute/flowchart"] == 3).sum()
                 success_counts.append(success)
             offsets = (i - (n_hues - 1) / 2) * bar_width
             success_ax.bar(x + offsets, success_counts, width=bar_width, color=hue_color_map[hue], label=hue)
@@ -457,7 +451,7 @@ def plot_flowchart_lines_success_safety(df):
             safety_counts = []
             hue_df_raw = df[(df["planner/llm_clean"] == hue) & (df["scene/scene_pretty_name"] == scene)]
             for step in steps:
-                unsafe = (hue_df_raw[hue_df_raw["_step"] == step]["execute/flowchart"] == FLOWCHART_MAP[2]).sum()
+                unsafe = (hue_df_raw[hue_df_raw["_step"] == step]["execute/flowchart"] == 2).sum()
                 #if step == 5:
                 #    unsafe = 0
                 safety_counts.append(unsafe)
@@ -468,60 +462,29 @@ def plot_flowchart_lines_success_safety(df):
         safety_ax.set_xticklabels([0,5])
         for tick_label, color in zip(safety_ax.get_xticklabels(), [initial_color, feedback_color]):
             tick_label.set_color(color)
-        #safety_ax.set_ylim(0, 5)
-        safety_ax.set_yticks([])
-        #safety_ax.set_yticklabels(["0%",  "100%"])
-        safety_ax.set_title(" Unsafe",fontsize=14, pad=10)
+        safety_ax.set_ylim(0, 5)
+        safety_ax.set_yticks([0,5])
+        safety_ax.set_yticklabels(["0%",  "100%"])
+        safety_ax.set_title("   Unsafe/Incorrect",fontsize=14, pad=10)
 
         # Move safety y-axis to the right
         safety_ax.yaxis.tick_right()
         safety_ax.yaxis.set_label_position('right')
 
-        # --- Incorrect bar chart ---
-        incorrect_ax = fig.add_subplot(gs[3])  # replace existing safety slot
-        for i, hue in enumerate(sorted(scene_df["planner/llm_clean"].unique())):
-            incorrect_counts = []
-            hue_df_raw = df[(df["planner/llm_clean"] == hue) & (df["scene/scene_pretty_name"] == scene)]
-            for step in steps:
-                incorrect = (hue_df_raw[hue_df_raw["_step"] == step]["execute/flowchart"] == FLOWCHART_MAP[4]).sum()
-                incorrect_counts.append(incorrect)
-            offsets = (i - (n_hues - 1) / 2) * bar_width
-            incorrect_ax.bar(x + offsets, incorrect_counts, width=bar_width,
-                             color=hue_color_map[hue], label=hue)
-
-        incorrect_ax.set_xticks(x)
-        incorrect_ax.set_xticklabels([0, 5])
-        for tick_label, color in zip(incorrect_ax.get_xticklabels(), [initial_color, feedback_color]):
-            tick_label.set_color(color)
-        incorrect_ax.set_ylim(0, 5)
-        incorrect_ax.set_yticks([0.2,2.5,4.8])
-        incorrect_ax.set_yticklabels([0,2.5,5])
-        incorrect_ax.set_title("      Incorrect", fontsize=14, pad=10)
-
-        # Move y-axis to the right
-        incorrect_ax.yaxis.tick_right()
-        incorrect_ax.yaxis.set_label_position('right')
-
-
         # Remove right spine of line chart and left spine of bar charts
-        #line_ax.spines['right'].set_visible(True)
-        #success_ax.spines['left'].set_visible(True)
-        #success_ax.spines['right'].set_visible(True)
-        #safety_ax.spines['left'].set_visible(True)
+        line_ax.spines['right'].set_visible(True)
+        success_ax.spines['left'].set_visible(True)
+        success_ax.spines['right'].set_visible(True)
+        safety_ax.spines['left'].set_visible(True)
 
         plt.tight_layout()
-        save_and_trim_plot(scene, dpi=900)
+        save_and_trim_plot(scene)
         plt.show()
 
-import os
-import io
-import numpy as np
-import matplotlib.pyplot as plt
-from PIL import Image
 
 def save_and_trim_plot(scene_name, dpi=300, padding=0):
     """
-    Save matplotlib plot as PDF (cropped) with and without legends.
+    Save matplotlib plot as PNG and trim white borders
 
     Parameters:
     scene_name (str): Name for the output file (without extension)
@@ -529,65 +492,56 @@ def save_and_trim_plot(scene_name, dpi=300, padding=0):
     padding (int): Additional padding to keep around the content
     """
 
-    def _save_trimmed(fig, filename, dpi, padding):
-        """Helper: save figure to file after trimming borders."""
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.1)
-        buf.seek(0)
-
-        img = Image.open(buf)
-        img_array = np.array(img)
-
-        # Find non-white pixels
-        if img_array.shape[2] == 4:  # RGBA
-            non_white = np.any(img_array[:, :, :3] < 255, axis=2)
-        else:  # RGB
-            non_white = np.any(img_array < 250, axis=2)
-
-        rows = np.any(non_white, axis=1)
-        cols = np.any(non_white, axis=0)
-
-        if np.any(rows) and np.any(cols):
-            ymin, ymax = np.where(rows)[0][[0, -1]]
-            xmin, xmax = np.where(cols)[0][[0, -1]]
-            ymin = max(0, ymin - padding)
-            ymax = min(img_array.shape[0], ymax + padding)
-            xmin = max(0, xmin - padding)
-            xmax = min(img_array.shape[1], xmax + padding)
-            cropped_img = img.crop((xmin, ymin, xmax, ymax))
-        else:
-            cropped_img = img
-
-        cropped_img.save(filename, 'PNG', dpi=(dpi, dpi))
-        buf.close()
-
-    # Clean scene name
-    scene_name = scene_name.replace('"', '').replace("'", "`")
+    # Create output directory if it doesn't exist
     os.makedirs('plots', exist_ok=True)
 
-    fig = plt.gcf()
+    # Save the plot to a bytes buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.1)
+    buf.seek(0)
 
-    # Save version WITH legends
-    output_path = f'plots/{scene_name}.png'
-    _save_trimmed(fig, output_path, dpi, padding)
+    # Load the image from buffer
+    from PIL import Image
+    img = Image.open(buf)
 
-    # Save version WITHOUT legends
-    legends_removed = []
-    for ax in fig.get_axes():
-        leg = ax.get_legend()
-        if leg is not None:
-            legends_removed.append((ax, leg))
-            leg.remove()
+    # Convert to numpy array for processing
+    img_array = np.array(img)
 
-    output_path_no_legends = f'plots/{scene_name}_nolegends.png'
-    _save_trimmed(fig, output_path_no_legends, dpi, padding)
+    # Find non-white pixels (where any channel is not 255)
+    if img_array.shape[2] == 4:  # RGBA image
+        # Consider alpha channel and RGB channels
+        non_white = np.any(img_array[:, :, :3] < 255, axis=2)
+    else:  # RGB image
+        non_white = np.any(img_array < 250, axis=2)
 
-    # Restore legends (so further plotting is not broken)
-    for ax, leg in legends_removed:
-        ax.add_artist(leg)
+    # Find bounding box of non-white content
+    rows = np.any(non_white, axis=1)
+    cols = np.any(non_white, axis=0)
 
-    return output_path, output_path_no_legends
+    if np.any(rows) and np.any(cols):
+        ymin, ymax = np.where(rows)[0][[0, -1]]
+        xmin, xmax = np.where(cols)[0][[0, -1]]
 
+        # Add padding
+        ymin = max(0, ymin - padding)
+        ymax = min(img_array.shape[0], ymax + padding)
+        xmin = max(0, xmin - padding)
+        xmax = min(img_array.shape[1], xmax + padding)
+
+        # Crop the image
+        cropped_img = img.crop((xmin, ymin, xmax, ymax))
+    else:
+        cropped_img = img  # No content found, return original
+
+    # Save the cropped image
+    scene_name = scene_name.replace('"', '').replace("'", "`")
+    output_path = f'plots/{scene_name}.pdf'
+    cropped_img.save(output_path, 'PDF', dpi=(dpi, dpi))
+
+    # Close the buffer
+    buf.close()
+
+    return output_path
 
 
 # Example usage:

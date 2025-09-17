@@ -418,7 +418,7 @@ if __name__ == "__main__":
     3. PutObjectDown("Yellow cube", "Table")
     """
 
-    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/tunedparams/TRELLIS-yes-mask_True-axis-90_2025-08-08-12-55-40/random_0",  # FloorPlan19_physics ## room
+    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0",  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree
