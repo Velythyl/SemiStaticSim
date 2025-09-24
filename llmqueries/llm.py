@@ -81,15 +81,7 @@ def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, lo
         prompt = [{"role": "user", "content": prompt}]
 
 
-    if "bbllm" in gpt_version:
-        _, text = barebonesllmchat.terminal.openaispoof.ChatCompletion.create(
-            prompt,
-            max_new_tokens=max_tokens,
-            temperature=np.clip(temperature, 0.1, 1.0)
-        )
-        ret = _, text.strip()
-
-    elif "gpt" not in gpt_version:
+    if "gpt" not in gpt_version:
         if MAX_COMPLETION_TOKENS_INSTEAD_OF_MAX_TOKENS.get(gpt_version, False):
             response = openai.Completion.create(
             model=gpt_version,
@@ -134,11 +126,6 @@ def _LLM_retry(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, lo
         ret = response, response.output_text.strip()
     return ret
 
-from diskcache import FanoutCache, Cache, Deque
-CACHEPATH = "/".join(__file__.split("/")[:-1]) + "/diskcache"
-cache = FanoutCache(CACHEPATH, shards=64)
-
-@cache.memoize()
 def _LLM_cache(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0, ignore_cache=False):
     print("LLM QUERY: Could not find prompt in cache, querying OpenAI API.")
     ret = _LLM_retry(prompt, gpt_version, max_tokens, temperature, stop, logprobs, frequency_penalty)

@@ -1,0 +1,12 @@
+ai2thor
+prior
+wheel
+tiktoken
+openai
+tenacity
+networkx
+matplotlib
+seaborn
+open3d
+shapely
+flax

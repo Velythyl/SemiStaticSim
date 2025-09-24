@@ -361,7 +361,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
     #controller = get_controller(scene, get_runtime_container=False, width=1000, height=1000, snapToGrid=False,
     #                                      visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
 
-    from hippo.ai2thor_hippo_controller import get_sim
+    from semistaticsim.ai2thor_hippo_controller import get_sim
     sim = get_sim(scene_name, renderInstanceSegmentation=True)
     controller = sim.controller
     """
@@ -502,7 +502,20 @@ DONE. red mug should be in the fridge
     # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0
     # /Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0
 
-    main(scene_name="/Users/charlie/Projects/Holodeck/hippo/sampled_scenes/realscenes/i_mug_kitchen_surely4/TRELLIS-yes-mask_True-aspect weighted/in_order_0",  # FloorPlan19_physics ## room
+    import prior
+    dataset = prior.load_dataset("procthor-10k")
+    dataset
+
+    import os
+
+    os.environ["JAX_PLATFORM_NAME"] = "cpu"
+    import jax
+
+    jax.config.update('jax_platform_name', "cpu")
+
+    house = dataset["train"][0]
+
+    main(scene_name=house,  # FloorPlan19_physics ## room
          gridSize=0.25, rotateStepDegrees=15,  ## agent step len and rotate degree
          BEV=False,  ## Bird's-eye view or top view(slope)
          slope_degree=60,  ## top view(slope)'s initial rotate degree

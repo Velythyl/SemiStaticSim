@@ -342,7 +342,7 @@ def main(scene_name="FloorPlan205_physics", gridSize=0.25, rotateStepDegrees=15,
     #controller = get_controller(scene, get_runtime_container=False, width=1000, height=1000, snapToGrid=False,
     #                                      visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
 
-    from hippo.ai2thor_hippo_controller import get_sim
+    from semistaticsim.ai2thor_hippo_controller import get_sim
     controller = get_sim(scene_name, just_controller=True)
     """
     _ = Controller(
