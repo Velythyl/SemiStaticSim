@@ -23,6 +23,8 @@ def generate_time_pattern(key, num_states, gaussian_instead=False):
         return {"means": weights, "stds": stds}
 
 
+
+
 def full_pattern(key,
     scales,
     locations,
@@ -46,6 +48,10 @@ def full_pattern(key,
     Returns:
         dict: Nested dictionary representing the full pattern.
     """
+    # fixme need to make all DFS branches alter the same global key (maybe unroll? or just use a local global)
+    # because otherwise the same key pattern occurs!
+    # or actually maybe just the forloop: unnest and split before each downcall
+
     current_scale = scales[0]
 
     # Leaf scale: assign location distribution
@@ -61,6 +67,13 @@ def full_pattern(key,
 
         key, rng = jax.random.split(key)
         distribution = generate_time_pattern(rng, len(locations), is_gaussian)
+
+        locations = jnp.array(locations)
+        key, rng = jax.random.split(key)
+        print("RNG AT LEAF", rng)
+        locations = jax.random.choice(rng, locations, locations.shape, replace=False)
+        print("LOCATIONS AT LEAF", locations)
+
         for delete in TO_DELETE:
             distribution["means"][delete] = 0
         return {
@@ -114,7 +127,7 @@ def flatten_pattern_with_weights(pattern):
 
 # Example usage
 scales = ["year", "month", "day"]
-locations = ["home", "work", "key rack"]
+locations = [0,1,2] #["home", "work", "key rack"]
 
 pattern = full_pattern(
     key=jax.random.PRNGKey(0),

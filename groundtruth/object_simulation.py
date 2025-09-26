@@ -28,7 +28,7 @@ class ScheduleDistribution:
         key, rngs = split_key(key, len(self))
 
         def sample(k, m, s):
-            return jax.random.normal(key=k) * s + m
+            return jax.random.normal(key=k) * s + m # fixme lognormal
 
         samples = jax.vmap(sample)(rngs, self.means, self.stds)
         return jnp.take(samples, jnp.astype(i, int)) #samples[i]
@@ -69,7 +69,7 @@ class Schedule:
             if len(subpatterns) > 0:
                 subpatterns = spoof_vmap(subpatterns)
 
-        return cls(time_scale, distribution, subpatterns, "locations" in description, -1., locations, -1., dt)
+        return cls(time_scale, distribution, subpatterns, "locations" in description, -1., jnp.array(locations), -1., dt)
 
     @jax.jit
     def tick(self, key):
@@ -92,7 +92,7 @@ class Schedule:
     @jax.jit
     def get_current_mode(self):
         if self.is_leaf:
-            return self.current_pattern
+            return jnp.take(self.locations, jnp.astype(self.current_pattern, int))
 
         ret = jax.vmap(lambda x: x.get_current_mode())(self.subpatterns)
 
@@ -124,6 +124,6 @@ if __name__ == "__main__":
     schedule.tick(key).get_current_mode()
 
 
-    schedule, results = jax.lax.scan(f=Schedule.step, init=schedule, xs=split_key(key, 10000)[-1])
+    schedule, results = jax.lax.scan(f=Schedule.step, init=schedule, xs=split_key(key, 100)[-1])
     print(results)
 
